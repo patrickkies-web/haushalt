@@ -1,182 +1,737 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Turnus — Abos & wiederkehrende Kosten</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#eef0ee;
-    --surface:#ffffff;
-    --ink:#15191a;
-    --muted:#6d7572;
-    --faint:#9aa19e;
-    --line:#e7e9e6;
-    --line-soft:#eef0ed;
-    --accent:#0f6e54;
-    --accent-tint:#e2efe9;
-    --danger:#b0556a;
-    --shadow:0 1px 2px rgba(20,30,25,.04), 0 8px 24px rgba(20,30,25,.05);
-    --radius:18px;
-    --c0:#0f6e54; --c1:#3b6fb0; --c2:#c2783f; --c3:#8a5bb8; --c4:#b0556a; --c5:#7e8783;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{background:var(--bg);color:var(--ink);font-family:"Hanken Grotesk",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  body{min-height:100dvh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-  .num{font-family:"Space Grotesk",system-ui,sans-serif;font-variant-numeric:tabular-nums lining-nums}
-  .wrap{max-width:560px;margin:0 auto;padding:22px 18px 120px}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Turnus — Abos & wiederkehrende Kosten</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:          #eef0ee;
+      --surface:     #ffffff;
+      --ink:         #15191a;
+      --muted:       #6d7572;
+      --faint:       #9aa19e;
+      --line:        #e7e9e6;
+      --line-soft:   #eef0ed;
+      --accent:      #0f6e54;
+      --accent-tint: #e2efe9;
+      --danger:      #b0556a;
+      --shadow:      0 1px 2px rgba(20,30,25,.04), 0 8px 24px rgba(20,30,25,.05);
+      --radius:      18px;
+      --c0: #0f6e54;
+      --c1: #3b6fb0;
+      --c2: #c2783f;
+      --c3: #8a5bb8;
+      --c4: #b0556a;
+      --c5: #7e8783;
+    }
 
-  /* Header */
-  header{display:flex;align-items:baseline;justify-content:space-between;margin:6px 2px 20px}
-  .brand{font-family:"Space Grotesk";font-weight:700;font-size:21px;letter-spacing:-.02em}
-  .brand .dot{color:var(--accent)}
-  .tagline{font-size:12.5px;color:var(--faint);font-weight:500}
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-  /* Summary */
-  .summary{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 20px 18px;margin-bottom:14px}
-  .sum-label{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.01em}
-  .sum-figure{display:flex;align-items:baseline;gap:2px;margin-top:4px}
-  .sum-figure .amt{font-family:"Space Grotesk";font-weight:700;font-size:46px;letter-spacing:-.025em;line-height:1;font-variant-numeric:tabular-nums}
-  .sum-figure .per{font-size:15px;color:var(--muted);font-weight:600;margin-left:6px}
-  .sum-meta{display:flex;gap:14px;margin-top:9px;font-size:13px;color:var(--muted)}
-  .sum-meta b{font-weight:600;color:var(--ink)}
-  .sum-meta .num{font-weight:600}
+    html, body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Hanken Grotesk", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
 
-  /* Composition bar */
-  .bar{display:flex;height:9px;border-radius:6px;overflow:hidden;margin-top:18px;background:var(--line-soft)}
-  .bar span{height:100%;transition:width .7s cubic-bezier(.4,0,.1,1)}
-  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px}
-  .legend div{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
-  .legend i{width:9px;height:9px;border-radius:3px;display:inline-block;flex:none}
-  .legend b{color:var(--ink);font-weight:600}
+    body {
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    }
 
-  /* Next payment */
-  .next{display:flex;align-items:center;gap:9px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line-soft);font-size:13.5px;color:var(--muted)}
-  .next .pill{font-size:11px;font-weight:600;color:var(--accent);background:var(--accent-tint);padding:3px 9px;border-radius:20px;white-space:nowrap}
-  .next b{color:var(--ink);font-weight:600}
+    .num {
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-variant-numeric: tabular-nums lining-nums;
+    }
 
-  /* Toolbar */
-  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 2px 12px}
-  .toolbar .count{font-size:13px;color:var(--muted);font-weight:600}
-  .sort{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);
-    font-family:inherit;font-size:13px;font-weight:600;padding:8px 30px 8px 12px;border-radius:11px;cursor:pointer;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236d7572' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;background-position:right 11px center}
+    .wrap {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 22px 18px 120px;
+    }
 
-  /* List */
-  .list{display:flex;flex-direction:column;gap:8px}
-  .row{display:flex;align-items:center;gap:13px;background:var(--surface);border-radius:14px;padding:14px 15px;
-    box-shadow:var(--shadow);cursor:pointer;transition:transform .12s ease, box-shadow .12s ease;border:1px solid transparent}
-  .row:hover{transform:translateY(-1px)}
-  .row:active{transform:scale(.992)}
-  .swatch{width:38px;height:38px;border-radius:11px;flex:none;display:grid;place-items:center;
-    font-family:"Space Grotesk";font-weight:600;font-size:15px;color:#fff}
-  .row-main{flex:1;min-width:0}
-  .row-name{font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .row-sub{font-size:12.5px;color:var(--faint);margin-top:2px}
-  .row-amt{text-align:right;flex:none}
-  .row-amt .v{font-family:"Space Grotesk";font-weight:600;font-size:15.5px;font-variant-numeric:tabular-nums}
-  .row-amt .c{font-size:11.5px;color:var(--faint);margin-top:2px}
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin: 6px 2px 20px;
+    }
 
-  /* Empty */
-  .empty{text-align:center;padding:54px 24px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}
-  .empty svg{margin-bottom:14px}
-  .empty h2{font-family:"Space Grotesk";font-weight:600;font-size:18px;letter-spacing:-.01em;margin-bottom:6px}
-  .empty p{font-size:14px;color:var(--muted);max-width:34ch;margin:0 auto 20px;line-height:1.5}
+    .brand {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 21px;
+      letter-spacing: -.02em;
+    }
 
-  /* Buttons */
-  .btn{font-family:inherit;font-weight:600;font-size:14.5px;border:none;border-radius:12px;padding:12px 18px;cursor:pointer;
-    transition:opacity .15s ease, transform .1s ease}
-  .btn:active{transform:scale(.985)}
-  .btn-primary{background:var(--accent);color:#fff}
-  .btn-primary:hover{opacity:.92}
-  .btn-ghost{background:transparent;color:var(--muted)}
-  .btn-danger{background:transparent;color:var(--danger);font-weight:600}
+    .brand .dot { color: var(--accent); }
 
-  /* Floating add (mobile) */
-  .fab{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;
-    background:var(--ink);color:#fff;border:none;border-radius:30px;padding:14px 24px;font-family:inherit;font-weight:600;
-    font-size:15px;display:flex;align-items:center;gap:9px;cursor:pointer;box-shadow:0 6px 22px rgba(20,30,25,.22);
-    transition:transform .12s ease}
-  .fab:active{transform:translateX(-50%) scale(.96)}
-  .fab svg{width:17px;height:17px}
+    .tagline {
+      font-size: 12.5px;
+      color: var(--faint);
+      font-weight: 500;
+    }
 
-  /* Sheet */
-  .scrim{position:fixed;inset:0;background:rgba(18,24,21,.34);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:40;backdrop-filter:blur(2px)}
-  .scrim.on{opacity:1;pointer-events:auto}
-  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--surface);
-    border-radius:24px 24px 0 0;padding:8px 20px calc(24px + env(safe-area-inset-bottom));
-    transform:translateY(102%);transition:transform .32s cubic-bezier(.32,.72,0,1);
-    max-width:560px;margin:0 auto;max-height:92dvh;overflow-y:auto;box-shadow:0 -8px 40px rgba(20,30,25,.16)}
-  .sheet.on{transform:translateY(0)}
-  .grab{width:38px;height:4px;border-radius:4px;background:var(--line);margin:8px auto 14px}
-  .sheet h2{font-family:"Space Grotesk";font-weight:600;font-size:19px;letter-spacing:-.01em;margin-bottom:18px}
-  .field{margin-bottom:15px}
-  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:7px}
-  .field input, .field textarea{width:100%;font-family:inherit;font-size:15px;color:var(--ink);background:var(--bg);
-    border:1.5px solid transparent;border-radius:12px;padding:13px 14px;transition:border-color .15s ease, background .15s ease}
-  .field input:focus, .field textarea:focus{outline:none;border-color:var(--accent);background:var(--surface)}
-  .field textarea{resize:none;min-height:64px}
-  .row2{display:flex;gap:12px}
-  .row2 .field{flex:1}
-  .seg{display:flex;gap:6px;background:var(--bg);padding:4px;border-radius:13px}
-  .seg button{flex:1;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--muted);background:transparent;
-    border:none;border-radius:10px;padding:10px 4px;cursor:pointer;transition:all .15s ease}
-  .seg button.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(20,30,25,.1)}
-  .chips{display:flex;flex-wrap:wrap;gap:7px}
-  .chips button{font-family:inherit;font-size:13px;font-weight:500;color:var(--muted);background:var(--bg);
-    border:1.5px solid transparent;border-radius:20px;padding:8px 13px;cursor:pointer;transition:all .15s ease}
-  .chips button.active{color:var(--accent);background:var(--accent-tint);border-color:var(--accent)}
-  .chips button.newcat{border:1.5px dashed var(--line);color:var(--muted);background:transparent}
-  .chips button.newcat:hover{border-color:var(--accent);color:var(--accent)}
-  .cat-input-row{display:flex;gap:8px;width:100%;margin-top:8px}
-  .cat-input-row input{flex:1;font-family:inherit;font-size:14px;color:var(--ink);background:var(--bg);
-    border:1.5px solid var(--accent);border-radius:20px;padding:9px 14px}
-  .cat-input-row input:focus{outline:none}
-  .cat-input-row .btn{padding:9px 15px;border-radius:20px;font-size:13px}
-  .sheet-actions{display:flex;gap:10px;margin-top:22px;align-items:center}
-  .sheet-actions .btn-primary{flex:1}
-  .err{color:var(--danger);font-size:12.5px;margin-top:6px;display:none}
-  .err.on{display:block}
+    /* ── Summary ── */
+    .summary {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px 20px 18px;
+      margin-bottom: 14px;
+    }
 
-  /* Forecast */
-  .forecast-wrap{margin-top:28px}
-  .forecast-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:0 2px 12px}
-  .forecast-head h2{font-family:"Space Grotesk";font-weight:600;font-size:16px;letter-spacing:-.01em}
-  .forecast-head .hint{display:block;margin-top:3px;font-size:11.5px;color:var(--faint)}
-  .forecast-head .avg{text-align:right;flex:none}
-  .forecast-head .avg-label{display:block;font-size:11px;color:var(--faint);font-weight:600}
-  .forecast-head .avg-val{font-family:"Space Grotesk";font-weight:700;font-size:19px;color:var(--accent);
-    font-variant-numeric:tabular-nums;letter-spacing:-.015em;line-height:1.1;margin-top:2px}
-  .fc-scroll{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table.fc{border-collapse:collapse;width:max-content;min-width:100%;font-size:13px}
-  table.fc th, table.fc td{padding:11px 13px;text-align:right;white-space:nowrap}
-  table.fc thead th{font-family:"Space Grotesk";font-weight:600;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);line-height:1.1}
-  table.fc thead th .yr{display:block;font-size:9.5px;color:var(--faint);font-weight:500;margin-top:2px}
-  table.fc th.name, table.fc td.name{position:sticky;left:0;background:var(--surface);text-align:left;z-index:2;box-shadow:1px 0 0 var(--line)}
-  table.fc thead th.name{z-index:3;color:var(--muted)}
-  table.fc tbody td{color:var(--ink);border-bottom:1px solid var(--line-soft);font-variant-numeric:tabular-nums}
-  table.fc tbody td.empty{color:#d6dad6}
-  table.fc .namecell{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13.5px}
-  table.fc .namecell i{width:8px;height:8px;border-radius:3px;flex:none}
-  table.fc .namecell span{overflow:hidden;text-overflow:ellipsis;max-width:140px}
-  table.fc th.cur, table.fc tbody td.cur{background:var(--accent-tint)}
-  table.fc tr.totals td{font-family:"Space Grotesk";font-weight:600;font-size:13px;border-top:1.5px solid var(--line);border-bottom:none;color:var(--ink);font-variant-numeric:tabular-nums}
-  table.fc tr.totals td.cur{background:var(--accent-tint);color:var(--accent)}
-  table.fc tr.totals td.name .lbl{font-weight:600;color:var(--ink)}
-  .reserve-note{font-size:12.5px;color:var(--muted);line-height:1.55;margin:0 2px 12px;padding:12px 15px;background:var(--accent-tint);border-radius:13px}
-  .reserve-note b{color:var(--accent);font-weight:600;font-family:"Space Grotesk";font-variant-numeric:tabular-nums}
-  table.fc tr.reserve td{font-family:"Space Grotesk";font-weight:500;font-size:12.5px;color:var(--muted);
-    border-top:1px solid var(--line-soft);border-bottom:none;font-variant-numeric:tabular-nums}
-  table.fc tr.reserve td.name .lbl{color:var(--muted);font-weight:600}
-  table.fc tr.reserve td.cur{background:var(--accent-tint);color:var(--accent)}
+    .sum-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: .01em;
+    }
 
-  @media (min-width:560px){ .fab{left:auto;right:calc(50% - 280px + 18px);transform:none} .fab:active{transform:scale(.96)} }
-  @media (prefers-reduced-motion:reduce){ *{transition:none!important;animation:none!important} }
-</style>
+    .sum-figure {
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+      margin-top: 4px;
+    }
+
+    .sum-figure .amt {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 46px;
+      letter-spacing: -.025em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sum-figure .per {
+      font-size: 15px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-left: 6px;
+    }
+
+    .sum-meta {
+      display: flex;
+      gap: 14px;
+      margin-top: 9px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .sum-meta b        { font-weight: 600; color: var(--ink); }
+    .sum-meta .num     { font-weight: 600; }
+
+    /* ── Composition bar ── */
+    .bar {
+      display: flex;
+      height: 9px;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 18px;
+      background: var(--line-soft);
+    }
+
+    .bar span {
+      height: 100%;
+      transition: width .7s cubic-bezier(.4,0,.1,1);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      margin-top: 12px;
+    }
+
+    .legend div {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .legend i {
+      width: 9px;
+      height: 9px;
+      border-radius: 3px;
+      display: inline-block;
+      flex: none;
+    }
+
+    .legend b { color: var(--ink); font-weight: 600; }
+
+    /* ── Next payment ── */
+    .next {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line-soft);
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+
+    .next .pill {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-tint);
+      padding: 3px 9px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .next b { color: var(--ink); font-weight: 600; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 22px 2px 12px;
+    }
+
+    .toolbar .count {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .sort {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 30px 8px 12px;
+      border-radius: 11px;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236d7572' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 11px center;
+    }
+
+    /* ── List ── */
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 14px 15px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease;
+      border: 1px solid transparent;
+    }
+
+    .row:hover  { transform: translateY(-1px); }
+    .row:active { transform: scale(.992); }
+
+    .swatch {
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
+      flex: none;
+      display: grid;
+      place-items: center;
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 15px;
+      color: #fff;
+    }
+
+    .row-main   { flex: 1; min-width: 0; }
+    .row-amt    { text-align: right; flex: none; }
+
+    .row-name {
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-sub { font-size: 12.5px; color: var(--faint); margin-top: 2px; }
+
+    .row-amt .v {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 15.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .row-amt .c { font-size: 11.5px; color: var(--faint); margin-top: 2px; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 54px 24px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .empty svg { margin-bottom: 14px; }
+
+    .empty h2 {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 18px;
+      letter-spacing: -.01em;
+      margin-bottom: 6px;
+    }
+
+    .empty p {
+      font-size: 14px;
+      color: var(--muted);
+      max-width: 34ch;
+      margin: 0 auto 20px;
+      line-height: 1.5;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 14.5px;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      cursor: pointer;
+      transition: opacity .15s ease, transform .1s ease;
+    }
+
+    .btn:active       { transform: scale(.985); }
+    .btn-primary      { background: var(--accent); color: #fff; }
+    .btn-primary:hover{ opacity: .92; }
+    .btn-ghost        { background: transparent; color: var(--muted); }
+    .btn-danger       { background: transparent; color: var(--danger); font-weight: 600; }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed;
+      left: 50%;
+      bottom: calc(22px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 30;
+      background: var(--ink);
+      color: #fff;
+      border: none;
+      border-radius: 30px;
+      padding: 14px 24px;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      cursor: pointer;
+      box-shadow: 0 6px 22px rgba(20,30,25,.22);
+      transition: transform .12s ease;
+    }
+
+    .fab:active { transform: translateX(-50%) scale(.96); }
+    .fab svg    { width: 17px; height: 17px; }
+
+    /* ── Sheet ── */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(18,24,21,.34);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+      z-index: 40;
+      backdrop-filter: blur(2px);
+    }
+
+    .scrim.on { opacity: 1; pointer-events: auto; }
+
+    .sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 50;
+      background: var(--surface);
+      border-radius: 24px 24px 0 0;
+      padding: 8px 20px calc(24px + env(safe-area-inset-bottom));
+      transform: translateY(102%);
+      transition: transform .32s cubic-bezier(.32,.72,0,1);
+      max-width: 560px;
+      margin: 0 auto;
+      max-height: 92dvh;
+      overflow-y: auto;
+      box-shadow: 0 -8px 40px rgba(20,30,25,.16);
+    }
+
+    .sheet.on { transform: translateY(0); }
+
+    .grab {
+      width: 38px;
+      height: 4px;
+      border-radius: 4px;
+      background: var(--line);
+      margin: 8px auto 14px;
+    }
+
+    .sheet h2 {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 19px;
+      letter-spacing: -.01em;
+      margin-bottom: 18px;
+    }
+
+    .field { margin-bottom: 15px; }
+
+    .field label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 7px;
+    }
+
+    .field input,
+    .field textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1.5px solid transparent;
+      border-radius: 12px;
+      padding: 13px 14px;
+      transition: border-color .15s ease, background .15s ease;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--surface);
+    }
+
+    .field textarea { resize: none; min-height: 64px; }
+
+    .row2         { display: flex; gap: 12px; }
+    .row2 .field  { flex: 1; }
+
+    .seg {
+      display: flex;
+      gap: 6px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 13px;
+    }
+
+    .seg button {
+      flex: 1;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 4px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .seg button.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(20,30,25,.1);
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .chips button {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1.5px solid transparent;
+      border-radius: 20px;
+      padding: 8px 13px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .chips button.active {
+      color: var(--accent);
+      background: var(--accent-tint);
+      border-color: var(--accent);
+    }
+
+    .chips button.newcat {
+      border: 1.5px dashed var(--line);
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .chips button.newcat:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .cat-input-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .cat-input-row input {
+      flex: 1;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 20px;
+      padding: 9px 14px;
+    }
+
+    .cat-input-row input:focus { outline: none; }
+
+    .cat-input-row .btn {
+      padding: 9px 15px;
+      border-radius: 20px;
+      font-size: 13px;
+    }
+
+    .sheet-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+      align-items: center;
+    }
+
+    .sheet-actions .btn-primary { flex: 1; }
+
+    .err {
+      color: var(--danger);
+      font-size: 12.5px;
+      margin-top: 6px;
+      display: none;
+    }
+
+    .err.on { display: block; }
+
+    /* ── Forecast ── */
+    .forecast-wrap { margin-top: 28px; }
+
+    .forecast-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 0 2px 12px;
+    }
+
+    .forecast-head h2 {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -.01em;
+    }
+
+    .forecast-head .hint {
+      display: block;
+      margin-top: 3px;
+      font-size: 11.5px;
+      color: var(--faint);
+    }
+
+    .forecast-head .avg       { text-align: right; flex: none; }
+
+    .forecast-head .avg-label {
+      display: block;
+      font-size: 11px;
+      color: var(--faint);
+      font-weight: 600;
+    }
+
+    .forecast-head .avg-val {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 19px;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.015em;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+
+    .fc-scroll {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table.fc {
+      border-collapse: collapse;
+      width: max-content;
+      min-width: 100%;
+      font-size: 13px;
+    }
+
+    table.fc th,
+    table.fc td {
+      padding: 11px 13px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    table.fc thead th {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      line-height: 1.1;
+    }
+
+    table.fc thead th .yr {
+      display: block;
+      font-size: 9.5px;
+      color: var(--faint);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    table.fc th.name,
+    table.fc td.name {
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      text-align: left;
+      z-index: 2;
+      box-shadow: 1px 0 0 var(--line);
+    }
+
+    table.fc thead th.name { z-index: 3; color: var(--muted); }
+
+    table.fc tbody td {
+      color: var(--ink);
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tbody td.empty { color: #d6dad6; }
+
+    table.fc .namecell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      font-size: 13.5px;
+    }
+
+    table.fc .namecell i {
+      width: 8px;
+      height: 8px;
+      border-radius: 3px;
+      flex: none;
+    }
+
+    table.fc .namecell span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
+    }
+
+    table.fc th.cur,
+    table.fc tbody td.cur { background: var(--accent-tint); }
+
+    table.fc tr.totals td {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 13px;
+      border-top: 1.5px solid var(--line);
+      border-bottom: none;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.totals td.cur       { background: var(--accent-tint); color: var(--accent); }
+    table.fc tr.totals td.name .lbl { font-weight: 600; color: var(--ink); }
+
+    .reserve-note {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.55;
+      margin: 0 2px 12px;
+      padding: 12px 15px;
+      background: var(--accent-tint);
+      border-radius: 13px;
+    }
+
+    .reserve-note b {
+      color: var(--accent);
+      font-weight: 600;
+      font-family: "Space Grotesk";
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.reserve td {
+      font-family: "Space Grotesk";
+      font-weight: 500;
+      font-size: 12.5px;
+      color: var(--muted);
+      border-top: 1px solid var(--line-soft);
+      border-bottom: none;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.reserve td.name .lbl { color: var(--muted); font-weight: 600; }
+    table.fc tr.reserve td.cur        { background: var(--accent-tint); color: var(--accent); }
+
+    /* ── Responsive ── */
+    @media (min-width: 560px) {
+      .fab        { left: auto; right: calc(50% - 280px + 18px); transform: none; }
+      .fab:active { transform: scale(.96); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -202,7 +757,9 @@
   </div>
 
   <button class="fab" id="fab" style="display:none">
-    <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+    </svg>
     Abo hinzufügen
   </button>
 
@@ -250,118 +807,215 @@
   </div>
 
 <script>
-const KEY="turnus:subs";
-const CKEY="turnus:cats";
-const DEFAULT_CATS=["Streaming","Software","Versicherung","Wohnen","Sport","Mobilität","Sonstiges"];
-let CATS=[...DEFAULT_CATS];
-let addingCat=false;
-const CYCLES={monthly:{label:"monatlich",perYear:12,short:"Mon."},quarterly:{label:"quartalsweise",perYear:4,short:"Quart."},yearly:{label:"jährlich",perYear:1,short:"Jahr"}};
-const PALETTE=["var(--c0)","var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--c5)"];
-const eur=new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"});
-const eur0=new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR",maximumFractionDigits:0});
+// ── Constants ──────────────────────────────────────────────────────────────
+const KEY  = "turnus:subs";
+const CKEY = "turnus:cats";
 
-let subs=[];
-let editing=null;
-let draft={cycle:"monthly",cat:"Sonstiges"};
-let mem=null; // in-memory fallback if storage unavailable
+const DEFAULT_CATS = ["Streaming", "Software", "Versicherung", "Wohnen", "Sport", "Mobilität", "Sonstiges"];
 
-const $=id=>document.getElementById(id);
+const CYCLES = {
+  monthly:   { label: "monatlich",     perYear: 12, short: "Mon."   },
+  quarterly: { label: "quartalsweise", perYear: 4,  short: "Quart." },
+  yearly:    { label: "jährlich",      perYear: 1,  short: "Jahr"   },
+};
 
-async function load(){
-  try{
-    const r=await window.storage.get(KEY);
-    subs=r&&r.value?JSON.parse(r.value):[];
-  }catch(e){ subs=mem||[]; }
-  try{
-    const rc=await window.storage.get(CKEY);
-    if(rc&&rc.value){ const arr=JSON.parse(rc.value); if(Array.isArray(arr)&&arr.length) CATS=arr; }
-  }catch(e){}
+const PALETTE = ["var(--c0)", "var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+
+const eur  = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+const eur0 = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+// ── State ──────────────────────────────────────────────────────────────────
+let CATS      = [...DEFAULT_CATS];
+let subs      = [];
+let editing   = null;
+let draft     = { cycle: "monthly", cat: "Sonstiges" };
+let addingCat = false;
+let mem       = null; // in-memory fallback if storage unavailable
+
+const $ = id => document.getElementById(id);
+
+// ── Storage ────────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await window.storage.get(KEY);
+    subs = r && r.value ? JSON.parse(r.value) : [];
+  } catch (e) {
+    subs = mem || [];
+  }
+  try {
+    const rc = await window.storage.get(CKEY);
+    if (rc && rc.value) {
+      const arr = JSON.parse(rc.value);
+      if (Array.isArray(arr) && arr.length) CATS = arr;
+    }
+  } catch (e) {}
   render();
 }
-async function persist(){
-  mem=subs;
-  try{ await window.storage.set(KEY,JSON.stringify(subs)); }catch(e){}
-}
-async function persistCats(){
-  try{ await window.storage.set(CKEY,JSON.stringify(CATS)); }catch(e){}
+
+async function persist() {
+  mem = subs;
+  try { await window.storage.set(KEY, JSON.stringify(subs)); } catch (e) {}
 }
 
-function monthlyOf(s){ return s.amount*CYCLES[s.cycle].perYear/12; }
-function yearlyOf(s){ return s.amount*CYCLES[s.cycle].perYear; }
-function catColor(cat){ const i=CATS.indexOf(cat); return PALETTE[(i<0?CATS.length-1:i)%PALETTE.length]; }
-function initials(name){ return (name.trim()[0]||"?").toUpperCase(); }
+async function persistCats() {
+  try { await window.storage.set(CKEY, JSON.stringify(CATS)); } catch (e) {}
+}
 
-function nextOccurrence(s){
-  if(!s.date) return null;
-  let d=new Date(s.date+"T00:00:00");
-  const today=new Date(); today.setHours(0,0,0,0);
-  const step={monthly:1,quarterly:3,yearly:12}[s.cycle];
-  let guard=0;
-  while(d<today && guard<400){ d.setMonth(d.getMonth()+step); guard++; }
+// ── Helpers ────────────────────────────────────────────────────────────────
+function monthlyOf(s) { return s.amount * CYCLES[s.cycle].perYear / 12; }
+function yearlyOf(s)  { return s.amount * CYCLES[s.cycle].perYear; }
+
+function catColor(cat) {
+  const i = CATS.indexOf(cat);
+  return PALETTE[(i < 0 ? CATS.length - 1 : i) % PALETTE.length];
+}
+
+function initials(name) {
+  return (name.trim()[0] || "?").toUpperCase();
+}
+
+function nextOccurrence(s) {
+  if (!s.date) return null;
+  let d = new Date(s.date + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const step = { monthly: 1, quarterly: 3, yearly: 12 }[s.cycle];
+  let guard = 0;
+  while (d < today && guard < 400) {
+    d.setMonth(d.getMonth() + step);
+    guard++;
+  }
   return d;
 }
-function daysUntil(d){ const t=new Date();t.setHours(0,0,0,0); return Math.round((d-t)/86400000); }
-function relDays(n){ if(n===0)return "heute"; if(n===1)return "morgen"; return "in "+n+" Tagen"; }
 
-function render(){
-  const hasData=subs.length>0;
-  $("toolbar").style.display=hasData?"flex":"none";
-  $("fab").style.display="flex";
+function daysUntil(d) {
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  return Math.round((d - t) / 86400000);
+}
 
-  // summary
-  const totalMonthly=subs.reduce((a,s)=>a+monthlyOf(s),0);
-  const totalYearly=totalMonthly*12;
-  let html="";
-  html+=`<div class="sum-label">Summe pro Monat</div>`;
-  html+=`<div class="sum-figure"><span class="amt" id="bigamt">${eur.format(0)}</span></div>`;
-  html+=`<div class="sum-meta"><span>≈ <b class="num">${eur0.format(totalYearly)}</b> im Jahr</span><span><b class="num">${subs.length}</b> ${subs.length===1?"Abo":"Abos"}</span></div>`;
+function relDays(n) {
+  if (n === 0) return "heute";
+  if (n === 1) return "morgen";
+  return "in " + n + " Tagen";
+}
 
-  // composition by category
-  if(hasData){
-    const byCat={};
-    subs.forEach(s=>{ byCat[s.cat]=(byCat[s.cat]||0)+monthlyOf(s); });
-    const entries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
-    html+=`<div class="bar" id="bar">`;
-    entries.forEach(([cat,v])=>{ html+=`<span data-w="${(v/totalMonthly*100).toFixed(2)}" style="width:0;background:${catColor(cat)}"></span>`; });
-    html+=`</div><div class="legend">`;
-    entries.forEach(([cat,v])=>{ html+=`<div><i style="background:${catColor(cat)}"></i>${cat} <b class="num">${eur0.format(v)}</b></div>`; });
-    html+=`</div>`;
+function parseAmount(v) {
+  const n = parseFloat(String(v).replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? NaN : n;
+}
 
-    // next payment
-    const upcoming=subs.map(s=>({s,d:nextOccurrence(s)})).filter(x=>x.d).sort((a,b)=>a.d-b.d)[0];
-    if(upcoming){
-      const n=daysUntil(upcoming.d);
-      html+=`<div class="next"><span class="pill">Nächste Zahlung</span><span><b>${esc(upcoming.s.name)}</b> · ${relDays(n)} · <span class="num">${eur.format(upcoming.s.amount)}</span></span></div>`;
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function animateAmount(el, target) {
+  if (!el) return;
+  if (window.matchMedia("(prefers-reduced-motion:reduce)").matches) {
+    el.textContent = eur.format(target);
+    return;
+  }
+  const dur = 600, t0 = performance.now();
+  function tick(t) {
+    const p = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = eur.format(target * e);
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function render() {
+  const hasData = subs.length > 0;
+  $("toolbar").style.display = hasData ? "flex" : "none";
+  $("fab").style.display = "flex";
+
+  const totalMonthly = subs.reduce((a, s) => a + monthlyOf(s), 0);
+  const totalYearly  = totalMonthly * 12;
+
+  let html = "";
+  html += `<div class="sum-label">Summe pro Monat</div>`;
+  html += `<div class="sum-figure"><span class="amt" id="bigamt">${eur.format(0)}</span></div>`;
+  html += `<div class="sum-meta">
+    <span>≈ <b class="num">${eur0.format(totalYearly)}</b> im Jahr</span>
+    <span><b class="num">${subs.length}</b> ${subs.length === 1 ? "Abo" : "Abos"}</span>
+  </div>`;
+
+  if (hasData) {
+    // Composition bar
+    const byCat = {};
+    subs.forEach(s => { byCat[s.cat] = (byCat[s.cat] || 0) + monthlyOf(s); });
+    const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+
+    html += `<div class="bar" id="bar">`;
+    entries.forEach(([cat, v]) => {
+      html += `<span data-w="${(v / totalMonthly * 100).toFixed(2)}" style="width:0;background:${catColor(cat)}"></span>`;
+    });
+    html += `</div><div class="legend">`;
+    entries.forEach(([cat, v]) => {
+      html += `<div><i style="background:${catColor(cat)}"></i>${cat} <b class="num">${eur0.format(v)}</b></div>`;
+    });
+    html += `</div>`;
+
+    // Next payment
+    const upcoming = subs
+      .map(s => ({ s, d: nextOccurrence(s) }))
+      .filter(x => x.d)
+      .sort((a, b) => a.d - b.d)[0];
+
+    if (upcoming) {
+      const n = daysUntil(upcoming.d);
+      html += `<div class="next">
+        <span class="pill">Nächste Zahlung</span>
+        <span><b>${esc(upcoming.s.name)}</b> · ${relDays(n)} · <span class="num">${eur.format(upcoming.s.amount)}</span></span>
+      </div>`;
     }
   } else {
-    html+=`<div class="next" style="margin-top:16px;border:none;padding-top:14px"><span>Noch nichts erfasst — füge unten dein erstes Abo hinzu.</span></div>`;
+    html += `<div class="next" style="margin-top:16px;border:none;padding-top:14px">
+      <span>Noch nichts erfasst — füge unten dein erstes Abo hinzu.</span>
+    </div>`;
   }
-  $("summary").innerHTML=html;
-  animateAmount($("bigamt"),totalMonthly);
-  requestAnimationFrame(()=>{ const bar=$("bar"); if(bar) bar.querySelectorAll("span").forEach(sp=>sp.style.width=sp.dataset.w+"%"); });
+
+  $("summary").innerHTML = html;
+  animateAmount($("bigamt"), totalMonthly);
+  requestAnimationFrame(() => {
+    const bar = $("bar");
+    if (bar) bar.querySelectorAll("span").forEach(sp => sp.style.width = sp.dataset.w + "%");
+  });
 
   renderForecast();
 
-  // list
-  $("count").textContent=subs.length+(subs.length===1?" Eintrag":" Einträge");
-  const sortBy=$("sort").value;
-  const sorted=[...subs].sort((a,b)=>{
-    if(sortBy==="name") return a.name.localeCompare(b.name,"de");
-    if(sortBy==="next"){ const da=nextOccurrence(a),db=nextOccurrence(b); if(!da&&!db)return 0; if(!da)return 1; if(!db)return -1; return da-db; }
-    return monthlyOf(b)-monthlyOf(a);
+  // Subscription list
+  $("count").textContent = subs.length + (subs.length === 1 ? " Eintrag" : " Einträge");
+  const sortBy = $("sort").value;
+  const sorted = [...subs].sort((a, b) => {
+    if (sortBy === "name") return a.name.localeCompare(b.name, "de");
+    if (sortBy === "next") {
+      const da = nextOccurrence(a), db = nextOccurrence(b);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da - db;
+    }
+    return monthlyOf(b) - monthlyOf(a);
   });
 
-  if(!hasData){
-    $("list").innerHTML=`<div class="empty">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#0f6e54" stroke-width="1.5"/><path d="M12 8v4l2.5 2.5" stroke="#0f6e54" stroke-width="1.5" stroke-linecap="round"/></svg>
+  if (!hasData) {
+    $("list").innerHTML = `<div class="empty">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="#0f6e54" stroke-width="1.5"/>
+        <path d="M12 8v4l2.5 2.5" stroke="#0f6e54" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
       <h2>Behalte den Überblick</h2>
       <p>Erfasse deine Abos und Fixkosten — Turnus rechnet alles auf einen Monats- und Jahreswert um.</p>
       <button class="btn btn-primary" onclick="openSheet()">Erstes Abo hinzufügen</button>
     </div>`;
     return;
   }
-  $("list").innerHTML=sorted.map(s=>{
-    const norm=s.cycle==="monthly"?"":` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
+
+  $("list").innerHTML = sorted.map(s => {
+    const norm = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
     return `<div class="row" onclick="openSheet('${s.id}')">
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
       <div class="row-main">
@@ -376,158 +1030,235 @@ function render(){
   }).join("");
 }
 
-function renderForecast(){
-  const host=$("forecast");
-  if(subs.length===0){ host.innerHTML=""; return; }
-  const N=36;
-  const now=new Date(); now.setDate(1); now.setHours(0,0,0,0);
-  const startIdx=now.getFullYear()*12+now.getMonth();
-  const stepOf={monthly:1,quarterly:3,yearly:12};
-  const mf=new Intl.DateTimeFormat("de-DE",{month:"short"});
+function renderForecast() {
+  const host = $("forecast");
+  if (subs.length === 0) { host.innerHTML = ""; return; }
 
-  // month headers
-  let head=`<th class="name">Ausgabe</th>`;
-  for(let k=0;k<N;k++){
-    const d=new Date(now.getFullYear(), now.getMonth()+k, 1);
-    const cur=k===0?"cur":"";
-    head+=`<th class="${cur}">${mf.format(d).replace(".","")}<span class="yr">’${String(d.getFullYear()).slice(2)}</span></th>`;
+  const N        = 36;
+  const now      = new Date();
+  now.setDate(1);
+  now.setHours(0, 0, 0, 0);
+  const startIdx = now.getFullYear() * 12 + now.getMonth();
+  const stepOf   = { monthly: 1, quarterly: 3, yearly: 12 };
+  const mf       = new Intl.DateTimeFormat("de-DE", { month: "short" });
+
+  // Month headers
+  let head = `<th class="name">Ausgabe</th>`;
+  for (let k = 0; k < N; k++) {
+    const d   = new Date(now.getFullYear(), now.getMonth() + k, 1);
+    const cur = k === 0 ? "cur" : "";
+    head += `<th class="${cur}">${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
   }
 
-  const baseIndex=s=>{ const d=s.date?new Date(s.date+"T00:00:00"):new Date(now); return d.getFullYear()*12+d.getMonth(); };
-  const rows=[...subs].sort((a,b)=>monthlyOf(b)-monthlyOf(a));
-  const totals=new Array(N).fill(0);
+  const baseIndex = s => {
+    const d = s.date ? new Date(s.date + "T00:00:00") : new Date(now);
+    return d.getFullYear() * 12 + d.getMonth();
+  };
 
-  let body="";
-  rows.forEach(s=>{
-    const step=stepOf[s.cycle], bi=baseIndex(s);
-    let cells="";
-    for(let k=0;k<N;k++){
-      const i=startIdx+k, cur=k===0?"cur":"";
-      const phase=(((i-bi)%step)+step)%step===0;
-      const due=phase && (bi<=startIdx || i>=bi);
-      if(due){ totals[k]+=s.amount; cells+=`<td class="${cur}">${eur.format(s.amount)}</td>`; }
-      else { cells+=`<td class="empty ${cur}">–</td>`; }
+  const rows   = [...subs].sort((a, b) => monthlyOf(b) - monthlyOf(a));
+  const totals = new Array(N).fill(0);
+  let body     = "";
+
+  rows.forEach(s => {
+    const step = stepOf[s.cycle];
+    const bi   = baseIndex(s);
+    let cells  = "";
+    for (let k = 0; k < N; k++) {
+      const i     = startIdx + k;
+      const cur   = k === 0 ? "cur" : "";
+      const phase = (((i - bi) % step) + step) % step === 0;
+      const due   = phase && (bi <= startIdx || i >= bi);
+      if (due) {
+        totals[k] += s.amount;
+        cells += `<td class="${cur}">${eur.format(s.amount)}</td>`;
+      } else {
+        cells += `<td class="empty ${cur}">–</td>`;
+      }
     }
-    body+=`<tr><td class="name"><div class="namecell"><i style="background:${catColor(s.cat)}"></i><span>${esc(s.name)}</span></div></td>${cells}</tr>`;
+    body += `<tr>
+      <td class="name"><div class="namecell"><i style="background:${catColor(s.cat)}"></i><span>${esc(s.name)}</span></div></td>
+      ${cells}
+    </tr>`;
   });
 
-  let tot=`<td class="name"><span class="lbl">Summe / Monat</span></td>`;
-  totals.forEach((v,k)=>{ const cur=k===0?"cur":""; tot+=`<td class="${cur}">${v?eur.format(v):"–"}</td>`; });
+  // Totals row
+  let tot = `<td class="name"><span class="lbl">Summe / Monat</span></td>`;
+  totals.forEach((v, k) => {
+    const cur = k === 0 ? "cur" : "";
+    tot += `<td class="${cur}">${v ? eur.format(v) : "–"}</td>`;
+  });
 
-  // average over the next 12 months from the current month
-  const avg12=totals.slice(0,12).reduce((a,v)=>a+v,0)/12;
+  // Reserve account: deposit avg12 each month, pay that month's bills.
+  // Run from zero first to find the deepest dip = starting cushion needed.
+  const avg12 = totals.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
+  let bal = 0, minBal = 0;
+  const raw = [];
+  for (let k = 0; k < N; k++) {
+    bal += avg12 - totals[k];
+    raw.push(bal);
+    if (bal < minBal) minBal = bal;
+  }
+  const cushion = minBal < -0.005 ? -minBal : 0;
 
-  // reserve account: each month deposit the average, pay the month's bills.
-  // run from zero first to find the deepest dip = the starting cushion needed.
-  let bal=0, minBal=0;
-  const raw=[];
-  for(let k=0;k<N;k++){ bal+=avg12-totals[k]; raw.push(bal); if(bal<minBal) minBal=bal; }
-  const cushion=minBal<-0.005?-minBal:0;
-  let res=`<td class="name"><span class="lbl">Rücklagenkonto</span></td>`;
-  raw.forEach((v,k)=>{ const cur=k===0?"cur":""; const b=v+cushion; res+=`<td class="${cur}">${eur.format(Math.abs(b)<0.005?0:b)}</td>`; });
+  let res = `<td class="name"><span class="lbl">Rücklagenkonto</span></td>`;
+  raw.forEach((v, k) => {
+    const cur = k === 0 ? "cur" : "";
+    const b   = v + cushion;
+    res += `<td class="${cur}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
+  });
 
-  const note = cushion>0.005
+  const note = cushion > 0.005
     ? `So funktioniert's: Starte das Konto mit <b>${eur.format(cushion)}</b> und lege jeden Monat <b>${eur.format(avg12)}</b> zur Seite. Davon werden die fälligen Rechnungen bezahlt – so rutscht das Konto nie ins Minus.`
     : `Deine Kosten sind gleichmäßig verteilt: Leg einfach jeden Monat <b>${eur.format(avg12)}</b> zur Seite – ein Startpolster ist nicht nötig.`;
 
-  host.innerHTML=`<div class="forecast-wrap">
+  host.innerHTML = `<div class="forecast-wrap">
     <div class="forecast-head">
-      <div><h2>Prognose</h2><span class="hint">nächste 36 Monate · seitwärts wischen →</span></div>
-      <div class="avg"><span class="avg-label">Ø pro Monat · 12 Mon.</span><span class="avg-val">${eur.format(avg12)}</span></div>
+      <div>
+        <h2>Prognose</h2>
+        <span class="hint">nächste 36 Monate · seitwärts wischen →</span>
+      </div>
+      <div class="avg">
+        <span class="avg-label">Ø pro Monat · 12 Mon.</span>
+        <span class="avg-val">${eur.format(avg12)}</span>
+      </div>
     </div>
     <div class="reserve-note">${note}</div>
-    <div class="fc-scroll"><table class="fc">
-      <thead><tr>${head}</tr></thead>
-      <tbody>${body}<tr class="totals">${tot}</tr><tr class="reserve">${res}</tr></tbody>
-    </table></div>
+    <div class="fc-scroll">
+      <table class="fc">
+        <thead><tr>${head}</tr></thead>
+        <tbody>
+          ${body}
+          <tr class="totals">${tot}</tr>
+          <tr class="reserve">${res}</tr>
+        </tbody>
+      </table>
+    </div>
   </div>`;
 }
 
-function animateAmount(el,target){
-  if(!el)return;
-  if(window.matchMedia("(prefers-reduced-motion:reduce)").matches){ el.textContent=eur.format(target); return; }
-  const dur=600, t0=performance.now();
-  function tick(t){ const p=Math.min(1,(t-t0)/dur); const e=1-Math.pow(1-p,3); el.textContent=eur.format(target*e); if(p<1)requestAnimationFrame(tick); }
-  requestAnimationFrame(tick);
-}
-function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-
-/* Sheet */
-function openSheet(id){
-  editing=id||null;
-  const s=id?subs.find(x=>x.id===id):null;
-  $("sheet-title").textContent=s?"Abo bearbeiten":"Neues Abo";
-  $("f-name").value=s?s.name:"";
-  $("f-amount").value=s?String(s.amount).replace(".",","):"";
-  $("f-date").value=s?s.date||"":"";
-  $("f-note").value=s?s.note||"":"";
-  draft.cycle=s?s.cycle:"monthly";
-  draft.cat=s?s.cat:"Sonstiges";
-  $("f-cycle").querySelectorAll("button").forEach(b=>b.classList.toggle("active",b.dataset.c===draft.cycle));
-  addingCat=false;
+// ── Sheet ──────────────────────────────────────────────────────────────────
+function openSheet(id) {
+  editing = id || null;
+  const s = id ? subs.find(x => x.id === id) : null;
+  $("sheet-title").textContent = s ? "Abo bearbeiten" : "Neues Abo";
+  $("f-name").value   = s ? s.name : "";
+  $("f-amount").value = s ? String(s.amount).replace(".", ",") : "";
+  $("f-date").value   = s ? s.date || "" : "";
+  $("f-note").value   = s ? s.note || "" : "";
+  draft.cycle = s ? s.cycle : "monthly";
+  draft.cat   = s ? s.cat   : "Sonstiges";
+  $("f-cycle").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.c === draft.cycle));
+  addingCat = false;
   buildCats();
-  $("delete-btn").style.display=s?"block":"none";
+  $("delete-btn").style.display = s ? "block" : "none";
   clearErr();
-  $("scrim").classList.add("on"); $("sheet").classList.add("on");
+  $("scrim").classList.add("on");
+  $("sheet").classList.add("on");
 }
-function closeSheet(){ $("scrim").classList.remove("on"); $("sheet").classList.remove("on"); }
-function buildCats(){
-  const host=$("f-cat");
-  let html=CATS.map(c=>`<button data-cat="${esc(c)}" class="${c===draft.cat?"active":""}">${esc(c)}</button>`).join("");
-  html+=`<button class="newcat" id="cat-new">+ Neu</button>`;
-  host.innerHTML=html;
-  host.querySelectorAll("button[data-cat]").forEach(b=>b.onclick=()=>{ draft.cat=b.dataset.cat; addingCat=false; buildCats(); });
-  $("cat-new").onclick=()=>{ addingCat=true; renderCatInput(); };
-  if(addingCat) renderCatInput();
+
+function closeSheet() {
+  $("scrim").classList.remove("on");
+  $("sheet").classList.remove("on");
 }
-function renderCatInput(){
-  const host=$("f-cat");
-  const old=document.getElementById("cat-input-row"); if(old) old.remove();
-  const row=document.createElement("div");
-  row.id="cat-input-row"; row.className="cat-input-row";
-  row.innerHTML=`<input id="cat-input" type="text" placeholder="Neue Kategorie" autocomplete="off" maxlength="24">
+
+function buildCats() {
+  const host = $("f-cat");
+  let html = CATS.map(c => `<button data-cat="${esc(c)}" class="${c === draft.cat ? "active" : ""}">${esc(c)}</button>`).join("");
+  html += `<button class="newcat" id="cat-new">+ Neu</button>`;
+  host.innerHTML = html;
+  host.querySelectorAll("button[data-cat]").forEach(b => b.onclick = () => {
+    draft.cat = b.dataset.cat;
+    addingCat = false;
+    buildCats();
+  });
+  $("cat-new").onclick = () => { addingCat = true; renderCatInput(); };
+  if (addingCat) renderCatInput();
+}
+
+function renderCatInput() {
+  const host = $("f-cat");
+  const old  = document.getElementById("cat-input-row");
+  if (old) old.remove();
+
+  const row       = document.createElement("div");
+  row.id          = "cat-input-row";
+  row.className   = "cat-input-row";
+  row.innerHTML   = `<input id="cat-input" type="text" placeholder="Neue Kategorie" autocomplete="off" maxlength="24">
     <button id="cat-confirm" class="btn btn-primary">Hinzufügen</button>`;
   host.appendChild(row);
-  const inp=document.getElementById("cat-input"); inp.focus();
-  const confirm=()=>{
-    const v=inp.value.trim(); if(!v)return;
-    let match=CATS.find(c=>c.toLowerCase()===v.toLowerCase());
-    if(!match){ CATS.push(v); match=v; persistCats(); }
-    draft.cat=match; addingCat=false; buildCats();
+
+  const inp = document.getElementById("cat-input");
+  inp.focus();
+
+  const confirm = () => {
+    const v = inp.value.trim();
+    if (!v) return;
+    let match = CATS.find(c => c.toLowerCase() === v.toLowerCase());
+    if (!match) { CATS.push(v); match = v; persistCats(); }
+    draft.cat = match;
+    addingCat = false;
+    buildCats();
   };
-  document.getElementById("cat-confirm").onclick=confirm;
-  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); confirm(); } });
+
+  document.getElementById("cat-confirm").onclick = confirm;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); confirm(); } });
 }
-function clearErr(){ $("err-name").classList.remove("on"); $("err-amount").classList.remove("on"); }
 
-function parseAmount(v){ const n=parseFloat(String(v).replace(/\s/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)?NaN:n; }
+function clearErr() {
+  $("err-name").classList.remove("on");
+  $("err-amount").classList.remove("on");
+}
 
-async function save(){
+// ── CRUD ───────────────────────────────────────────────────────────────────
+async function save() {
   clearErr();
-  const name=$("f-name").value.trim();
-  const amount=parseAmount($("f-amount").value);
-  let ok=true;
-  if(!name){ $("err-name").classList.add("on"); ok=false; }
-  if(isNaN(amount)||amount<0){ $("err-amount").classList.add("on"); ok=false; }
-  if(!ok)return;
-  const data={name,amount:Math.round(amount*100)/100,cycle:draft.cycle,cat:draft.cat,date:$("f-date").value||null,note:$("f-note").value.trim()};
-  if(editing){ const i=subs.findIndex(x=>x.id===editing); if(i>-1)subs[i]={...subs[i],...data}; }
-  else { subs.push({id:"s"+Date.now()+Math.random().toString(36).slice(2,6),...data}); }
-  await persist(); closeSheet(); render();
-}
-async function del(){
-  if(!editing)return;
-  subs=subs.filter(x=>x.id!==editing);
-  await persist(); closeSheet(); render();
+  const name   = $("f-name").value.trim();
+  const amount = parseAmount($("f-amount").value);
+  let ok = true;
+  if (!name)                       { $("err-name").classList.add("on");   ok = false; }
+  if (isNaN(amount) || amount < 0) { $("err-amount").classList.add("on"); ok = false; }
+  if (!ok) return;
+
+  const data = {
+    name,
+    amount: Math.round(amount * 100) / 100,
+    cycle:  draft.cycle,
+    cat:    draft.cat,
+    date:   $("f-date").value || null,
+    note:   $("f-note").value.trim(),
+  };
+
+  if (editing) {
+    const i = subs.findIndex(x => x.id === editing);
+    if (i > -1) subs[i] = { ...subs[i], ...data };
+  } else {
+    subs.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), ...data });
+  }
+
+  await persist();
+  closeSheet();
+  render();
 }
 
-$("f-cycle").querySelectorAll("button").forEach(b=>b.onclick=()=>{ draft.cycle=b.dataset.c; $("f-cycle").querySelectorAll("button").forEach(x=>x.classList.toggle("active",x===b)); });
-$("fab").onclick=()=>openSheet();
-$("save-btn").onclick=save;
-$("cancel-btn").onclick=closeSheet;
-$("delete-btn").onclick=del;
-$("scrim").onclick=closeSheet;
-$("sort").onchange=render;
+async function del() {
+  if (!editing) return;
+  subs = subs.filter(x => x.id !== editing);
+  await persist();
+  closeSheet();
+  render();
+}
+
+// ── Event listeners ────────────────────────────────────────────────────────
+$("f-cycle").querySelectorAll("button").forEach(b => b.onclick = () => {
+  draft.cycle = b.dataset.c;
+  $("f-cycle").querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+});
+$("fab").onclick        = () => openSheet();
+$("save-btn").onclick   = save;
+$("cancel-btn").onclick = closeSheet;
+$("delete-btn").onclick = del;
+$("scrim").onclick      = closeSheet;
+$("sort").onchange      = render;
 
 load();
 </script>
