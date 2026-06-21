@@ -722,6 +722,82 @@
     table.fc tr.reserve td.name .lbl { color: var(--muted); font-weight: 600; }
     table.fc tr.reserve td.cur        { background: var(--accent-tint); color: var(--accent); }
 
+    /* ── Income rows ── */
+    table.fc tr.inc-sep td {
+      padding-top: 16px;
+      padding-bottom: 3px;
+      border-top: 2px solid var(--line);
+      border-bottom: none;
+      background: var(--bg);
+    }
+
+    table.fc tr.inc-sep td .lbl {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    table.fc tr.inc-input td {
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.inc-input td.name .lbl { color: var(--muted); font-weight: 500; }
+
+    table.fc tr.inc-calc td {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.inc-calc td.name .lbl            { font-weight: 600; color: var(--ink); }
+    table.fc tr.inc-calc.muted td                { color: var(--muted); }
+    table.fc tr.inc-calc.muted td.name .lbl      { color: var(--muted); }
+    table.fc tr.inc-calc.remain td               { background: var(--accent-tint); color: var(--accent); }
+    table.fc tr.inc-calc.remain td.name .lbl     { color: var(--accent); }
+
+    table.fc tr.inc-payout td {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 13.5px;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.inc-payout td.name .lbl { font-weight: 700; color: var(--ink); }
+
+    table.fc .ic {
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      color: var(--ink);
+      background: transparent;
+      border: none;
+      text-align: right;
+      padding: 0;
+      width: 100%;
+      min-width: 64px;
+      display: block;
+      cursor: text;
+    }
+
+    table.fc .ic::placeholder { color: var(--line); }
+
+    table.fc .ic:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 4px;
+      background: var(--accent-tint);
+    }
+
     /* ── Data actions ── */
     .data-row {
       display: flex;
@@ -879,6 +955,7 @@
 // ── Constants ──────────────────────────────────────────────────────────────
 const KEY  = "turnus:subs";
 const CKEY = "turnus:cats";
+const IKEY = "turnus:income";
 
 const DEFAULT_CATS = ["Streaming", "Software", "Versicherung", "Wohnen", "Sport", "Mobilität", "Sonstiges"];
 
@@ -894,12 +971,15 @@ const eur  = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR"
 const eur0 = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 // ── State ──────────────────────────────────────────────────────────────────
-let CATS      = [...DEFAULT_CATS];
-let subs      = [];
-let editing   = null;
-let draft     = { cycle: "monthly", cat: "Sonstiges" };
-let addingCat = false;
-let mem       = null; // in-memory fallback if storage unavailable
+let CATS        = [...DEFAULT_CATS];
+let subs        = [];
+let income      = {};   // { [absMonthIdx]: { patrick, sara, other, prevSara, prevPatrick, sockel } }
+let editing     = null;
+let draft       = { cycle: "monthly", cat: "Sonstiges" };
+let addingCat   = false;
+let mem         = null; // in-memory fallback if storage unavailable
+let lastTotals  = [];   // subscription costs per month, kept for income recalc
+let lastStartIdx = 0;
 
 const $ = id => document.getElementById(id);
 
@@ -918,6 +998,13 @@ async function load() {
       if (Array.isArray(arr) && arr.length) CATS = arr;
     }
   } catch (e) {}
+  try {
+    const ri = await window.storage.get(IKEY);
+    if (ri && ri.value) {
+      const obj = JSON.parse(ri.value);
+      if (obj && typeof obj === 'object') income = obj;
+    }
+  } catch (e) {}
   render();
 }
 
@@ -930,9 +1017,50 @@ async function persistCats() {
   try { await window.storage.set(CKEY, JSON.stringify(CATS)); } catch (e) {}
 }
 
+async function persistIncome() {
+  try { await window.storage.set(IKEY, JSON.stringify(income)); } catch (e) {}
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function monthlyOf(s) { return s.amount * CYCLES[s.cycle].perYear / 12; }
 function yearlyOf(s)  { return s.amount * CYCLES[s.cycle].perYear; }
+
+function getInc(mk, field) {
+  const m = income[String(mk)];
+  return (m && m[field]) ? Number(m[field]) : 0;
+}
+
+function setInc(mk, field, val) {
+  const k = String(mk);
+  if (!income[k]) income[k] = {};
+  income[k][field] = val;
+}
+
+function updateIncomeCol(col, mk) {
+  const p    = getInc(mk, 'patrick');
+  const s    = getInc(mk, 'sara');
+  const o    = getInc(mk, 'other');
+  const tot  = p + s + o;
+  const surp = tot - (lastTotals[col] || 0);
+  const half = surp / 2;
+  const prevS  = getInc(mk, 'prevSara');
+  const prevP  = getInc(mk, 'prevPatrick');
+  const sock   = getInc(mk, 'sockel');
+  const remain = surp - sock * 2 - prevS - prevP;
+  const hasData = p || s || o || sock || prevS || prevP;
+
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = hasData ? eur.format(v) : '–';
+  };
+
+  set(`cc-total-${mk}`,    tot);
+  set(`cc-surp-${mk}`,     surp);
+  set(`cc-half-${mk}`,     half);
+  set(`cc-remain-${mk}`,   remain);
+  set(`cc-sarap-${mk}`,    sock + prevS);
+  set(`cc-patrickp-${mk}`, sock + prevP);
+}
 
 function catColor(cat) {
   const i = CATS.indexOf(cat);
@@ -1180,6 +1308,44 @@ function renderForecast() {
     ? `So funktioniert's: Starte das Konto mit <b>${eur.format(cushion)}</b> und lege jeden Monat <b>${eur.format(avg12)}</b> zur Seite. Davon werden die fälligen Rechnungen bezahlt – so rutscht das Konto nie ins Minus.`
     : `Deine Kosten sind gleichmäßig verteilt: Leg einfach jeden Monat <b>${eur.format(avg12)}</b> zur Seite – ein Startpolster ist nicht nötig.`;
 
+  // ── Income rows ──
+  const iRow = (trCls, lbl, cells) =>
+    `<tr class="${trCls}"><td class="name"><span class="lbl">${lbl}</span></td>${cells}</tr>`;
+
+  const inputCells = key => Array.from({ length: N }, (_, k) => {
+    const mk  = startIdx + k;
+    const cur = k === 0 ? 'cur' : '';
+    const v   = getInc(mk, key);
+    return `<td class="${cur}"><input class="ic" data-key="${key}" data-col="${k}" type="text" inputmode="decimal" placeholder="–"${v ? ` value="${String(v).replace('.', ',')}"` : ''}></td>`;
+  }).join('');
+
+  const calcCells = key => Array.from({ length: N }, (_, k) => {
+    const mk  = startIdx + k;
+    const cur = k === 0 ? 'cur' : '';
+    return `<td class="${cur}" id="cc-${key}-${mk}">–</td>`;
+  }).join('');
+
+  let sepCells = '';
+  for (let k = 0; k < N; k++) sepCells += `<td class="${k === 0 ? 'cur' : ''}"></td>`;
+
+  const incRows =
+    `<tr class="inc-sep"><td class="name"><span class="lbl">Einnahmen &amp; Auszahlung</span></td>${sepCells}</tr>`
+    + iRow('inc-input', 'Patrick Lohn',       inputCells('patrick'))
+    + iRow('inc-input', 'Sara Lohn',          inputCells('sara'))
+    + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
+    + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
+    + iRow('inc-calc',  'Überschuss',         calcCells('surp'))
+    + iRow('inc-calc muted', 'Überschuss / 2', calcCells('half'))
+    + iRow('inc-input', 'Vormonat Sara',      inputCells('prevSara'))
+    + iRow('inc-input', 'Vormonat Patrick',   inputCells('prevPatrick'))
+    + iRow('inc-input', 'Sockel / Person',    inputCells('sockel'))
+    + iRow('inc-calc remain', 'Verbleibend',  calcCells('remain'))
+    + iRow('inc-payout', 'Sara erhält',       calcCells('sarap'))
+    + iRow('inc-payout', 'Patrick erhält',    calcCells('patrickp'));
+
+  lastTotals   = totals;
+  lastStartIdx = startIdx;
+
   host.innerHTML = `<div class="forecast-wrap">
     <div class="forecast-head">
       <div>
@@ -1199,10 +1365,25 @@ function renderForecast() {
           ${body}
           <tr class="totals">${tot}</tr>
           <tr class="reserve">${res}</tr>
+          ${incRows}
         </tbody>
       </table>
     </div>
   </div>`;
+
+  // Fill computed income cells
+  for (let k = 0; k < N; k++) updateIncomeCol(k, startIdx + k);
+
+  // Attach income input listeners
+  host.querySelectorAll('.ic').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const col = parseInt(inp.dataset.col);
+      const mk  = lastStartIdx + col;
+      setInc(mk, inp.dataset.key, parseFloat(inp.value.replace(/\./g, '').replace(',', '.')) || 0);
+      persistIncome();
+      updateIncomeCol(col, mk);
+    });
+  });
 }
 
 // ── Sheet ──────────────────────────────────────────────────────────────────
@@ -1320,7 +1501,7 @@ async function del() {
 // ── Import / Export ────────────────────────────────────────────────────────
 function exportData() {
   const date    = new Date().toISOString().slice(0, 10);
-  const payload = JSON.stringify({ subs, cats: CATS, exported: new Date().toISOString() }, null, 2);
+  const payload = JSON.stringify({ subs, cats: CATS, income, exported: new Date().toISOString() }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement("a");
@@ -1340,10 +1521,12 @@ async function importData(file) {
     const data = JSON.parse(text);
     if (!Array.isArray(data.subs)) throw new Error("Kein gültiges Haushalt-Backup");
     if (subs.length > 0 && !confirm(`${subs.length} vorhandene Einträge ersetzen?`)) return;
-    subs = data.subs;
-    CATS = (Array.isArray(data.cats) && data.cats.length) ? data.cats : [...DEFAULT_CATS];
+    subs   = data.subs;
+    CATS   = (Array.isArray(data.cats) && data.cats.length) ? data.cats : [...DEFAULT_CATS];
+    income = (data.income && typeof data.income === 'object') ? data.income : {};
     await persist();
     await persistCats();
+    await persistIncome();
     render();
     showToast(`${subs.length} Einträge geladen`);
   } catch (e) {
