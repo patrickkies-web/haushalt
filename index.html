@@ -798,6 +798,161 @@
       background: var(--accent-tint);
     }
 
+    /* ── Wealth section ── */
+    .wealth-wrap { margin-top: 28px; }
+
+    .wealth-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 0 2px 12px;
+    }
+
+    .wealth-head h2 {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -.01em;
+    }
+
+    .wealth-head .hint {
+      display: block;
+      margin-top: 3px;
+      font-size: 11.5px;
+      color: var(--faint);
+    }
+
+    .wealth-add-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-tint);
+      border: none;
+      border-radius: 20px;
+      padding: 8px 14px;
+      cursor: pointer;
+      flex: none;
+      white-space: nowrap;
+      transition: opacity .15s ease;
+    }
+
+    .wealth-add-btn:hover { opacity: .8; }
+
+    .wealth-empty {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--faint);
+      font-size: 13.5px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    table.fc tr.wt-acct td {
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+
+    table.fc tr.wt-total td {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 13px;
+      border-top: 1.5px solid var(--line);
+      border-bottom: none;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.wt-total td.cur { background: var(--accent-tint); color: var(--accent); }
+    table.fc tr.wt-acct  td.cur { background: var(--accent-tint); }
+
+    .wealth-chart-wrap {
+      margin-top: 16px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 4px 14px;
+      overflow: hidden;
+    }
+
+    .wealth-chart-title {
+      font-family: "Space Grotesk";
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0 14px 14px;
+    }
+
+    .wealth-chart-svg { width: 100%; display: block; }
+
+    .wealth-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin: 12px 14px 0;
+    }
+
+    .wealth-legend div {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .wealth-legend i {
+      width: 18px;
+      height: 3px;
+      border-radius: 2px;
+      display: inline-block;
+      flex: none;
+    }
+
+    .wealth-del-btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--danger);
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      padding: 2px 6px;
+      cursor: pointer;
+      opacity: .6;
+      line-height: 1;
+    }
+
+    .wealth-del-btn:hover { opacity: 1; }
+
+    .wealth-add-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+    }
+
+    .wealth-add-row input {
+      flex: 1;
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1.5px solid var(--accent);
+      border-radius: 20px;
+      padding: 9px 14px;
+    }
+
+    .wealth-add-row input:focus { outline: none; }
+
+    .wealth-add-row .btn {
+      padding: 9px 15px;
+      border-radius: 20px;
+      font-size: 13px;
+    }
+
     /* ── Data actions ── */
     .data-row {
       display: flex;
@@ -886,6 +1041,8 @@
 
     <section id="forecast"></section>
 
+    <section id="wealth"></section>
+
     <div class="data-row">
       <button class="btn-data" id="export-btn">
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13M7 11l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -956,6 +1113,7 @@
 const KEY  = "turnus:subs";
 const CKEY = "turnus:cats";
 const IKEY = "turnus:income";
+const WKEY = "turnus:wealth";
 
 const DEFAULT_CATS = ["Streaming", "Software", "Versicherung", "Wohnen", "Sport", "Mobilität", "Sonstiges"];
 
@@ -980,6 +1138,7 @@ let addingCat   = false;
 let mem         = null; // in-memory fallback if storage unavailable
 let lastTotals  = [];   // subscription costs per month, kept for income recalc
 let lastStartIdx = 0;
+let wealth       = { accounts: [], balances: {} };
 
 const $ = id => document.getElementById(id);
 
@@ -1005,6 +1164,13 @@ async function load() {
       if (obj && typeof obj === 'object') income = obj;
     }
   } catch (e) {}
+  try {
+    const rw = await window.storage.get(WKEY);
+    if (rw && rw.value) {
+      const d = JSON.parse(rw.value);
+      if (d && Array.isArray(d.accounts)) wealth = d;
+    }
+  } catch (e) {}
   render();
 }
 
@@ -1019,6 +1185,10 @@ async function persistCats() {
 
 async function persistIncome() {
   try { await window.storage.set(IKEY, JSON.stringify(income)); } catch (e) {}
+}
+
+async function persistWealth() {
+  try { await window.storage.set(WKEY, JSON.stringify(wealth)); } catch (e) {}
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1182,6 +1352,7 @@ function render() {
   });
 
   renderForecast();
+  renderWealth();
 
   // Subscription list
   $("count").textContent = subs.length + (subs.length === 1 ? " Eintrag" : " Einträge");
@@ -1386,6 +1557,201 @@ function renderForecast() {
   });
 }
 
+// ── Wealth ─────────────────────────────────────────────────────────────────
+function getWealthBalance(accountId, mk) {
+  const bals = wealth.balances[accountId];
+  if (!bals) return null;
+  let last = null;
+  const keys = Object.keys(bals).map(Number).sort((a, b) => a - b);
+  for (const k of keys) {
+    if (k <= mk) last = bals[k];
+    else break;
+  }
+  return last;
+}
+
+function setWealthBalance(accountId, mk, val) {
+  if (!wealth.balances[accountId]) wealth.balances[accountId] = {};
+  if (val === "" || val === null) {
+    delete wealth.balances[accountId][String(mk)];
+  } else {
+    wealth.balances[accountId][String(mk)] = val;
+  }
+}
+
+function buildWealthChart(accounts, totals, startIdx, N) {
+  const W = 540, H = 160, PL = 8, PR = 8, PT = 12, PB = 28;
+  const cw = W - PL - PR, ch = H - PT - PB;
+  const allVals = totals.filter(v => v !== null);
+  if (!allVals.length) return "";
+  const maxV = Math.max(...allVals, 1);
+  const minV = Math.min(...allVals, 0);
+  const range = maxV - minV || 1;
+  const xOf = k => PL + (k / (N - 1)) * cw;
+  const yOf = v => PT + ch - ((v - minV) / range) * ch;
+
+  let svg = `<svg class="wealth-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`;
+  for (let i = 0; i <= 4; i++) {
+    const y = PT + (i / 4) * ch;
+    svg += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+    if (i < 4) svg += `<text x="${PL + 2}" y="${y - 3}" font-size="8" fill="var(--faint)" font-family="Space Grotesk">${eur0.format(maxV - (i / 4) * range)}</text>`;
+  }
+  const now = new Date();
+  const mf  = new Intl.DateTimeFormat("de-DE", { month: "short" });
+  for (let k = 0; k < N; k += 6) {
+    const d = new Date(now.getFullYear(), now.getMonth() + k, 1);
+    svg += `<text x="${xOf(k)}" y="${H - 2}" font-size="8" fill="var(--faint)" font-family="Space Grotesk" text-anchor="middle">${mf.format(d).replace(".", "")} '${String(d.getFullYear()).slice(2)}</text>`;
+  }
+  svg += `<line x1="${xOf(0)}" y1="${PT}" x2="${xOf(0)}" y2="${PT + ch}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="3 3" opacity=".5"/>`;
+
+  const aColors = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+  accounts.forEach((acc, ai) => {
+    const pts = [];
+    for (let k = 0; k < N; k++) {
+      const v = getWealthBalance(acc.id, startIdx + k);
+      if (v !== null) pts.push([xOf(k), yOf(v)]);
+    }
+    if (pts.length < 2) return;
+    const d = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(" ");
+    svg += `<path d="${d}" fill="none" stroke="${aColors[ai % aColors.length]}" stroke-width="1.5" opacity=".65"/>`;
+  });
+
+  const totalPts = totals.map((v, k) => v !== null ? [xOf(k), yOf(v)] : null);
+  const segments = [];
+  let seg = [];
+  totalPts.forEach(p => { if (p) { seg.push(p); } else { if (seg.length) { segments.push(seg); seg = []; } } });
+  if (seg.length) segments.push(seg);
+  segments.forEach(pts => {
+    if (pts.length < 2) return;
+    const baseline = yOf(minV);
+    const area = `M${pts[0][0]},${baseline} ` + pts.map(p => `L${p[0]},${p[1]}`).join(" ") + ` L${pts[pts.length-1][0]},${baseline} Z`;
+    const line = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(" ");
+    svg += `<path d="${area}" fill="var(--accent)" opacity=".08"/>`;
+    svg += `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.2"/>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+function renderWealth() {
+  const host = $("wealth");
+  const N    = 36;
+  const now  = new Date();
+  now.setDate(1); now.setHours(0, 0, 0, 0);
+  const startIdx = now.getFullYear() * 12 + now.getMonth();
+  const mf       = new Intl.DateTimeFormat("de-DE", { month: "short" });
+  const accounts = wealth.accounts;
+  const aColors  = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)"];
+
+  const totals = [];
+  let anyData = false;
+  for (let k = 0; k < N; k++) {
+    const mk = startIdx + k;
+    let sum = 0, hasAny = false;
+    accounts.forEach(acc => {
+      const v = getWealthBalance(acc.id, mk);
+      if (v !== null) { sum += v; hasAny = true; }
+    });
+    totals.push(hasAny ? sum : null);
+    if (hasAny) anyData = true;
+  }
+
+  const addBtn   = `<button class="wealth-add-btn" onclick="wealthStartAdd()">+ Position</button>`;
+  const headHtml = `<div class="wealth-head"><div><h2>Vermögen</h2><span class="hint">Kontostand zu Monatsbeginn · seitwärts wischen →</span></div>${addBtn}</div>`;
+
+  if (accounts.length === 0) {
+    host.innerHTML = `<div class="wealth-wrap">${headHtml}<div class="wealth-empty">Noch keine Positionen — füge z. B. Aktiendepot oder Sparkonto hinzu.</div></div>`;
+    return;
+  }
+
+  let head = `<th class="name">Position</th>`;
+  for (let k = 0; k < N; k++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + k, 1);
+    head += `<th class="${k === 0 ? "cur" : ""}">${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
+  }
+
+  let acctRows = "";
+  accounts.forEach((acc, ai) => {
+    let cells = "";
+    for (let k = 0; k < N; k++) {
+      const mk     = startIdx + k;
+      const cur    = k === 0 ? "cur" : "";
+      const stored = (wealth.balances[acc.id] || {})[String(mk)];
+      const cf     = getWealthBalance(acc.id, mk);
+      const isCf   = cf !== null && stored === undefined;
+      cells += `<td class="${cur}" style="${isCf ? "opacity:.45" : ""}"><input class="ic" type="text" inputmode="decimal" data-acct="${acc.id}" data-key="${mk}" value="${stored !== undefined ? String(stored).replace(".", ",") : ""}" placeholder="${isCf ? eur.format(cf) : ""}"></td>`;
+    }
+    acctRows += `<tr class="wt-acct"><td class="name"><div class="namecell"><i style="background:${aColors[ai % aColors.length]}"></i><span>${esc(acc.name)}</span><button class="wealth-del-btn" onclick="wealthDelAccount('${acc.id}')">×</button></div></td>${cells}</tr>`;
+  });
+
+  let totRow = `<td class="name"><span class="lbl">Vermögen gesamt</span></td>`;
+  totals.forEach((v, k) => {
+    totRow += `<td class="${k === 0 ? "cur" : ""}">${v !== null ? eur.format(v) : "–"}</td>`;
+  });
+
+  const chartHtml = anyData ? `<div class="wealth-chart-wrap">
+    <div class="wealth-chart-title">Vermögensverlauf</div>
+    ${buildWealthChart(accounts, totals, startIdx, N)}
+    <div class="wealth-legend">
+      <div><i style="background:var(--accent)"></i><b>Gesamt</b></div>
+      ${accounts.map((acc, ai) => `<div><i style="background:${aColors[ai % aColors.length]}"></i>${esc(acc.name)}</div>`).join("")}
+    </div>
+  </div>` : "";
+
+  host.innerHTML = `<div class="wealth-wrap">${headHtml}
+    <div class="fc-scroll"><table class="fc">
+      <thead><tr>${head}</tr></thead>
+      <tbody>${acctRows}<tr class="wt-total">${totRow}</tr></tbody>
+    </table></div>
+    ${chartHtml}
+  </div>`;
+
+  host.querySelectorAll("input.ic[data-acct]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const accId = inp.dataset.acct;
+      const mk    = Number(inp.dataset.key);
+      const raw   = inp.value.trim().replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+      const v     = parseFloat(raw);
+      setWealthBalance(accId, mk, isNaN(v) ? "" : v);
+      persistWealth();
+      renderWealth();
+    });
+  });
+}
+
+function wealthStartAdd() {
+  const host = $("wealth");
+  const existing = host.querySelector(".wealth-add-row");
+  if (existing) { existing.querySelector("input").focus(); return; }
+  const row = document.createElement("div");
+  row.className = "wealth-add-row";
+  row.innerHTML = `<input id="wealth-name-inp" type="text" placeholder="z. B. Aktiendepot, Sparkonto" autocomplete="off" maxlength="32">
+    <button class="btn btn-primary" onclick="wealthConfirmAdd()">Hinzufügen</button>
+    <button class="btn btn-ghost" onclick="this.parentElement.remove()">Abbrechen</button>`;
+  host.querySelector(".wealth-wrap").appendChild(row);
+  const inp = document.getElementById("wealth-name-inp");
+  inp.focus();
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); wealthConfirmAdd(); } });
+}
+
+function wealthConfirmAdd() {
+  const inp = document.getElementById("wealth-name-inp");
+  if (!inp) return;
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  wealth.accounts.push({ id: "w" + Date.now() + Math.random().toString(36).slice(2, 5), name });
+  persistWealth();
+  renderWealth();
+}
+
+function wealthDelAccount(id) {
+  if (!confirm("Position löschen?")) return;
+  wealth.accounts = wealth.accounts.filter(a => a.id !== id);
+  delete wealth.balances[id];
+  persistWealth();
+  renderWealth();
+}
+
 // ── Sheet ──────────────────────────────────────────────────────────────────
 function openSheet(id) {
   editing = id || null;
@@ -1501,7 +1867,7 @@ async function del() {
 // ── Import / Export ────────────────────────────────────────────────────────
 function exportData() {
   const date    = new Date().toISOString().slice(0, 10);
-  const payload = JSON.stringify({ subs, cats: CATS, income, exported: new Date().toISOString() }, null, 2);
+  const payload = JSON.stringify({ subs, cats: CATS, income, wealth, exported: new Date().toISOString() }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement("a");
@@ -1524,9 +1890,11 @@ async function importData(file) {
     subs   = data.subs;
     CATS   = (Array.isArray(data.cats) && data.cats.length) ? data.cats : [...DEFAULT_CATS];
     income = (data.income && typeof data.income === 'object') ? data.income : {};
+    wealth = (data.wealth && Array.isArray(data.wealth.accounts)) ? data.wealth : { accounts: [], balances: {} };
     await persist();
     await persistCats();
     await persistIncome();
+    await persistWealth();
     render();
     showToast(`${subs.length} Einträge geladen`);
   } catch (e) {
