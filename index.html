@@ -2463,44 +2463,52 @@ function renderForecast() {
     tot += `<td class="${cls}">${v ? eur.format(v) : "–"}</td>`;
   });
 
-  // Reserve account based on future months only
-  const futureTotals = totals.slice(PAST);
-  const avg12 = futureTotals.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
-  let bal = 0, minBal = 0;
-  const raw = [];
-  for (let k = 0; k < FUTURE + 1; k++) {
-    bal += avg12 - futureTotals[k];
-    raw.push(bal);
-    if (bal < minBal) minBal = bal;
-  }
-  const cushion = minBal < -0.005 ? -minBal : 0;
-
-  let res = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
-  for (let k = 0; k < N; k++) {
-    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
-    if (isPast(k)) {
-      res += `<td class="${cls}">–</td>`;
-    } else {
-      const b = raw[k - PAST] + cushion;
-      res += `<td class="${cls}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
+  // Rotierkonto: only irregular (quarterly + yearly) subs need smoothing
+  const irrTotals = new Array(N).fill(0);
+  rows.forEach(s => {
+    if (s.cycle === 'monthly') return;
+    const step    = stepOf[s.cycle];
+    const bi      = baseIndex(s);
+    const deactMk = subDeactMk(s);
+    for (let k = 0; k < N; k++) {
+      const i = startIdx + k;
+      const phase = (((i - bi) % step) + step) % step === 0;
+      if (phase && (bi <= curMk || i >= bi) && i < deactMk) irrTotals[k] += s.amount;
     }
-  }
+  });
 
-  // Rotierkonto: monthly deposit (constant) and withdrawal (when due)
+  const futureIrr = irrTotals.slice(PAST);
+  const avg12Irr  = futureIrr.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
+  let balIrr = 0, minBalIrr = 0;
+  const rawIrr = [];
+  for (let k = 0; k < FUTURE + 1; k++) {
+    balIrr += avg12Irr - futureIrr[k];
+    rawIrr.push(balIrr);
+    if (balIrr < minBalIrr) minBalIrr = balIrr;
+  }
+  const cushion = minBalIrr < -0.005 ? -minBalIrr : 0;
+
   let rotSep = `<td class="name"><span class="lbl">Rotierkonto</span></td>`;
   let rotEin = `<td class="name"><span class="lbl">↑ Einzahlen / Monat</span></td>`;
   let rotAus = `<td class="name"><span class="lbl">↓ Auszahlen wenn fällig</span></td>`;
+  let rotRes = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
   for (let k = 0; k < N; k++) {
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
-    const due = totals[k];
+    const due = irrTotals[k];
     rotSep += `<td class="${cls}"></td>`;
-    rotEin += `<td class="${cls}">${eur.format(avg12)}</td>`;
-    rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : "–"}</td>`;
+    rotEin += `<td class="${cls}">${avg12Irr > 0.005 ? eur.format(avg12Irr) : '–'}</td>`;
+    rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
+    if (isPast(k)) {
+      rotRes += `<td class="${cls}">–</td>`;
+    } else {
+      const b = rawIrr[k - PAST] + cushion;
+      rotRes += `<td class="${cls}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
+    }
   }
 
-  const note = cushion > 0.005
-    ? `Starte das Rotierkonto mit <b>${eur.format(cushion)}</b> und zahle jeden Monat <b>${eur.format(avg12)}</b> ein. In Monaten mit fälligen Rechnungen zahlst du den Betrag aus – deine monatlichen Ausgaben bleiben so immer gleich.`
-    : `Zahle jeden Monat <b>${eur.format(avg12)}</b> aufs Rotierkonto. In Monaten mit fälligen Rechnungen zahlst du den Betrag aus – so hast du immer gleiche Ausgaben, kein Startpolster nötig.`;
+  const note = avg12Irr < 0.005 ? '' : cushion > 0.005
+    ? `Starte das Rotierkonto mit <b>${eur.format(cushion)}</b> und zahle jeden Monat <b>${eur.format(avg12Irr)}</b> ein. In Monaten mit fälligen Rechnungen überweist du den Betrag aufs Gehaltskonto – so sind deine Ausgaben immer gleich.`
+    : `Zahle jeden Monat <b>${eur.format(avg12Irr)}</b> aufs Rotierkonto. In Monaten mit fälligen Rechnungen überweist du den Betrag aufs Gehaltskonto – kein Startpolster nötig.`;
 
   // ── Income rows ──
   const iRow = (trCls, lbl, cells) =>
@@ -2551,7 +2559,7 @@ function renderForecast() {
       </div>
       <div class="avg">
         <span class="avg-label">Rotierkonto · Ø / Monat</span>
-        <span class="avg-val">${eur.format(avg12)}</span>
+        <span class="avg-val">${avg12Irr > 0.005 ? eur.format(avg12Irr) : '–'}</span>
       </div>
     </div>
     <div class="reserve-note">${note}</div>
@@ -2564,7 +2572,7 @@ function renderForecast() {
           <tr class="rot-sep">${rotSep}</tr>
           <tr class="rot-ein">${rotEin}</tr>
           <tr class="rot-aus">${rotAus}</tr>
-          <tr class="reserve">${res}</tr>
+          <tr class="reserve">${rotRes}</tr>
           ${incRows}
         </tbody>
       </table>
