@@ -1145,6 +1145,179 @@
       gap: 6px;
     }
 
+    /* ── Transaction link / payment UI ── */
+    .tx-chips-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 5px;
+    }
+
+    .tx-link-btn {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-tint);
+      border: 1.5px dashed var(--accent);
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      letter-spacing: .01em;
+      user-select: none;
+    }
+    .tx-link-btn:hover { background: #c8e8da; }
+
+    .tx-linked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-tint);
+      border: 1.5px solid var(--accent);
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* payment badge on subscription row */
+    .sub-pay-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: "Space Grotesk";
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      margin-bottom: 4px;
+    }
+    .sub-pay-badge.ok   { color: var(--accent);  background: var(--accent-tint); }
+    .sub-pay-badge.diff { color: #a06020;         background: #fef0db; }
+
+    /* sub picker bottom sheet */
+    .tx-sub-picker {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: min(480px, 100vw);
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 12px 16px 36px;
+      box-shadow: 0 -8px 40px rgba(20,30,25,.18);
+      z-index: 62;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .tx-sub-scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(18,24,21,.28);
+      z-index: 61;
+      backdrop-filter: blur(2px);
+    }
+
+    .tx-sub-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .tx-sub-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg);
+      border-radius: 14px;
+      padding: 11px 13px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: border-color .15s;
+    }
+    .tx-sub-row:hover, .tx-sub-row.active { border-color: var(--accent); background: var(--accent-tint); }
+
+    .tx-sub-swatch {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 12px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .tx-sub-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .tx-sub-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    /* price change modal */
+    .price-modal-scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(18,24,21,.4);
+      z-index: 70;
+      backdrop-filter: blur(3px);
+    }
+
+    .price-modal {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(380px, 92vw);
+      background: var(--surface);
+      border-radius: 22px;
+      padding: 28px 24px 22px;
+      box-shadow: 0 20px 60px rgba(20,30,25,.22);
+      z-index: 71;
+      text-align: center;
+    }
+
+    .price-modal-icon {
+      font-size: 30px;
+      margin-bottom: 10px;
+    }
+
+    .price-modal-title {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    .price-modal-body {
+      font-size: 14.5px;
+      line-height: 1.6;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+
+    .price-modal-q {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+
+    .price-modal-btns {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
     /* ── Wealth section ── */
     .wealth-wrap { margin-top: 28px; }
 
@@ -1473,6 +1646,7 @@ const CKEY = "turnus:cats";
 const IKEY = "turnus:income";
 const WKEY = "turnus:wealth";
 const TKEY = "turnus:transactions";
+const PKEY = "turnus:payments";
 
 const TX_CATS = [
   "Lebensmittel","Restaurant & Café","Mobilität","Shopping",
@@ -1506,6 +1680,7 @@ let lastTotals  = [];   // subscription costs per month, kept for income recalc
 let lastStartIdx = 0;
 let wealth        = { accounts: [], balances: {} };
 let transactions  = [];
+let payments      = {};   // { [subId]: { [yymm]: { txId, txAmount, date, isException } } }
 let txMonthOffset = 0;
 let txFilter      = "all";
 let txHideTransfer = true;
@@ -1548,6 +1723,13 @@ async function load() {
       if (Array.isArray(d)) transactions = d;
     }
   } catch (e) {}
+  try {
+    const rp = await window.storage.get(PKEY);
+    if (rp && rp.value) {
+      const d = JSON.parse(rp.value);
+      if (d && typeof d === 'object') payments = d;
+    }
+  } catch (e) {}
   render();
 }
 
@@ -1570,6 +1752,187 @@ async function persistWealth() {
 
 async function persistTransactions() {
   try { await window.storage.set(TKEY, JSON.stringify(transactions)); } catch (e) {}
+}
+
+async function persistPayments() {
+  try { await window.storage.set(PKEY, JSON.stringify(payments)); } catch (e) {}
+}
+
+// ── Payment helpers ────────────────────────────────────────────────────────
+function getPayment(subId, yymm) {
+  return (payments[subId] || {})[yymm] || null;
+}
+
+function txYYMM(t) {
+  return t.date ? t.date.slice(0, 7) : null;
+}
+
+// which sub (if any) is this transaction linked to?
+function txLinkedSub(txId) {
+  for (const subId of Object.keys(payments)) {
+    const sub = subs.find(s => s.id === subId);
+    if (!sub) continue;
+    for (const p of Object.values(payments[subId] || {})) {
+      if (p.txId === txId) return sub;
+    }
+  }
+  return null;
+}
+
+// fuzzy name similarity score (0–1) — shared characters / max length
+function nameSim(a, b) {
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+  if (a.includes(b) || b.includes(a)) return 1;
+  let hits = 0;
+  b.split("").forEach(c => { if (a.includes(c)) hits++; });
+  return hits / Math.max(a.length, b.length);
+}
+
+function txLinkToSub(txId) {
+  const t = transactions.find(x => x.id === txId);
+  if (!t) return;
+  document.querySelectorAll(".tx-sub-picker").forEach(p => p.remove());
+  document.querySelectorAll(".tx-sub-scrim").forEach(p => p.remove());
+
+  const payee = t.payee || "";
+  const sorted = [...subs].sort((a, b) => nameSim(b.name, payee) - nameSim(a.name, payee));
+
+  const existingLink = txLinkedSub(txId);
+
+  const rows = sorted.map(s => {
+    const isLinked = existingLink && existingLink.id === s.id;
+    const yymm = txYYMM(t);
+    const alreadyPaid = yymm && getPayment(s.id, yymm);
+    const note = isLinked ? "· verknüpft" : alreadyPaid ? "· bereits bezahlt" : "";
+    return `<div class="tx-sub-row ${isLinked ? "active" : ""}" onclick="txConfirmLink('${txId}','${s.id}')">
+      <div class="tx-sub-swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
+      <div class="tx-sub-info">
+        <div class="tx-sub-name">${esc(s.name)}</div>
+        <div class="tx-sub-meta">${esc(s.cat)} · ${eur.format(s.amount)} ${CYCLES[s.cycle].short} <span style="color:var(--accent)">${note}</span></div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const popup = document.createElement("div");
+  popup.className = "tx-sub-picker";
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:6px">Abo zuordnen</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Transaktion: <b>${esc(payee)}</b> · ${eur.format(t.amount)}</div>
+    <div class="tx-sub-list">${rows || '<div style="color:var(--muted);font-size:13px;padding:8px 0">Noch keine Abos angelegt.</div>'}</div>
+    ${existingLink ? `<button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="txUnlinkSub('${txId}')">Zuordnung entfernen</button>` : ""}`;
+
+  const scrim = document.createElement("div");
+  scrim.className = "tx-sub-scrim";
+  scrim.onclick = () => { popup.remove(); scrim.remove(); };
+
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function txConfirmLink(txId, subId) {
+  const t   = transactions.find(x => x.id === txId);
+  const sub = subs.find(s => s.id === subId);
+  if (!t || !sub) return;
+
+  const txAmt  = Math.abs(t.amount);
+  const subAmt = sub.amount;
+  const diff   = Math.abs(txAmt - subAmt);
+
+  if (diff < 0.01) {
+    // amounts match — link directly
+    doLinkTx(txId, subId, false);
+  } else {
+    // amounts differ — ask user
+    showPriceChangeModal(txId, subId, subAmt, txAmt);
+  }
+}
+
+function doLinkTx(txId, subId, isException) {
+  const t = transactions.find(x => x.id === txId);
+  if (!t) return;
+  const yymm = txYYMM(t);
+  if (!yymm) return;
+  if (!payments[subId]) payments[subId] = {};
+  payments[subId][yymm] = { txId, txAmount: t.amount, date: t.date, isException };
+  persistPayments();
+  document.querySelectorAll(".tx-sub-picker").forEach(p => p.remove());
+  document.querySelectorAll(".tx-sub-scrim").forEach(p => p.remove());
+  renderTransactions();
+  // Re-render subscription list too
+  render();
+}
+
+function txUnlinkSub(txId) {
+  const t = transactions.find(x => x.id === txId);
+  if (!t) return;
+  const yymm = txYYMM(t);
+  for (const subId of Object.keys(payments)) {
+    const mp = payments[subId];
+    if (mp && mp[yymm] && mp[yymm].txId === txId) {
+      delete mp[yymm];
+      if (!Object.keys(mp).length) delete payments[subId];
+      break;
+    }
+  }
+  persistPayments();
+  document.querySelectorAll(".tx-sub-picker").forEach(p => p.remove());
+  document.querySelectorAll(".tx-sub-scrim").forEach(p => p.remove());
+  renderTransactions();
+  render();
+}
+
+function showPriceChangeModal(txId, subId, subAmt, txAmt) {
+  document.querySelectorAll(".tx-sub-picker").forEach(p => p.remove());
+  document.querySelectorAll(".tx-sub-scrim").forEach(p => p.remove());
+  document.querySelectorAll(".price-modal").forEach(p => p.remove());
+  document.querySelectorAll(".price-modal-scrim").forEach(p => p.remove());
+
+  const sub = subs.find(s => s.id === subId);
+  const higher = txAmt > subAmt;
+
+  const modal = document.createElement("div");
+  modal.className = "price-modal";
+  modal.innerHTML = `<div class="price-modal-icon">${higher ? "⬆" : "⬇"}</div>
+    <div class="price-modal-title">Betrag weicht ab</div>
+    <div class="price-modal-body">
+      Gespeichert: <b class="num">${eur.format(subAmt)}</b><br>
+      Tatsächlich abgebucht: <b class="num">${eur.format(txAmt)}</b>
+    </div>
+    <div class="price-modal-q">War das eine einmalige Ausnahme oder gilt der neue Betrag dauerhaft?</div>
+    <div class="price-modal-btns">
+      <button class="btn btn-ghost" onclick="txPriceException('${txId}','${subId}')">Einmalige Ausnahme</button>
+      <button class="btn btn-primary" onclick="txPricePermanent('${txId}','${subId}',${txAmt})">Dauerhaft übernehmen</button>
+    </div>`;
+
+  const scrim = document.createElement("div");
+  scrim.className = "price-modal-scrim";
+
+  document.body.appendChild(scrim);
+  document.body.appendChild(modal);
+}
+
+function txPriceException(txId, subId) {
+  document.querySelectorAll(".price-modal").forEach(p => p.remove());
+  document.querySelectorAll(".price-modal-scrim").forEach(p => p.remove());
+  doLinkTx(txId, subId, true);
+}
+
+async function txPricePermanent(txId, subId, newAmt) {
+  document.querySelectorAll(".price-modal").forEach(p => p.remove());
+  document.querySelectorAll(".price-modal-scrim").forEach(p => p.remove());
+  const i = subs.findIndex(s => s.id === subId);
+  if (i > -1) {
+    const sub = subs[i];
+    const t   = transactions.find(x => x.id === txId);
+    const yymm = t ? txYYMM(t) : null;
+    if (!sub.priceHistory) sub.priceHistory = [];
+    sub.priceHistory.push({ from: yymm || "?", amount: newAmt });
+    sub.amount = Math.round(newAmt * 100) / 100;
+    await persist();
+    showToast(`Betrag von ${sub.name} auf ${eur.format(newAmt)} aktualisiert`);
+  }
+  doLinkTx(txId, subId, false);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1764,8 +2127,20 @@ function render() {
     return;
   }
 
+  const now2    = new Date();
+  const curYYMM = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}`;
+
   $("list").innerHTML = sorted.map(s => {
-    const norm = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
+    const norm    = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
+    const pay     = getPayment(s.id, curYYMM);
+    let payBadge  = "";
+    if (pay) {
+      const diff = Math.abs(Math.abs(pay.txAmount) - s.amount) > 0.01;
+      payBadge = `<div class="sub-pay-badge ${diff ? "diff" : "ok"}" title="${pay.date}" onclick="event.stopPropagation();txGoToLinked('${pay.txId}')">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        ${eur.format(Math.abs(pay.txAmount))}
+      </div>`;
+    }
     return `<div class="row" onclick="openSheet('${s.id}')">
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
       <div class="row-main">
@@ -1773,6 +2148,7 @@ function render() {
         <div class="row-sub">${esc(s.cat)}${norm}</div>
       </div>
       <div class="row-amt">
+        ${payBadge}
         <div class="v">${eur.format(s.amount)}</div>
         <div class="c">${CYCLES[s.cycle].label}</div>
       </div>
@@ -2278,12 +2654,24 @@ function renderTransactions() {
         const amtCls = isNeu ? "" : (isPos ? "pos" : "neg");
         const cat    = txEffectiveCat(t);
         const acct   = t.accountName ? ` · ${t.accountName}` : "";
-        listHtml += `<div class="tx-item">
+        const linked = txLinkedSub(t.id);
+        const linkBadge = linked
+          ? `<span class="tx-linked-badge" onclick="txLinkToSub('${t.id}')">
+               <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+               ${esc(linked.name)}
+             </span>`
+          : (t.amount < 0 && subs.length > 0
+              ? `<span class="tx-link-btn" onclick="txLinkToSub('${t.id}')">Abo +</span>`
+              : "");
+        listHtml += `<div class="tx-item" data-txid="${t.id}">
           <div class="tx-dot ${cls}"></div>
           <div class="tx-main">
             <div class="tx-payee">${esc(t.payee || "Unbekannt")}</div>
             <div class="tx-meta">${esc(t.type)}${acct}</div>
-            <span class="tx-cat-chip" onclick="txEditCat('${t.id}')">${esc(cat)}</span>
+            <div class="tx-chips-row">
+              <span class="tx-cat-chip" onclick="txEditCat('${t.id}')">${esc(cat)}</span>
+              ${linkBadge}
+            </div>
           </div>
           <div class="tx-right">
             <div class="tx-amt ${amtCls}">${t.amount > 0 ? "+" : ""}${eur.format(t.amount)}</div>
@@ -2337,6 +2725,17 @@ function renderTransactions() {
     </div>
     ${listHtml}
   </div>`;
+}
+
+function txGoToLinked(txId) {
+  // switch to transactions tab and scroll to the linked transaction
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    if (b.dataset.tab === "tx") b.click();
+  });
+  setTimeout(() => {
+    const el = document.querySelector(`[data-txid="${txId}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 100);
 }
 
 function txNavMonth(dir) {
