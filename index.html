@@ -798,6 +798,353 @@
       background: var(--accent-tint);
     }
 
+    /* ── Tab navigation ── */
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 14px;
+      margin-bottom: 18px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      border: none;
+      border-radius: 11px;
+      padding: 10px 4px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .tab-btn.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(20,30,25,.1);
+    }
+
+    /* ── Transactions ── */
+    .tx-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 2px 14px;
+    }
+
+    .tx-head h2 {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -.01em;
+    }
+
+    .tx-head .hint {
+      display: block;
+      margin-top: 3px;
+      font-size: 11.5px;
+      color: var(--faint);
+    }
+
+    .tx-import-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-tint);
+      border: none;
+      border-radius: 20px;
+      padding: 8px 14px;
+      cursor: pointer;
+      flex: none;
+      white-space: nowrap;
+    }
+
+    .tx-paste-wrap {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .tx-paste-wrap textarea {
+      width: 100%;
+      font-family: "Space Grotesk", monospace;
+      font-size: 11px;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.4;
+    }
+
+    .tx-paste-wrap textarea:focus { outline: none; border-color: var(--accent); }
+
+    .tx-paste-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      justify-content: flex-end;
+    }
+
+    .tx-month-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tx-month-nav button {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .tx-month-nav button:hover { color: var(--ink); }
+
+    .tx-month-label {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: -.01em;
+    }
+
+    .tx-summary-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tx-sum-card {
+      flex: 1;
+      background: var(--surface);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 14px 14px 12px;
+    }
+
+    .tx-sum-card .lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .tx-sum-card .val {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 18px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.015em;
+    }
+
+    .tx-sum-card.pos .val { color: var(--accent); }
+    .tx-sum-card.neg .val { color: var(--danger); }
+
+    .tx-cat-bar-wrap {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .tx-cat-bar-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 12px;
+    }
+
+    .tx-cat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .tx-cat-row:last-child { margin-bottom: 0; }
+
+    .tx-cat-name {
+      width: 120px;
+      flex: none;
+      font-size: 12.5px;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tx-cat-track {
+      flex: 1;
+      height: 6px;
+      background: var(--line-soft);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .tx-cat-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--danger);
+      transition: width .5s cubic-bezier(.4,0,.1,1);
+    }
+
+    .tx-cat-amt {
+      width: 72px;
+      text-align: right;
+      font-family: "Space Grotesk";
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      flex: none;
+    }
+
+    .tx-filter-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .tx-filter-btn {
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1.5px solid transparent;
+      border-radius: 20px;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .tx-filter-btn.active {
+      color: var(--accent);
+      background: var(--accent-tint);
+      border-color: var(--accent);
+    }
+
+    .tx-day-sep {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--faint);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin: 16px 2px 6px;
+    }
+
+    .tx-item {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 11px 13px;
+      box-shadow: var(--shadow);
+      margin-bottom: 6px;
+    }
+
+    .tx-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    .tx-dot.pos { background: var(--accent); }
+    .tx-dot.neg { background: var(--danger); }
+    .tx-dot.neu { background: var(--faint); }
+
+    .tx-main { flex: 1; min-width: 0; }
+
+    .tx-payee {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tx-meta {
+      font-size: 11.5px;
+      color: var(--faint);
+      margin-top: 2px;
+    }
+
+    .tx-right { text-align: right; flex: none; }
+
+    .tx-amt {
+      font-family: "Space Grotesk";
+      font-weight: 600;
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tx-amt.pos { color: var(--accent); }
+    .tx-amt.neg { color: var(--danger); }
+
+    .tx-cat-chip {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--bg);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-top: 4px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all .12s ease;
+    }
+
+    .tx-cat-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+    .tx-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--faint);
+      font-size: 13.5px;
+    }
+
+    .tx-hide-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tx-hide-row label {
+      font-size: 12.5px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     /* ── Wealth section ── */
     .wealth-wrap { margin-top: 28px; }
 
@@ -1026,33 +1373,44 @@
       <div class="tagline">Wiederkehrende Kosten, ruhig im Blick</div>
     </header>
 
-    <section class="summary" id="summary"></section>
-
-    <div class="toolbar" id="toolbar" style="display:none">
-      <span class="count" id="count"></span>
-      <select class="sort" id="sort">
-        <option value="amount">Nach Monatswert</option>
-        <option value="name">Nach Name</option>
-        <option value="next">Nach nächster Zahlung</option>
-      </select>
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="turnus">Turnus</button>
+      <button class="tab-btn" data-tab="tx">Transaktionen</button>
     </div>
 
-    <div class="list" id="list"></div>
+    <div id="pane-turnus">
+      <section class="summary" id="summary"></section>
 
-    <section id="forecast"></section>
+      <div class="toolbar" id="toolbar" style="display:none">
+        <span class="count" id="count"></span>
+        <select class="sort" id="sort">
+          <option value="amount">Nach Monatswert</option>
+          <option value="name">Nach Name</option>
+          <option value="next">Nach nächster Zahlung</option>
+        </select>
+      </div>
 
-    <section id="wealth"></section>
+      <div class="list" id="list"></div>
 
-    <div class="data-row">
-      <button class="btn-data" id="export-btn">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13M7 11l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Exportieren
-      </button>
-      <button class="btn-data" id="import-btn">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21V8M7 13l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        Importieren
-      </button>
-      <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+      <section id="forecast"></section>
+
+      <section id="wealth"></section>
+
+      <div class="data-row">
+        <button class="btn-data" id="export-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13M7 11l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Exportieren
+        </button>
+        <button class="btn-data" id="import-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 21V8M7 13l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Importieren
+        </button>
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+      </div>
+    </div>
+
+    <div id="pane-tx" style="display:none">
+      <section id="transactions"></section>
     </div>
   </div>
 
@@ -1114,6 +1472,14 @@ const KEY  = "turnus:subs";
 const CKEY = "turnus:cats";
 const IKEY = "turnus:income";
 const WKEY = "turnus:wealth";
+const TKEY = "turnus:transactions";
+
+const TX_CATS = [
+  "Lebensmittel","Restaurant & Café","Mobilität","Shopping",
+  "Wohnen & Haushalt","Energie","Versicherungen","Streaming & Abo",
+  "Freizeit","Gesundheit","Einkommen","Reisen","Kredit",
+  "Umbuchung","Sonstiges"
+];
 
 const DEFAULT_CATS = ["Streaming", "Software", "Versicherung", "Wohnen", "Sport", "Mobilität", "Sonstiges"];
 
@@ -1138,7 +1504,11 @@ let addingCat   = false;
 let mem         = null; // in-memory fallback if storage unavailable
 let lastTotals  = [];   // subscription costs per month, kept for income recalc
 let lastStartIdx = 0;
-let wealth       = { accounts: [], balances: {} };
+let wealth        = { accounts: [], balances: {} };
+let transactions  = [];
+let txMonthOffset = 0;
+let txFilter      = "all";
+let txHideTransfer = true;
 
 const $ = id => document.getElementById(id);
 
@@ -1171,6 +1541,13 @@ async function load() {
       if (d && Array.isArray(d.accounts)) wealth = d;
     }
   } catch (e) {}
+  try {
+    const rt = await window.storage.get(TKEY);
+    if (rt && rt.value) {
+      const d = JSON.parse(rt.value);
+      if (Array.isArray(d)) transactions = d;
+    }
+  } catch (e) {}
   render();
 }
 
@@ -1189,6 +1566,10 @@ async function persistIncome() {
 
 async function persistWealth() {
   try { await window.storage.set(WKEY, JSON.stringify(wealth)); } catch (e) {}
+}
+
+async function persistTransactions() {
+  try { await window.storage.set(TKEY, JSON.stringify(transactions)); } catch (e) {}
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1353,6 +1734,7 @@ function render() {
 
   renderForecast();
   renderWealth();
+  renderTransactions();
 
   // Subscription list
   $("count").textContent = subs.length + (subs.length === 1 ? " Eintrag" : " Einträge");
@@ -1752,6 +2134,301 @@ function wealthDelAccount(id) {
   renderWealth();
 }
 
+// ── Transactions ───────────────────────────────────────────────────────────
+function parseTxAmount(str) {
+  if (!str) return 0;
+  const clean = str.replace(/\s/g, "").replace("€", "").replace(/\./g, "").replace(",", ".");
+  return parseFloat(clean) || 0;
+}
+
+function parseTxDate(str) {
+  if (!str) return "";
+  const m = str.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+  if (!m) return "";
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+function txFingerprint(t) {
+  return `${t.date}|${t.amount}|${t.payee}|${t.accountNumber}`.toLowerCase().trim();
+}
+
+function parseTransactionData(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split("\t").map(h => h.trim());
+  const col = h => headers.indexOf(h);
+  const result = [];
+  lines.slice(1).forEach(line => {
+    if (!line.trim()) return;
+    const c = line.split("\t");
+    const get = h => { const i = col(h); return i >= 0 ? (c[i] || "").trim() : ""; };
+    const amount = parseTxAmount(get("Betrag"));
+    const date   = parseTxDate(get("Buchungsdatum"));
+    const t = {
+      id: null,
+      type: get("Transaktionstyp"),
+      date,
+      amount,
+      payee: get("Zahlungsempfänger"),
+      iban: get("IBAN"),
+      purpose: (get("Verwendungszweck") || get("Beschreibung")),
+      accountNumber: get("Kontonummer"),
+      accountName: get("Kontoname"),
+      c24Cat: get("Kategorie") || "Sonstiges",
+      userCat: null,
+    };
+    t.fp = txFingerprint(t);
+    result.push(t);
+  });
+  return result;
+}
+
+function importTxData(text) {
+  const parsed = parseTransactionData(text);
+  if (!parsed.length) { showToast("Keine Transaktionen erkannt"); return 0; }
+  const existing = new Set(transactions.map(t => t.fp));
+  let added = 0;
+  parsed.forEach(t => {
+    if (existing.has(t.fp)) return;
+    t.id = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
+    transactions.push(t);
+    existing.add(t.fp);
+    added++;
+  });
+  transactions.sort((a, b) => b.date.localeCompare(a.date));
+  persistTransactions();
+  return added;
+}
+
+function txEffectiveCat(t) {
+  return t.userCat || t.c24Cat || "Sonstiges";
+}
+
+function txIsTransfer(t) {
+  return t.type === "Pocket-Umbuchung" || t.c24Cat === "Umbuchung" || (t.userCat === "Umbuchung");
+}
+
+function renderTransactions() {
+  const host = $("transactions");
+
+  // Current selected month
+  const now = new Date();
+  const d   = new Date(now.getFullYear(), now.getMonth() + txMonthOffset, 1);
+  const monthStr = d.toLocaleString("de-DE", { month: "long", year: "numeric" });
+  const yymm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+  // Filter transactions for this month
+  let monthTx = transactions.filter(t => t.date.startsWith(yymm));
+  if (txHideTransfer) monthTx = monthTx.filter(t => !txIsTransfer(t));
+
+  let visible = monthTx;
+  if (txFilter === "income")  visible = monthTx.filter(t => t.amount > 0);
+  if (txFilter === "expense") visible = monthTx.filter(t => t.amount < 0);
+
+  // Summaries
+  const income  = monthTx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const expense = monthTx.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  const balance = income + expense;
+
+  // Category breakdown (expenses only)
+  const catTotals = {};
+  monthTx.filter(t => t.amount < 0).forEach(t => {
+    const cat = txEffectiveCat(t);
+    catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount);
+  });
+  const catEntries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  const maxCat = catEntries[0]?.[1] || 1;
+
+  const catBarHtml = catEntries.length ? `<div class="tx-cat-bar-wrap">
+    <div class="tx-cat-bar-title">Ausgaben nach Kategorie</div>
+    ${catEntries.map(([cat, v]) => `<div class="tx-cat-row">
+      <div class="tx-cat-name">${esc(cat)}</div>
+      <div class="tx-cat-track"><div class="tx-cat-fill" style="width:${(v/maxCat*100).toFixed(1)}%"></div></div>
+      <div class="tx-cat-amt">${eur.format(v)}</div>
+    </div>`).join("")}
+  </div>` : "";
+
+  // Transaction list grouped by date
+  const grouped = {};
+  visible.forEach(t => {
+    const dk = t.date || "unbekannt";
+    if (!grouped[dk]) grouped[dk] = [];
+    grouped[dk].push(t);
+  });
+
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+  const formatDate = str => {
+    if (!str || str === "unbekannt") return "Unbekanntes Datum";
+    const [y, m, day] = str.split("-");
+    const d = new Date(Number(y), Number(m) - 1, Number(day));
+    return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long" });
+  };
+
+  let listHtml = "";
+  if (!sortedDates.length) {
+    listHtml = `<div class="tx-empty">Keine Transaktionen für ${monthStr}.</div>`;
+  } else {
+    sortedDates.forEach(dk => {
+      listHtml += `<div class="tx-day-sep">${formatDate(dk)}</div>`;
+      grouped[dk].forEach(t => {
+        const isPos  = t.amount > 0;
+        const isNeu  = t.amount === 0;
+        const cls    = isNeu ? "neu" : (isPos ? "pos" : "neg");
+        const amtCls = isNeu ? "" : (isPos ? "pos" : "neg");
+        const cat    = txEffectiveCat(t);
+        const acct   = t.accountName ? ` · ${t.accountName}` : "";
+        listHtml += `<div class="tx-item">
+          <div class="tx-dot ${cls}"></div>
+          <div class="tx-main">
+            <div class="tx-payee">${esc(t.payee || "Unbekannt")}</div>
+            <div class="tx-meta">${esc(t.type)}${acct}</div>
+            <span class="tx-cat-chip" onclick="txEditCat('${t.id}')">${esc(cat)}</span>
+          </div>
+          <div class="tx-right">
+            <div class="tx-amt ${amtCls}">${t.amount > 0 ? "+" : ""}${eur.format(t.amount)}</div>
+          </div>
+        </div>`;
+      });
+    });
+  }
+
+  const pasteArea = transactions.length === 0 ? `<div class="tx-paste-wrap" id="tx-paste-box">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">C24-Transaktionen einfügen (aus der Rockets-App kopieren)</div>
+    <textarea id="tx-paste-input" placeholder="Transaktionsdaten hier einfügen..."></textarea>
+    <div class="tx-paste-actions">
+      <button class="btn btn-primary" onclick="txDoImport()">Einlesen</button>
+    </div>
+  </div>` : "";
+
+  host.innerHTML = `<div>
+    <div class="tx-head">
+      <div><h2>Transaktionen</h2><span class="hint">C24 Rockets · Ausgaben im Blick</span></div>
+      <button class="tx-import-btn" onclick="txShowPaste()">+ Einfügen</button>
+    </div>
+    ${pasteArea}
+    <div class="tx-month-nav">
+      <button onclick="txNavMonth(-1)">‹</button>
+      <span class="tx-month-label">${monthStr}</span>
+      <button onclick="txNavMonth(1)" ${txMonthOffset >= 0 ? "disabled style='opacity:.4'" : ""}>›</button>
+    </div>
+    <div class="tx-summary-row">
+      <div class="tx-sum-card pos">
+        <span class="lbl">Einnahmen</span>
+        <span class="val num">${eur.format(income)}</span>
+      </div>
+      <div class="tx-sum-card neg">
+        <span class="lbl">Ausgaben</span>
+        <span class="val num">${eur.format(Math.abs(expense))}</span>
+      </div>
+      <div class="tx-sum-card ${balance >= 0 ? "pos" : "neg"}">
+        <span class="lbl">Saldo</span>
+        <span class="val num">${eur.format(balance)}</span>
+      </div>
+    </div>
+    ${catBarHtml}
+    <div class="tx-filter-row">
+      <button class="tx-filter-btn ${txFilter==="all"?"active":""}" onclick="txSetFilter('all')">Alle</button>
+      <button class="tx-filter-btn ${txFilter==="income"?"active":""}" onclick="txSetFilter('income')">Einnahmen</button>
+      <button class="tx-filter-btn ${txFilter==="expense"?"active":""}" onclick="txSetFilter('expense')">Ausgaben</button>
+    </div>
+    <div class="tx-hide-row">
+      <label><input type="checkbox" ${txHideTransfer?"checked":""} onchange="txToggleTransfer(this.checked)"> Umbuchungen ausblenden</label>
+    </div>
+    ${listHtml}
+  </div>`;
+}
+
+function txNavMonth(dir) {
+  txMonthOffset = Math.min(0, txMonthOffset + dir);
+  renderTransactions();
+}
+
+function txSetFilter(f) {
+  txFilter = f;
+  renderTransactions();
+}
+
+function txToggleTransfer(val) {
+  txHideTransfer = val;
+  renderTransactions();
+}
+
+function txShowPaste() {
+  const host = $("transactions");
+  const existing = host.querySelector(".tx-paste-wrap");
+  if (existing) { existing.querySelector("textarea").focus(); return; }
+  const div = document.createElement("div");
+  div.className = "tx-paste-wrap";
+  div.id = "tx-paste-box";
+  div.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:10px">C24-Transaktionen einfügen (aus der Rockets-App kopieren)</div>
+    <textarea id="tx-paste-input" placeholder="Transaktionsdaten hier einfügen..."></textarea>
+    <div class="tx-paste-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('tx-paste-box').remove()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="txDoImport()">Einlesen</button>
+    </div>`;
+  host.querySelector(".tx-head").after(div);
+  div.querySelector("textarea").focus();
+}
+
+function txDoImport() {
+  const inp = document.getElementById("tx-paste-input");
+  if (!inp || !inp.value.trim()) return;
+  const added = importTxData(inp.value);
+  showToast(added > 0 ? `${added} neue Transaktionen eingelesen` : "Alle bereits vorhanden");
+  renderTransactions();
+}
+
+function txEditCat(id) {
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+
+  // Remove existing popup
+  document.querySelectorAll(".tx-cat-popup").forEach(p => p.remove());
+
+  const currentCat = txEffectiveCat(t);
+  const allCats = [...new Set([...TX_CATS, t.c24Cat])].filter(Boolean);
+
+  const popup = document.createElement("div");
+  popup.className = "tx-cat-popup";
+  popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:65vh;overflow-y:auto";
+
+  const chips = allCats.map(cat => `<button style="font-family:inherit;font-size:13px;font-weight:${cat===currentCat?700:500};color:${cat===currentCat?"var(--accent)":"var(--muted)"};background:${cat===currentCat?"var(--accent-tint)":"var(--bg)"};border:1.5px solid ${cat===currentCat?"var(--accent)":"transparent"};border-radius:20px;padding:8px 13px;cursor:pointer;margin:3px" onclick="txSetCat('${id}','${esc(cat)}')">${esc(cat)}</button>`).join("");
+
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:12px">Kategorie wählen</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px">${chips}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Eigene Kategorie:</div>
+    <div style="display:flex;gap:8px">
+      <input id="tx-cat-custom" type="text" value="" placeholder="z. B. Kinder, Arzt, Hobby" style="flex:1;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink)" autocomplete="off">
+      <button class="btn btn-primary" onclick="txSetCatCustom('${id}')" style="padding:10px 16px;border-radius:12px">OK</button>
+    </div>`;
+
+  const scrim = document.createElement("div");
+  scrim.style.cssText = "position:fixed;inset:0;background:rgba(18,24,21,.28);z-index:59;backdrop-filter:blur(2px)";
+  scrim.onclick = () => { popup.remove(); scrim.remove(); };
+
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function txSetCat(id, cat) {
+  const t = transactions.find(x => x.id === id);
+  if (!t) return;
+  t.userCat = cat;
+  persistTransactions();
+  document.querySelectorAll(".tx-cat-popup").forEach(p => p.remove());
+  document.querySelectorAll("[style*='rgba(18,24,21']").forEach(p => p.remove());
+  renderTransactions();
+}
+
+function txSetCatCustom(id) {
+  const inp = document.getElementById("tx-cat-custom");
+  const val = inp?.value.trim();
+  if (!val) return;
+  txSetCat(id, val);
+}
+
 // ── Sheet ──────────────────────────────────────────────────────────────────
 function openSheet(id) {
   editing = id || null;
@@ -1924,6 +2601,15 @@ $("sort").onchange      = render;
 $("export-btn").onclick = exportData;
 $("import-btn").onclick = () => $("import-file").click();
 $("import-file").onchange = e => { importData(e.target.files[0]); e.target.value = ""; };
+
+document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
+  const tab = btn.dataset.tab;
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
+  $("pane-turnus").style.display = tab === "turnus" ? "" : "none";
+  $("pane-tx").style.display     = tab === "tx"     ? "" : "none";
+  $("fab").style.display         = tab === "turnus" ? "flex" : "none";
+  if (tab === "tx") renderTransactions();
+});
 
 load();
 </script>
