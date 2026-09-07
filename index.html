@@ -777,6 +777,18 @@
     table.fc tr.rot-aus td.cur        { background: var(--accent-tint); }
     table.fc tr.rot-aus td.past-col   { color: rgba(15,110,84,.45); }
 
+    table.fc tr.rot-net td {
+      font-family: "Space Grotesk";
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      border-bottom: 1.5px solid var(--line);
+    }
+    table.fc tr.rot-net td.name .lbl { color: var(--text-2); font-weight: 600; font-size: 11px; }
+    table.fc tr.rot-net td.rot-net-pos { color: var(--accent); }
+    table.fc tr.rot-net td.rot-net-neg { color: var(--danger); }
+    table.fc tr.rot-net td.cur        { background: var(--bg-2); }
+
     table.fc tr.reserve td {
       font-family: "Space Grotesk";
       font-weight: 500;
@@ -2491,13 +2503,21 @@ function renderForecast() {
   let rotSep = `<td class="name"><span class="lbl">Rotierkonto</span></td>`;
   let rotEin = `<td class="name"><span class="lbl">↑ Einzahlen / Monat</span></td>`;
   let rotAus = `<td class="name"><span class="lbl">↓ Auszahlen wenn fällig</span></td>`;
+  let rotNet = `<td class="name"><span class="lbl">= Netto aufs Konto</span></td>`;
   let rotRes = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
   for (let k = 0; k < N; k++) {
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
     const due = irrTotals[k];
+    const net = avg12Irr - due;
     rotSep += `<td class="${cls}"></td>`;
     rotEin += `<td class="${cls}">${avg12Irr > 0.005 ? eur.format(avg12Irr) : '–'}</td>`;
     rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
+    if (avg12Irr < 0.005) {
+      rotNet += `<td class="${cls}">–</td>`;
+    } else {
+      const sign = net >= 0 ? '+' : '';
+      rotNet += `<td class="${cls} ${net < -0.005 ? 'rot-net-neg' : 'rot-net-pos'}">${sign}${eur.format(Math.abs(net) < 0.005 ? 0 : net)}</td>`;
+    }
     if (isPast(k)) {
       rotRes += `<td class="${cls}">–</td>`;
     } else {
@@ -2572,6 +2592,7 @@ function renderForecast() {
           <tr class="rot-sep">${rotSep}</tr>
           <tr class="rot-ein">${rotEin}</tr>
           <tr class="rot-aus">${rotAus}</tr>
+          <tr class="rot-net">${rotNet}</tr>
           <tr class="reserve">${rotRes}</tr>
           ${incRows}
         </tbody>
