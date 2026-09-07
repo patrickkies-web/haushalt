@@ -2764,19 +2764,21 @@ function parseTransactionData(text) {
 
 function importTxData(text) {
   const parsed = parseTransactionData(text);
-  if (!parsed.length) { showToast("Keine Transaktionen erkannt"); return 0; }
+  if (!parsed.length) { showToast("Keine Transaktionen erkannt"); return { added: 0, skipped: 0, months: [] }; }
   const existing = new Set(transactions.map(t => t.fp));
-  let added = 0;
+  let added = 0, skipped = 0;
+  const newMonths = new Set();
   parsed.forEach(t => {
-    if (existing.has(t.fp)) return;
+    if (existing.has(t.fp)) { skipped++; return; }
     t.id = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
     transactions.push(t);
     existing.add(t.fp);
+    if (t.date) newMonths.add(t.date.slice(0, 7));
     added++;
   });
   transactions.sort((a, b) => b.date.localeCompare(a.date));
   persistTransactions();
-  return added;
+  return { added, skipped, months: [...newMonths].sort() };
 }
 
 function txEffectiveCat(t) {
@@ -2976,8 +2978,26 @@ function txShowPaste() {
 function txDoImport() {
   const inp = document.getElementById("tx-paste-input");
   if (!inp || !inp.value.trim()) return;
-  const added = importTxData(inp.value);
-  showToast(added > 0 ? `${added} neue Transaktionen eingelesen` : "Alle bereits vorhanden");
+  const { added, skipped, months } = importTxData(inp.value);
+  const mf = new Intl.DateTimeFormat("de-DE", { month: "short", year: "2-digit" });
+  const monthLabels = months.map(ym => {
+    const [y, m] = ym.split("-").map(Number);
+    return mf.format(new Date(y, m - 1, 1));
+  }).join(", ");
+  if (added > 0) {
+    const dupNote  = skipped > 0 ? ` · ${skipped} bereits vorhanden` : "";
+    const monNote  = monthLabels ? ` · ${monthLabels}` : "";
+    showToast(`${added} neu eingelesen${dupNote}${monNote}`);
+    // Navigate to the earliest new month
+    if (months.length > 0) {
+      const [y, m] = months[0].split("-").map(Number);
+      const now2   = new Date();
+      const diff   = (y - now2.getFullYear()) * 12 + (m - 1 - now2.getMonth());
+      txMonthOffset = Math.min(0, diff);
+    }
+  } else {
+    showToast(skipped > 0 ? `Alle ${skipped} bereits vorhanden – nichts Neues` : "Keine Transaktionen erkannt");
+  }
   renderTransactions();
 }
 
