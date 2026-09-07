@@ -735,6 +735,48 @@
       font-variant-numeric: tabular-nums;
     }
 
+    table.fc tr.rot-sep td {
+      padding-top: 8px;
+      padding-bottom: 2px;
+      border-top: 1.5px solid var(--line);
+      border-bottom: none;
+    }
+
+    table.fc tr.rot-sep td .lbl {
+      font-family: "Space Grotesk";
+      font-weight: 700;
+      font-size: 10.5px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    table.fc tr.rot-ein td {
+      font-family: "Space Grotesk";
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--danger);
+      border-bottom: none;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.rot-ein td.name .lbl { color: var(--danger); font-weight: 600; }
+    table.fc tr.rot-ein td.cur       { background: rgba(176,85,106,.07); }
+    table.fc tr.rot-ein td.past-col  { color: rgba(176,85,106,.45); }
+
+    table.fc tr.rot-aus td {
+      font-family: "Space Grotesk";
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--accent);
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.fc tr.rot-aus td.name .lbl { color: var(--accent); font-weight: 600; }
+    table.fc tr.rot-aus td.cur        { background: var(--accent-tint); }
+    table.fc tr.rot-aus td.past-col   { color: rgba(15,110,84,.45); }
+
     table.fc tr.reserve td {
       font-family: "Space Grotesk";
       font-weight: 500;
@@ -2433,7 +2475,7 @@ function renderForecast() {
   }
   const cushion = minBal < -0.005 ? -minBal : 0;
 
-  let res = `<td class="name"><span class="lbl">Rücklagenkonto</span></td>`;
+  let res = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
   for (let k = 0; k < N; k++) {
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
     if (isPast(k)) {
@@ -2444,9 +2486,21 @@ function renderForecast() {
     }
   }
 
+  // Rotierkonto: monthly deposit (constant) and withdrawal (when due)
+  let rotSep = `<td class="name"><span class="lbl">Rotierkonto</span></td>`;
+  let rotEin = `<td class="name"><span class="lbl">↑ Einzahlen / Monat</span></td>`;
+  let rotAus = `<td class="name"><span class="lbl">↓ Auszahlen wenn fällig</span></td>`;
+  for (let k = 0; k < N; k++) {
+    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    const due = totals[k];
+    rotSep += `<td class="${cls}"></td>`;
+    rotEin += `<td class="${cls}">${eur.format(avg12)}</td>`;
+    rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : "–"}</td>`;
+  }
+
   const note = cushion > 0.005
-    ? `So funktioniert's: Starte das Konto mit <b>${eur.format(cushion)}</b> und lege jeden Monat <b>${eur.format(avg12)}</b> zur Seite. Davon werden die fälligen Rechnungen bezahlt – so rutscht das Konto nie ins Minus.`
-    : `Deine Kosten sind gleichmäßig verteilt: Leg einfach jeden Monat <b>${eur.format(avg12)}</b> zur Seite – ein Startpolster ist nicht nötig.`;
+    ? `Starte das Rotierkonto mit <b>${eur.format(cushion)}</b> und zahle jeden Monat <b>${eur.format(avg12)}</b> ein. In Monaten mit fälligen Rechnungen zahlst du den Betrag aus – deine monatlichen Ausgaben bleiben so immer gleich.`
+    : `Zahle jeden Monat <b>${eur.format(avg12)}</b> aufs Rotierkonto. In Monaten mit fälligen Rechnungen zahlst du den Betrag aus – so hast du immer gleiche Ausgaben, kein Startpolster nötig.`;
 
   // ── Income rows ──
   const iRow = (trCls, lbl, cells) =>
@@ -2496,7 +2550,7 @@ function renderForecast() {
         <span class="hint">← 6 Monate · aktueller Monat · Prognose 35 Monate →</span>
       </div>
       <div class="avg">
-        <span class="avg-label">Ø pro Monat · 12 Mon.</span>
+        <span class="avg-label">Rotierkonto · Ø / Monat</span>
         <span class="avg-val">${eur.format(avg12)}</span>
       </div>
     </div>
@@ -2507,6 +2561,9 @@ function renderForecast() {
         <tbody>
           ${body}
           <tr class="totals">${tot}</tr>
+          <tr class="rot-sep">${rotSep}</tr>
+          <tr class="rot-ein">${rotEin}</tr>
+          <tr class="rot-aus">${rotAus}</tr>
           <tr class="reserve">${res}</tr>
           ${incRows}
         </tbody>
