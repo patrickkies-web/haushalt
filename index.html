@@ -2115,12 +2115,12 @@ function setInc(mk, field, val) {
   income[k][field] = val;
 }
 
-function updateIncomeCol(col, mk) {
+function updateIncomeCol(mk) {
   const p    = getInc(mk, 'patrick');
   const s    = getInc(mk, 'sara');
   const o    = getInc(mk, 'other');
   const tot  = p + s + o;
-  const surp = tot - (lastTotals[col] || 0);
+  const surp = tot - (lastTotals[mk - lastStartIdx] || 0);
   const half = surp / 2;
   const prevS  = getInc(mk, 'prevSara');
   const prevP  = getInc(mk, 'prevPatrick');
@@ -2486,8 +2486,8 @@ function renderForecast() {
     + iRow('inc-payout', 'Sara erhält',       calcCells('sarap'))
     + iRow('inc-payout', 'Patrick erhält',    calcCells('patrickp'));
 
-  lastTotals   = totals.slice(PAST); // only future totals for income calculation
-  lastStartIdx = curMk;
+  lastTotals   = totals;    // all months so past-column lookups work
+  lastStartIdx = startIdx; // absolute month index of column 0
 
   host.innerHTML = `<div class="forecast-wrap">
     <div class="forecast-head">
@@ -2523,17 +2523,16 @@ function renderForecast() {
     }
   });
 
-  // Fill computed income cells — only for current + future cols
-  for (let k = PAST; k < N; k++) updateIncomeCol(k - PAST, startIdx + k);
+  // Fill computed income cells — all cols including past
+  for (let k = 0; k < N; k++) updateIncomeCol(startIdx + k);
 
   // Attach income input listeners
   host.querySelectorAll('.ic').forEach(inp => {
     inp.addEventListener('input', () => {
-      const col = parseInt(inp.dataset.col);
-      const mk  = startIdx + col;
+      const mk = startIdx + parseInt(inp.dataset.col);
       setInc(mk, inp.dataset.key, parseFloat(inp.value.replace(/\./g, '').replace(',', '.')) || 0);
       persistIncome();
-      updateIncomeCol(col - PAST, mk);
+      updateIncomeCol(mk);
     });
   });
 }
