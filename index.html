@@ -2906,7 +2906,8 @@ function txEffectiveCat(t) {
 }
 
 function txIsTransfer(t) {
-  return t.type === "Pocket-Umbuchung" || t.c24Cat === "Umbuchung" || (t.userCat === "Umbuchung");
+  if (t.userCat && t.userCat !== "Umbuchung") return false;
+  return t.type === "Pocket-Umbuchung" || t.c24Cat === "Umbuchung" || t.userCat === "Umbuchung";
 }
 
 // ── TX Category management ─────────────────────────────────────────────────
