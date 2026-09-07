@@ -1171,6 +1171,60 @@
       gap: 6px;
     }
 
+    /* ── Inactive subscriptions ── */
+    .row.inactive-sub { opacity: 0.6; }
+    .row.inactive-sub .row-name { text-decoration: line-through; color: var(--muted); }
+    .row.inactive-sub .row-amt .v { color: var(--muted); }
+
+    .sub-deact-tag {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--danger);
+      background: rgba(176,85,106,.1);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-top: 4px;
+    }
+
+    .inactive-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 11px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--bg);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+      gap: 8px;
+    }
+    .inactive-toggle:hover { background: var(--line-soft); }
+
+    /* Forecast: inactive rows */
+    table.fc tr.fc-inactive-row { opacity: 0.55; }
+    table.fc tr.fc-inactive-row td { font-style: italic; }
+
+    .fc-inactive-badge {
+      display: inline-block;
+      font-size: 9.5px;
+      color: var(--danger);
+      margin-left: 4px;
+      font-style: normal;
+    }
+
+    table.fc tbody td.fc-deact-boundary {
+      color: var(--danger);
+      font-size: 12px;
+      background: rgba(176,85,106,.06);
+      border-left: 2px solid var(--danger);
+    }
+
     /* ── Transaction link / payment UI ── */
     .tx-chips-row {
       display: flex;
@@ -1658,8 +1712,17 @@
       <label>Notiz (optional)</label>
       <textarea id="f-note" placeholder="z. B. gemeinsam mit Anna, Kündigungsfrist 1 Monat"></textarea>
     </div>
+    <div class="field" id="f-deact-wrap" style="display:none">
+      <label>Deaktiviert ab <span id="deact-hint" style="font-weight:400;color:var(--muted)"></span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="f-deact-date" type="date" style="flex:1">
+        <button type="button" class="btn btn-ghost" onclick="clearDeact()" style="flex-shrink:0;padding:10px 14px">Löschen</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Zahlungen bis zu diesem Datum werden weiter geplant, danach nicht mehr.</div>
+    </div>
     <div class="sheet-actions">
       <button class="btn btn-danger" id="delete-btn" style="display:none">Löschen</button>
+      <button class="btn btn-ghost" id="deact-btn" style="display:none" onclick="quickDeactivate()">Deaktivieren</button>
       <button class="btn btn-ghost" id="cancel-btn">Abbrechen</button>
       <button class="btn btn-primary" id="save-btn">Speichern</button>
     </div>
@@ -1702,7 +1765,8 @@ let editing     = null;
 let draft       = { cycle: "monthly", cat: "Sonstiges" };
 let addingCat   = false;
 let mem         = null; // in-memory fallback if storage unavailable
-let lastTotals  = [];   // subscription costs per month, kept for income recalc
+let lastTotals    = [];   // subscription costs per month, kept for income recalc
+let showInactive  = false;
 let lastStartIdx = 0;
 let wealth        = { accounts: [], balances: {} };
 let transactions  = [];
@@ -1965,6 +2029,43 @@ async function txPricePermanent(txId, subId, newAmt) {
 function monthlyOf(s) { return s.amount * CYCLES[s.cycle].perYear / 12; }
 function yearlyOf(s)  { return s.amount * CYCLES[s.cycle].perYear; }
 
+function subDeactMk(s) {
+  if (!s.deactivatedFrom) return Infinity;
+  const d = new Date(s.deactivatedFrom + "T00:00:00");
+  return d.getFullYear() * 12 + d.getMonth();
+}
+
+function subIsInactive(s) { return !!s.deactivatedFrom; }
+
+function toggleInactive() {
+  showInactive = !showInactive;
+  render();
+}
+
+function quickDeactivate() {
+  const s = editing ? subs.find(x => x.id === editing) : null;
+  if (!s) return;
+  if (s.deactivatedFrom) {
+    // Reaktivieren
+    $("f-deact-date").value = "";
+    $("deact-hint").textContent = "";
+    $("deact-btn").textContent = "Deaktivieren";
+  } else {
+    // Deaktivieren: set to today (first of current month for clean boundary)
+    const today = new Date();
+    const iso   = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+    $("f-deact-date").value = iso;
+    $("deact-hint").textContent = `(ab ${today.toLocaleDateString("de-DE", { month: "long", year: "numeric" })})`;
+    $("deact-btn").textContent = "Reaktivieren";
+  }
+}
+
+function clearDeact() {
+  $("f-deact-date").value = "";
+  $("deact-hint").textContent = "";
+  $("deact-btn").textContent = "Deaktivieren";
+}
+
 function getInc(mk, field) {
   const m = income[String(mk)];
   return (m && m[field]) ? Number(m[field]) : 0;
@@ -2153,20 +2254,45 @@ function render() {
     return;
   }
 
-  $("list").innerHTML = sorted.map(s => {
+  const renderSubRow = (s, inactive = false) => {
     const norm = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
-    return `<div class="row" onclick="openSheet('${s.id}')">
+    let deactTag = "";
+    if (inactive && s.deactivatedFrom) {
+      const d = new Date(s.deactivatedFrom + "T00:00:00");
+      deactTag = `<div class="sub-deact-tag">Inaktiv seit ${d.toLocaleDateString("de-DE", { month: "short", year: "numeric" })}</div>`;
+    }
+    return `<div class="row${inactive ? " inactive-sub" : ""}" onclick="openSheet('${s.id}')">
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
       <div class="row-main">
         <div class="row-name">${esc(s.name)}</div>
         <div class="row-sub">${esc(s.cat)}${norm}</div>
+        ${deactTag}
       </div>
       <div class="row-amt">
         <div class="v">${eur.format(s.amount)}</div>
         <div class="c">${CYCLES[s.cycle].label}</div>
       </div>
     </div>`;
-  }).join("");
+  };
+
+  const activeSubs   = sorted.filter(s => !subIsInactive(s));
+  const inactiveSubs = sorted.filter(s => subIsInactive(s));
+
+  let listHtml = activeSubs.map(s => renderSubRow(s)).join("");
+
+  if (inactiveSubs.length > 0) {
+    listHtml += `<button class="inactive-toggle" onclick="toggleInactive()">
+      <span>Inaktive Abos (${inactiveSubs.length})</span>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="transition:transform .2s;transform:rotate(${showInactive ? 180 : 0}deg)">
+        <path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>`;
+    if (showInactive) {
+      listHtml += inactiveSubs.map(s => renderSubRow(s, true)).join("");
+    }
+  }
+
+  $("list").innerHTML = listHtml;
 }
 
 function renderForecast() {
@@ -2207,17 +2333,21 @@ function renderForecast() {
   let body     = "";
 
   rows.forEach(s => {
-    const step = stepOf[s.cycle];
-    const bi   = baseIndex(s);
-    let cells  = "";
+    const step    = stepOf[s.cycle];
+    const bi      = baseIndex(s);
+    const deactMk = subDeactMk(s);
+    let cells     = "";
     for (let k = 0; k < N; k++) {
       const i     = startIdx + k;
       const phase = (((i - bi) % step) + step) % step === 0;
-      const due   = phase && (bi <= curMk || i >= bi);
+      const withinActive = i < deactMk;
+      const due   = phase && (bi <= curMk || i >= bi) && withinActive;
       const yymm  = colYYMM(k);
       const past  = isPast(k);
       const cur   = isCur(k);
       const baseCls = [cur ? "cur" : "", past ? "past-col" : ""].filter(Boolean).join(" ");
+      // Mark the deactivation boundary cell
+      const isDeactBoundary = (i === deactMk);
 
       if (due) {
         totals[k] += s.amount;
@@ -2231,12 +2361,18 @@ function renderForecast() {
         } else {
           cells += `<td class="${baseCls}">${eur.format(s.amount)}</td>`;
         }
+      } else if (isDeactBoundary) {
+        cells += `<td class="empty ${baseCls} fc-deact-boundary" title="Deaktiviert ab diesem Monat">⊘</td>`;
       } else {
         cells += `<td class="empty ${baseCls}">–</td>`;
       }
     }
-    body += `<tr>
-      <td class="name"><div class="namecell"><i style="background:${catColor(s.cat)}"></i><span>${esc(s.name)}</span></div></td>
+    const inactive = subIsInactive(s);
+    const nameTag  = inactive
+      ? `<span class="fc-inactive-badge">⊘</span>`
+      : "";
+    body += `<tr class="${inactive ? "fc-inactive-row" : ""}">
+      <td class="name"><div class="namecell"><i style="background:${catColor(s.cat)}"></i><span>${esc(s.name)}${nameTag}</span></div></td>
       ${cells}
     </tr>`;
   });
@@ -2910,6 +3046,27 @@ function openSheet(id) {
   addingCat = false;
   buildCats();
   $("delete-btn").style.display = s ? "block" : "none";
+  // Deactivation section — only when editing
+  const deactWrap = $("f-deact-wrap");
+  const deactBtn  = $("deact-btn");
+  if (s) {
+    deactWrap.style.display = "";
+    $("f-deact-date").value = s.deactivatedFrom || "";
+    const hint = $("deact-hint");
+    if (s.deactivatedFrom) {
+      const d = new Date(s.deactivatedFrom + "T00:00:00");
+      hint.textContent = `(seit ${d.toLocaleDateString("de-DE", { month: "long", year: "numeric" })})`;
+      deactBtn.textContent = "Reaktivieren";
+      deactBtn.style.display = "block";
+    } else {
+      hint.textContent = "";
+      deactBtn.textContent = "Deaktivieren";
+      deactBtn.style.display = "block";
+    }
+  } else {
+    deactWrap.style.display = "none";
+    deactBtn.style.display = "none";
+  }
   clearErr();
   $("scrim").classList.add("on");
   $("sheet").classList.add("on");
@@ -2978,6 +3135,7 @@ async function save() {
   if (isNaN(amount) || amount < 0) { $("err-amount").classList.add("on"); ok = false; }
   if (!ok) return;
 
+  const deactEl = $("f-deact-date");
   const data = {
     name,
     amount: Math.round(amount * 100) / 100,
@@ -2985,6 +3143,7 @@ async function save() {
     cat:    draft.cat,
     date:   $("f-date").value || null,
     note:   $("f-note").value.trim(),
+    deactivatedFrom: (deactEl && deactEl.value) ? deactEl.value : null,
   };
 
   if (editing) {
