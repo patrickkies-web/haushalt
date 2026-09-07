@@ -1263,6 +1263,108 @@
       user-select: none;
     }
 
+    /* ── Settlement badge ── */
+    .tx-settle-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #7050b8;
+      background: rgba(112, 80, 184, .1);
+      border: 1.5px solid rgba(112, 80, 184, .35);
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── IOU badges ── */
+    .tx-iou-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tx-iou-badge.open   { color: #a06020; background: #fef0db; border: 1.5px solid #e0a840; }
+    .tx-iou-badge.settled { color: var(--muted); background: var(--bg); border: 1.5px solid var(--line); }
+
+    .tx-iou-btn {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #a06020;
+      background: #fef0db;
+      border: 1.5px dashed #e0a840;
+      border-radius: 20px;
+      padding: 3px 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── Category manager ── */
+    .catmgr-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 4px;
+      border-bottom: 1px solid var(--bg);
+      gap: 8px;
+    }
+    .catmgr-name { font-size: 14px; flex: 1; }
+    .catmgr-builtin { font-size: 10px; color: var(--muted); margin-left: 6px; font-weight: 400; }
+    .catmgr-btn {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 9px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--ink);
+      font-family: inherit;
+      line-height: 1;
+    }
+    .catmgr-btn:hover { background: var(--surface); }
+    .catmgr-btn.danger { color: var(--danger); border-color: rgba(176,85,106,.4); }
+    .catmgr-btn.danger:hover { background: rgba(176,85,106,.08); }
+
+    /* ── Settlement picker rows ── */
+    .settle-pick-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      margin-bottom: 5px;
+      background: var(--bg);
+    }
+    .settle-pick-row.selected { border-color: var(--accent); background: var(--accent-tint); }
+    .settle-check { font-size: 16px; color: var(--muted); flex-shrink: 0; }
+    .settle-pick-row.selected .settle-check { color: var(--accent); }
+
+    /* ── IOU outstanding bar ── */
+    .iou-outstanding-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fef0db;
+      border: 1px solid #e0a840;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #a06020;
+    }
+    .iou-outstanding-amt { font-size: 14px; }
+
     /* payment badge on subscription row */
     .sub-pay-badge {
       display: inline-flex;
@@ -1736,6 +1838,8 @@ const IKEY = "turnus:income";
 const WKEY = "turnus:wealth";
 const TKEY = "turnus:transactions";
 const PKEY = "turnus:payments";
+const XKEY = "turnus:txcats";
+const SKEY = "turnus:settlements";
 
 const TX_CATS = [
   "Lebensmittel","Restaurant & Café","Mobilität","Shopping",
@@ -1774,6 +1878,8 @@ let payments      = {};   // { [subId]: { [yymm]: { txId, txAmount, date, isExce
 let txMonthOffset = 0;
 let txFilter      = "all";
 let txHideTransfer = true;
+let txUserCats    = [];
+let settlements   = [];
 
 const $ = id => document.getElementById(id);
 
@@ -1820,6 +1926,14 @@ async function load() {
       if (d && typeof d === 'object') payments = d;
     }
   } catch (e) {}
+  try {
+    const rx = await window.storage.get(XKEY);
+    if (rx && rx.value) { const d = JSON.parse(rx.value); if (Array.isArray(d)) txUserCats = d; }
+  } catch (e) {}
+  try {
+    const rs = await window.storage.get(SKEY);
+    if (rs && rs.value) { const d = JSON.parse(rs.value); if (Array.isArray(d)) settlements = d; }
+  } catch (e) {}
   render();
 }
 
@@ -1846,6 +1960,12 @@ async function persistTransactions() {
 
 async function persistPayments() {
   try { await window.storage.set(PKEY, JSON.stringify(payments)); } catch (e) {}
+}
+async function persistTxCats() {
+  try { await window.storage.set(XKEY, JSON.stringify(txUserCats)); } catch (e) {}
+}
+async function persistSettlements() {
+  try { await window.storage.set(SKEY, JSON.stringify(settlements)); } catch (e) {}
 }
 
 // ── Payment helpers ────────────────────────────────────────────────────────
@@ -2789,6 +2909,286 @@ function txIsTransfer(t) {
   return t.type === "Pocket-Umbuchung" || t.c24Cat === "Umbuchung" || (t.userCat === "Umbuchung");
 }
 
+// ── TX Category management ─────────────────────────────────────────────────
+function allTxCats() {
+  return [...new Set([...TX_CATS, ...txUserCats])];
+}
+
+function buildCatmgrList() {
+  return allTxCats().map(cat => {
+    const isBuiltin = TX_CATS.includes(cat);
+    return `<div class="catmgr-row">
+      <span class="catmgr-name">${esc(cat)}${isBuiltin ? ` <span class="catmgr-builtin">Standard</span>` : ""}</span>
+      <div style="display:flex;gap:6px">
+        ${!isBuiltin ? `<button class="catmgr-btn" onclick="catmgrRename('${esc(cat)}')" title="Umbenennen">✎</button><button class="catmgr-btn danger" onclick="catmgrDelete('${esc(cat)}')" title="Löschen">✕</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openTxCatManager() {
+  document.querySelectorAll(".tx-cat-popup,.tx-catmgr-popup,[data-scrim]").forEach(p => p.remove());
+  const popup = document.createElement("div");
+  popup.className = "tx-catmgr-popup";
+  popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:75vh;overflow-y:auto";
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-family:'Space Grotesk';font-weight:600;font-size:15px">Kategorien bearbeiten</span>
+      <button class="btn btn-ghost" style="padding:6px 12px" onclick="closeTxCatMgr()">Fertig</button>
+    </div>
+    <div id="catmgr-list">${buildCatmgrList()}</div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <input id="catmgr-new-input" type="text" placeholder="Neue Kategorie hinzufügen" style="flex:1;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink)" autocomplete="off">
+      <button class="btn btn-primary" onclick="catmgrAdd()" style="padding:10px 16px;border-radius:12px">+</button>
+    </div>`;
+  const scrim = document.createElement("div");
+  scrim.dataset.scrim = "1";
+  scrim.style.cssText = "position:fixed;inset:0;background:rgba(18,24,21,.28);z-index:59;backdrop-filter:blur(2px)";
+  scrim.onclick = closeTxCatMgr;
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function closeTxCatMgr() {
+  document.querySelectorAll(".tx-catmgr-popup,[data-scrim]").forEach(p => p.remove());
+}
+
+function catmgrRefresh() {
+  const list = document.getElementById("catmgr-list");
+  if (list) list.innerHTML = buildCatmgrList();
+}
+
+function catmgrRename(oldCat) {
+  const newName = prompt(`Kategorie umbenennen:`, oldCat);
+  if (!newName) return;
+  const val = newName.trim();
+  if (!val || val === oldCat) return;
+  const ui = txUserCats.indexOf(oldCat);
+  if (ui > -1) txUserCats[ui] = val;
+  else txUserCats.push(val);
+  transactions.forEach(t => { if (t.userCat === oldCat) t.userCat = val; });
+  persistTxCats();
+  persistTransactions();
+  catmgrRefresh();
+}
+
+function catmgrDelete(cat) {
+  if (!confirm(`Kategorie "${cat}" löschen? Betroffene Transaktionen werden auf "Sonstiges" gesetzt.`)) return;
+  txUserCats = txUserCats.filter(c => c !== cat);
+  transactions.forEach(t => { if (t.userCat === cat) t.userCat = "Sonstiges"; });
+  persistTxCats();
+  persistTransactions();
+  catmgrRefresh();
+}
+
+function catmgrAdd() {
+  const inp = document.getElementById("catmgr-new-input");
+  const val = inp?.value.trim();
+  if (!val) return;
+  if (!allTxCats().includes(val)) {
+    txUserCats.push(val);
+    persistTxCats();
+  }
+  inp.value = "";
+  catmgrRefresh();
+}
+
+// ── Settlement helpers ─────────────────────────────────────────────────────
+function txGetSettlement(txId) {
+  return settlements.find(s => s.expenseTxId === txId || (s.reimbursementTxIds||[]).includes(txId)) || null;
+}
+
+function settlementNetAmount(s) {
+  const expTx = transactions.find(t => t.id === s.expenseTxId);
+  const reimbs = (s.reimbursementTxIds||[]).map(id => transactions.find(t => t.id === id)).filter(Boolean);
+  return (expTx ? expTx.amount : 0) + reimbs.reduce((a, t) => a + t.amount, 0);
+}
+
+function txOpenSettlementPicker(txId) {
+  document.querySelectorAll(".tx-cat-popup,.tx-settle-popup,[data-scrim]").forEach(p => p.remove());
+  const expTx = transactions.find(t => t.id === txId);
+  if (!expTx || expTx.amount >= 0) return;
+  window._settleIds = new Set();
+
+  const allSettleTxIds = new Set(settlements.flatMap(s => [s.expenseTxId, ...(s.reimbursementTxIds||[])]));
+  const candidates = transactions.filter(t => t.amount > 0 && !allSettleTxIds.has(t.id));
+
+  const popup = document.createElement("div");
+  popup.className = "tx-settle-popup";
+  popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:80vh;overflow-y:auto";
+
+  const rebuildSettle = () => {
+    const total = [...window._settleIds].map(id => transactions.find(t => t.id === id)).filter(Boolean).reduce((a, t) => a + t.amount, 0);
+    const net = expTx.amount + total;
+    popup.querySelector("#settle-net").textContent = `Nettobetrag: ${eur.format(net)}${net !== 0 ? ` (${eur.format(Math.abs(net))} ${net < 0 ? "offen" : "Guthaben"})` : ""}`;
+    popup.querySelectorAll(".settle-pick-row").forEach(row => {
+      const sel = window._settleIds.has(row.dataset.tid);
+      row.classList.toggle("selected", sel);
+      row.querySelector(".settle-check").textContent = sel ? "☑" : "☐";
+    });
+  };
+
+  const cHtml = candidates.length
+    ? candidates.map(t => `<div class="settle-pick-row" data-tid="${t.id}" onclick="settleTogglePick('${t.id}')">
+        <span class="settle-check">☐</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.payee||"Unbekannt")}</div>
+          <div style="font-size:11px;color:var(--muted)">${t.date||""}</div>
+        </div>
+        <div style="font-weight:700;color:var(--accent);white-space:nowrap">${eur.format(t.amount)}</div>
+      </div>`).join("")
+    : `<div style="color:var(--muted);font-size:13px;padding:12px 0">Keine verfügbaren Einnahmen.</div>`;
+
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:4px">Ausgleich verknüpfen</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Ausgabe: ${esc(expTx.payee||"Unbekannt")} · ${eur.format(expTx.amount)}</div>
+    <div style="max-height:45vh;overflow-y:auto;margin-bottom:10px">${cHtml}</div>
+    <div id="settle-net" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">Nettobetrag: ${eur.format(expTx.amount)}</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.querySelectorAll('.tx-settle-popup,[data-scrim]').forEach(p=>p.remove());window._settleIds=null">Abbrechen</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmSettlement('${txId}')">Verknüpfen</button>
+    </div>`;
+
+  window._settleRebuild = rebuildSettle;
+
+  const scrim = document.createElement("div");
+  scrim.dataset.scrim = "1";
+  scrim.style.cssText = "position:fixed;inset:0;background:rgba(18,24,21,.28);z-index:59;backdrop-filter:blur(2px)";
+  scrim.onclick = () => { popup.remove(); scrim.remove(); window._settleIds = null; };
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function settleTogglePick(txId) {
+  if (!window._settleIds) return;
+  if (window._settleIds.has(txId)) window._settleIds.delete(txId);
+  else window._settleIds.add(txId);
+  if (window._settleRebuild) window._settleRebuild();
+}
+
+function confirmSettlement(expenseTxId) {
+  const ids = [...(window._settleIds||new Set())];
+  if (!ids.length) { showToast("Mindestens eine Erstattung auswählen"); return; }
+  settlements.push({
+    id: "sl" + Date.now() + Math.random().toString(36).slice(2, 4),
+    expenseTxId,
+    reimbursementTxIds: ids
+  });
+  persistSettlements();
+  document.querySelectorAll(".tx-settle-popup,[data-scrim]").forEach(p => p.remove());
+  window._settleIds = null;
+  renderTransactions();
+  showToast("Ausgleich verknüpft");
+}
+
+function txShowSettlementDetail(settlementId) {
+  document.querySelectorAll(".tx-settle-detail,[data-scrim]").forEach(p => p.remove());
+  const s = settlements.find(x => x.id === settlementId);
+  if (!s) return;
+  const expTx = transactions.find(t => t.id === s.expenseTxId);
+  const reimbs = (s.reimbursementTxIds||[]).map(id => transactions.find(t => t.id === id)).filter(Boolean);
+  const net = (expTx ? expTx.amount : 0) + reimbs.reduce((a, t) => a + t.amount, 0);
+  const netPos = net >= 0;
+
+  const popup = document.createElement("div");
+  popup.className = "tx-settle-detail";
+  popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:80vh;overflow-y:auto";
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:14px">Ausgleich-Details</div>
+    <div style="padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Ausgabe</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:600">${esc(expTx?.payee||"Unbekannt")}</div>
+        <div style="font-weight:700;color:var(--danger)">${eur.format(expTx?.amount||0)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${expTx?.date||""}</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Erstattungen (${reimbs.length})</div>
+    ${reimbs.map(t => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bg)">
+      <div><div style="font-size:13px">${esc(t.payee||"Unbekannt")}</div><div style="font-size:11px;color:var(--muted)">${t.date||""}</div></div>
+      <div style="font-weight:700;color:var(--accent)">${eur.format(t.amount)}</div>
+    </div>`).join("")}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:8px;border-top:2px solid var(--line)">
+      <div style="font-weight:700">Nettobetrag</div>
+      <div style="font-weight:700;font-size:16px;color:${netPos?"var(--accent)":"var(--danger)"}">${eur.format(net)}</div>
+    </div>
+    ${net !== 0 ? `<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:2px;margin-bottom:12px">Differenz: ${eur.format(Math.abs(net))} ${netPos?"Guthaben":"offen"}</div>` : `<div style="margin-bottom:12px"></div>`}
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.querySelectorAll('.tx-settle-detail,[data-scrim]').forEach(p=>p.remove())">Schließen</button>
+      <button class="btn btn-danger" style="flex:1" onclick="deleteSettlement('${settlementId}')">Aufheben</button>
+    </div>`;
+
+  const scrim = document.createElement("div");
+  scrim.dataset.scrim = "1";
+  scrim.style.cssText = "position:fixed;inset:0;background:rgba(18,24,21,.28);z-index:59;backdrop-filter:blur(2px)";
+  scrim.onclick = () => { popup.remove(); scrim.remove(); };
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function deleteSettlement(settlementId) {
+  if (!confirm("Verknüpfung aufheben?")) return;
+  settlements = settlements.filter(s => s.id !== settlementId);
+  persistSettlements();
+  document.querySelectorAll(".tx-settle-detail,[data-scrim]").forEach(p => p.remove());
+  renderTransactions();
+  showToast("Verknüpfung aufgehoben");
+}
+
+// ── IOU helpers ────────────────────────────────────────────────────────────
+function txMarkIOU(txId) {
+  document.querySelectorAll(".tx-iou-popup,[data-scrim]").forEach(p => p.remove());
+  const t = transactions.find(x => x.id === txId);
+  if (!t || t.amount >= 0) return;
+  const existing = t.iou || {};
+  const popup = document.createElement("div");
+  popup.className = "tx-iou-popup";
+  popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60";
+  popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
+    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:14px">Für andere bezahlt</div>
+    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Person</label>
+    <input id="iou-person" type="text" value="${esc(existing.person||"")}" placeholder="Name der Person" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink);margin-bottom:12px" autocomplete="off">
+    <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Notiz (optional)</label>
+    <input id="iou-note" type="text" value="${esc(existing.note||"")}" placeholder="z. B. Kino-Tickets, Abendessen" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink);margin-bottom:12px" autocomplete="off">
+    <label style="display:flex;align-items:center;gap:10px;font-size:14px;margin-bottom:16px;cursor:pointer">
+      <input id="iou-settled" type="checkbox" ${existing.settled ? "checked" : ""} style="width:18px;height:18px;cursor:pointer">
+      Bereits ausgeglichen
+    </label>
+    <div style="display:flex;gap:8px">
+      ${existing.person !== undefined ? `<button class="btn btn-danger" style="flex:1" onclick="clearIOU('${txId}')">Entfernen</button>` : ""}
+      <button class="btn btn-ghost" style="flex:1" onclick="document.querySelectorAll('.tx-iou-popup,[data-scrim]').forEach(p=>p.remove())">Abbrechen</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveIOU('${txId}')">Speichern</button>
+    </div>`;
+  const scrim = document.createElement("div");
+  scrim.dataset.scrim = "1";
+  scrim.style.cssText = "position:fixed;inset:0;background:rgba(18,24,21,.28);z-index:59;backdrop-filter:blur(2px)";
+  scrim.onclick = () => { popup.remove(); scrim.remove(); };
+  document.body.appendChild(scrim);
+  document.body.appendChild(popup);
+}
+
+function saveIOU(txId) {
+  const t = transactions.find(x => x.id === txId);
+  if (!t) return;
+  const person  = document.getElementById("iou-person")?.value.trim();
+  const note    = document.getElementById("iou-note")?.value.trim();
+  const settled = document.getElementById("iou-settled")?.checked || false;
+  if (!person) { showToast("Bitte einen Namen eingeben"); return; }
+  t.iou = { person, note, settled };
+  persistTransactions();
+  document.querySelectorAll(".tx-iou-popup,[data-scrim]").forEach(p => p.remove());
+  renderTransactions();
+}
+
+function clearIOU(txId) {
+  const t = transactions.find(x => x.id === txId);
+  if (!t) return;
+  delete t.iou;
+  persistTransactions();
+  document.querySelectorAll(".tx-iou-popup,[data-scrim]").forEach(p => p.remove());
+  renderTransactions();
+}
+
 function renderTransactions() {
   const host = $("transactions");
 
@@ -2806,16 +3206,51 @@ function renderTransactions() {
   if (txFilter === "income")  visible = monthTx.filter(t => t.amount > 0);
   if (txFilter === "expense") visible = monthTx.filter(t => t.amount < 0);
 
-  // Summaries
-  const income  = monthTx.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const expense = monthTx.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  // Settlement classification
+  const settledExpIds   = new Set(settlements.map(s => s.expenseTxId));
+  const settledReimbIds = new Set(settlements.flatMap(s => s.reimbursementTxIds||[]));
+  const settleByTxId    = {};
+  settlements.forEach(s => {
+    settleByTxId[s.expenseTxId] = s;
+    (s.reimbursementTxIds||[]).forEach(id => { settleByTxId[id] = s; });
+  });
+
+  // Effective income: exclude reimbursements
+  const income = monthTx.filter(t => t.amount > 0 && !settledReimbIds.has(t.id))
+                         .reduce((s, t) => s + t.amount, 0);
+
+  // Effective expense: net for settled, full for others
+  const processedSettle = new Set();
+  let expense = 0;
+  monthTx.filter(t => t.amount < 0).forEach(t => {
+    if (settledExpIds.has(t.id)) {
+      const s = settleByTxId[t.id];
+      if (s && !processedSettle.has(s.id)) { expense += settlementNetAmount(s); processedSettle.add(s.id); }
+    } else {
+      expense += t.amount;
+    }
+  });
   const balance = income + expense;
 
-  // Category breakdown (expenses only)
+  // Outstanding IOUs
+  const outstandingIOUs    = monthTx.filter(t => t.iou && !t.iou.settled && t.amount < 0);
+  const outstandingIouAmt  = outstandingIOUs.reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  // Category breakdown (expenses only, net for settled)
   const catTotals = {};
+  const processedSettleCat = new Set();
   monthTx.filter(t => t.amount < 0).forEach(t => {
     const cat = txEffectiveCat(t);
-    catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.amount);
+    if (settledExpIds.has(t.id)) {
+      const s = settleByTxId[t.id];
+      if (s && !processedSettleCat.has(s.id)) {
+        const net = settlementNetAmount(s);
+        if (net < 0) catTotals[cat] = (catTotals[cat]||0) + Math.abs(net);
+        processedSettleCat.add(s.id);
+      }
+    } else {
+      catTotals[cat] = (catTotals[cat]||0) + Math.abs(t.amount);
+    }
   });
   const catEntries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 7);
   const maxCat = catEntries[0]?.[1] || 1;
@@ -2827,6 +3262,11 @@ function renderTransactions() {
       <div class="tx-cat-track"><div class="tx-cat-fill" style="width:${(v/maxCat*100).toFixed(1)}%"></div></div>
       <div class="tx-cat-amt">${eur.format(v)}</div>
     </div>`).join("")}
+  </div>` : "";
+
+  const iouBarHtml = outstandingIouAmt > 0 ? `<div class="iou-outstanding-bar">
+    <span>⏳ Für andere ausstehend (${outstandingIOUs.length})</span>
+    <span class="iou-outstanding-amt">${eur.format(outstandingIouAmt)}</span>
   </div>` : "";
 
   // Transaction list grouped by date
@@ -2859,23 +3299,44 @@ function renderTransactions() {
         const amtCls = isNeu ? "" : (isPos ? "pos" : "neg");
         const cat    = txEffectiveCat(t);
         const acct   = t.accountName ? ` · ${t.accountName}` : "";
-        const linked = txLinkedSub(t.id);
+        const linked    = txLinkedSub(t.id);
+        const settle    = txGetSettlement(t.id);
+        const isExpense = t.amount < 0;
+        const isReimb   = settle && (settle.reimbursementTxIds||[]).includes(t.id);
+
         const linkBadge = linked
           ? `<span class="tx-linked-badge" onclick="txLinkToSub('${t.id}')">
                <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                ${esc(linked.name)}
              </span>`
-          : (t.amount < 0 && subs.length > 0
+          : (isExpense && subs.length > 0
               ? `<span class="tx-link-btn" onclick="txLinkToSub('${t.id}')">Abo +</span>`
               : "");
+
+        const settleBadge = settle
+          ? `<span class="tx-settle-badge" onclick="txShowSettlementDetail('${settle.id}')">⇄ ${isReimb ? "Ausgleich" : `Netto: ${eur.format(settlementNetAmount(settle))}`}</span>`
+          : (isExpense
+              ? `<span class="tx-link-btn" style="border-color:rgba(128,96,192,.5);color:#7050b8;background:rgba(128,96,192,.08)" onclick="txOpenSettlementPicker('${t.id}')">Ausgleich +</span>`
+              : "");
+
+        const iouBadge = t.iou
+          ? `<span class="tx-iou-badge ${t.iou.settled ? "settled" : "open"}" onclick="txMarkIOU('${t.id}')">${t.iou.settled ? "✓" : "⏳"} ${esc(t.iou.person)}</span>`
+          : (isExpense
+              ? `<span class="tx-iou-btn" onclick="txMarkIOU('${t.id}')">Für andere</span>`
+              : "");
+
+        const iouMeta = t.iou?.note ? ` · ${esc(t.iou.note)}` : "";
+
         listHtml += `<div class="tx-item" data-txid="${t.id}">
           <div class="tx-dot ${cls}"></div>
           <div class="tx-main">
             <div class="tx-payee">${esc(t.payee || "Unbekannt")}</div>
-            <div class="tx-meta">${esc(t.type)}${acct}</div>
+            <div class="tx-meta">${esc(t.type)}${acct}${iouMeta}</div>
             <div class="tx-chips-row">
               <span class="tx-cat-chip" onclick="txEditCat('${t.id}')">${esc(cat)}</span>
               ${linkBadge}
+              ${settleBadge}
+              ${iouBadge}
             </div>
           </div>
           <div class="tx-right">
@@ -2920,6 +3381,7 @@ function renderTransactions() {
       </div>
     </div>
     ${catBarHtml}
+    ${iouBarHtml}
     <div class="tx-filter-row">
       <button class="tx-filter-btn ${txFilter==="all"?"active":""}" onclick="txSetFilter('all')">Alle</button>
       <button class="tx-filter-btn ${txFilter==="income"?"active":""}" onclick="txSetFilter('income')">Einnahmen</button>
@@ -3009,7 +3471,7 @@ function txEditCat(id) {
   document.querySelectorAll(".tx-cat-popup").forEach(p => p.remove());
 
   const currentCat = txEffectiveCat(t);
-  const allCats = [...new Set([...TX_CATS, t.c24Cat])].filter(Boolean);
+  const allCats = [...new Set([...allTxCats(), t.c24Cat])].filter(Boolean);
 
   const popup = document.createElement("div");
   popup.className = "tx-cat-popup";
@@ -3018,7 +3480,10 @@ function txEditCat(id) {
   const chips = allCats.map(cat => `<button style="font-family:inherit;font-size:13px;font-weight:${cat===currentCat?700:500};color:${cat===currentCat?"var(--accent)":"var(--muted)"};background:${cat===currentCat?"var(--accent-tint)":"var(--bg)"};border:1.5px solid ${cat===currentCat?"var(--accent)":"transparent"};border-radius:20px;padding:8px 13px;cursor:pointer;margin:3px" onclick="txSetCat('${id}','${esc(cat)}')">${esc(cat)}</button>`).join("");
 
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
-    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:12px">Kategorie wählen</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-family:'Space Grotesk';font-weight:600;font-size:15px">Kategorie wählen</span>
+      <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openTxCatManager()">Bearbeiten</button>
+    </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px">${chips}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Eigene Kategorie:</div>
     <div style="display:flex;gap:8px">
