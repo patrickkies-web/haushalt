@@ -679,6 +679,32 @@
     table.fc th.cur,
     table.fc tbody td.cur { background: var(--accent-tint); }
 
+    /* Past month columns */
+    table.fc th.past-col { color: var(--faint); }
+    table.fc tbody td.past-col { color: var(--muted); }
+    table.fc tbody td.empty.past-col { color: #dde0dd; }
+
+    /* Payment states in forecast cells */
+    table.fc tbody td.fc-paid {
+      font-weight: 600;
+      border-radius: 6px;
+    }
+    table.fc tbody td.fc-ok {
+      color: var(--accent);
+      background: var(--accent-tint);
+    }
+    table.fc tbody td.fc-diff {
+      color: #a06020;
+      background: #fef0db;
+    }
+    table.fc tbody td.fc-unconfirmed {
+      color: var(--faint);
+      border-bottom: 1.5px dashed var(--line);
+      cursor: pointer;
+    }
+    table.fc tbody td.fc-paid { cursor: pointer; }
+    table.fc tbody td.fc-unconfirmed:hover { background: var(--bg); }
+
     table.fc tr.totals td {
       font-family: "Space Grotesk";
       font-weight: 600;
@@ -2127,20 +2153,8 @@ function render() {
     return;
   }
 
-  const now2    = new Date();
-  const curYYMM = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}`;
-
   $("list").innerHTML = sorted.map(s => {
-    const norm    = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
-    const pay     = getPayment(s.id, curYYMM);
-    let payBadge  = "";
-    if (pay) {
-      const diff = Math.abs(Math.abs(pay.txAmount) - s.amount) > 0.01;
-      payBadge = `<div class="sub-pay-badge ${diff ? "diff" : "ok"}" title="${pay.date}" onclick="event.stopPropagation();txGoToLinked('${pay.txId}')">
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        ${eur.format(Math.abs(pay.txAmount))}
-      </div>`;
-    }
+    const norm = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
     return `<div class="row" onclick="openSheet('${s.id}')">
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
       <div class="row-main">
@@ -2148,7 +2162,6 @@ function render() {
         <div class="row-sub">${esc(s.cat)}${norm}</div>
       </div>
       <div class="row-amt">
-        ${payBadge}
         <div class="v">${eur.format(s.amount)}</div>
         <div class="c">${CYCLES[s.cycle].label}</div>
       </div>
@@ -2160,20 +2173,28 @@ function renderForecast() {
   const host = $("forecast");
   if (subs.length === 0) { host.innerHTML = ""; return; }
 
-  const N        = 36;
+  const PAST     = 6;             // months to show in the past
+  const FUTURE   = 35;            // months to show in the future
+  const N        = PAST + 1 + FUTURE;
   const now      = new Date();
   now.setDate(1);
   now.setHours(0, 0, 0, 0);
-  const startIdx = now.getFullYear() * 12 + now.getMonth();
+  const curMk    = now.getFullYear() * 12 + now.getMonth();
+  const startIdx = curMk - PAST;  // absolute month index of column 0
   const stepOf   = { monthly: 1, quarterly: 3, yearly: 12 };
   const mf       = new Intl.DateTimeFormat("de-DE", { month: "short" });
+
+  const colDate = k => new Date(now.getFullYear(), now.getMonth() - PAST + k, 1);
+  const colYYMM = k => { const d = colDate(k); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const isPast  = k => k < PAST;
+  const isCur   = k => k === PAST;
 
   // Month headers
   let head = `<th class="name">Ausgabe</th>`;
   for (let k = 0; k < N; k++) {
-    const d   = new Date(now.getFullYear(), now.getMonth() + k, 1);
-    const cur = k === 0 ? "cur" : "";
-    head += `<th class="${cur}">${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
+    const d     = colDate(k);
+    const cls   = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    head += `<th class="${cls}">${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
   }
 
   const baseIndex = s => {
@@ -2191,14 +2212,27 @@ function renderForecast() {
     let cells  = "";
     for (let k = 0; k < N; k++) {
       const i     = startIdx + k;
-      const cur   = k === 0 ? "cur" : "";
       const phase = (((i - bi) % step) + step) % step === 0;
-      const due   = phase && (bi <= startIdx || i >= bi);
+      const due   = phase && (bi <= curMk || i >= bi);
+      const yymm  = colYYMM(k);
+      const past  = isPast(k);
+      const cur   = isCur(k);
+      const baseCls = [cur ? "cur" : "", past ? "past-col" : ""].filter(Boolean).join(" ");
+
       if (due) {
         totals[k] += s.amount;
-        cells += `<td class="${cur}">${eur.format(s.amount)}</td>`;
+        const pay = (past || cur) ? getPayment(s.id, yymm) : null;
+        if (pay) {
+          const diffAmt = Math.abs(Math.abs(pay.txAmount) - s.amount) > 0.01;
+          const fcCls   = diffAmt ? "fc-paid fc-diff" : "fc-paid fc-ok";
+          cells += `<td class="${baseCls} ${fcCls}" onclick="fcCellClick('${s.id}','${yymm}')" title="${diffAmt ? 'Abweichung: geplant '+eur.format(s.amount) : 'Bezahlt'}">${eur.format(Math.abs(pay.txAmount))}</td>`;
+        } else if (past || cur) {
+          cells += `<td class="${baseCls} fc-unconfirmed" onclick="fcCellClick('${s.id}','${yymm}')" title="Noch nicht verknüpft">${eur.format(s.amount)}</td>`;
+        } else {
+          cells += `<td class="${baseCls}">${eur.format(s.amount)}</td>`;
+        }
       } else {
-        cells += `<td class="empty ${cur}">–</td>`;
+        cells += `<td class="empty ${baseCls}">–</td>`;
       }
     }
     body += `<tr>
@@ -2210,28 +2244,32 @@ function renderForecast() {
   // Totals row
   let tot = `<td class="name"><span class="lbl">Summe / Monat</span></td>`;
   totals.forEach((v, k) => {
-    const cur = k === 0 ? "cur" : "";
-    tot += `<td class="${cur}">${v ? eur.format(v) : "–"}</td>`;
+    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    tot += `<td class="${cls}">${v ? eur.format(v) : "–"}</td>`;
   });
 
-  // Reserve account: deposit avg12 each month, pay that month's bills.
-  // Run from zero first to find the deepest dip = starting cushion needed.
-  const avg12 = totals.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
+  // Reserve account based on future months only
+  const futureTotals = totals.slice(PAST);
+  const avg12 = futureTotals.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
   let bal = 0, minBal = 0;
   const raw = [];
-  for (let k = 0; k < N; k++) {
-    bal += avg12 - totals[k];
+  for (let k = 0; k < FUTURE + 1; k++) {
+    bal += avg12 - futureTotals[k];
     raw.push(bal);
     if (bal < minBal) minBal = bal;
   }
   const cushion = minBal < -0.005 ? -minBal : 0;
 
   let res = `<td class="name"><span class="lbl">Rücklagenkonto</span></td>`;
-  raw.forEach((v, k) => {
-    const cur = k === 0 ? "cur" : "";
-    const b   = v + cushion;
-    res += `<td class="${cur}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
-  });
+  for (let k = 0; k < N; k++) {
+    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    if (isPast(k)) {
+      res += `<td class="${cls}">–</td>`;
+    } else {
+      const b = raw[k - PAST] + cushion;
+      res += `<td class="${cls}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
+    }
+  }
 
   const note = cushion > 0.005
     ? `So funktioniert's: Starte das Konto mit <b>${eur.format(cushion)}</b> und lege jeden Monat <b>${eur.format(avg12)}</b> zur Seite. Davon werden die fälligen Rechnungen bezahlt – so rutscht das Konto nie ins Minus.`
@@ -2243,19 +2281,22 @@ function renderForecast() {
 
   const inputCells = key => Array.from({ length: N }, (_, k) => {
     const mk  = startIdx + k;
-    const cur = k === 0 ? 'cur' : '';
+    const cls = [isCur(k) ? 'cur' : '', isPast(k) ? 'past-col' : ''].filter(Boolean).join(' ');
     const v   = getInc(mk, key);
-    return `<td class="${cur}"><input class="ic" data-key="${key}" data-col="${k}" type="text" inputmode="decimal" placeholder="–"${v ? ` value="${String(v).replace('.', ',')}"` : ''}></td>`;
+    return `<td class="${cls}"><input class="ic" data-key="${key}" data-col="${k}" type="text" inputmode="decimal" placeholder="–"${v ? ` value="${String(v).replace('.', ',')}"` : ''}></td>`;
   }).join('');
 
   const calcCells = key => Array.from({ length: N }, (_, k) => {
     const mk  = startIdx + k;
-    const cur = k === 0 ? 'cur' : '';
-    return `<td class="${cur}" id="cc-${key}-${mk}">–</td>`;
+    const cls = [isCur(k) ? 'cur' : '', isPast(k) ? 'past-col' : ''].filter(Boolean).join(' ');
+    return `<td class="${cls}" id="cc-${key}-${mk}">–</td>`;
   }).join('');
 
   let sepCells = '';
-  for (let k = 0; k < N; k++) sepCells += `<td class="${k === 0 ? 'cur' : ''}"></td>`;
+  for (let k = 0; k < N; k++) {
+    const cls = [isCur(k) ? 'cur' : '', isPast(k) ? 'past-col' : ''].filter(Boolean).join(' ');
+    sepCells += `<td class="${cls}"></td>`;
+  }
 
   const incRows =
     `<tr class="inc-sep"><td class="name"><span class="lbl">Einnahmen &amp; Auszahlung</span></td>${sepCells}</tr>`
@@ -2272,14 +2313,14 @@ function renderForecast() {
     + iRow('inc-payout', 'Sara erhält',       calcCells('sarap'))
     + iRow('inc-payout', 'Patrick erhält',    calcCells('patrickp'));
 
-  lastTotals   = totals;
-  lastStartIdx = startIdx;
+  lastTotals   = totals.slice(PAST); // only future totals for income calculation
+  lastStartIdx = curMk;
 
   host.innerHTML = `<div class="forecast-wrap">
     <div class="forecast-head">
       <div>
         <h2>Prognose</h2>
-        <span class="hint">nächste 36 Monate · seitwärts wischen →</span>
+        <span class="hint">← 6 Monate · aktueller Monat · Prognose 35 Monate →</span>
       </div>
       <div class="avg">
         <span class="avg-label">Ø pro Monat · 12 Mon.</span>
@@ -2287,7 +2328,7 @@ function renderForecast() {
       </div>
     </div>
     <div class="reserve-note">${note}</div>
-    <div class="fc-scroll">
+    <div class="fc-scroll" id="fc-scroll">
       <table class="fc">
         <thead><tr>${head}</tr></thead>
         <tbody>
@@ -2300,19 +2341,45 @@ function renderForecast() {
     </div>
   </div>`;
 
-  // Fill computed income cells
-  for (let k = 0; k < N; k++) updateIncomeCol(k, startIdx + k);
+  // Scroll to current month on first render
+  requestAnimationFrame(() => {
+    const scroll = $("fc-scroll");
+    if (scroll) {
+      const curTh = scroll.querySelector("th.cur");
+      if (curTh) scroll.scrollLeft = curTh.offsetLeft - 120;
+    }
+  });
+
+  // Fill computed income cells — only for current + future cols
+  for (let k = PAST; k < N; k++) updateIncomeCol(k - PAST, startIdx + k);
 
   // Attach income input listeners
   host.querySelectorAll('.ic').forEach(inp => {
     inp.addEventListener('input', () => {
       const col = parseInt(inp.dataset.col);
-      const mk  = lastStartIdx + col;
+      const mk  = startIdx + col;
       setInc(mk, inp.dataset.key, parseFloat(inp.value.replace(/\./g, '').replace(',', '.')) || 0);
       persistIncome();
-      updateIncomeCol(col, mk);
+      updateIncomeCol(col - PAST, mk);
     });
   });
+}
+
+function fcCellClick(subId, yymm) {
+  const pay = getPayment(subId, yymm);
+  if (pay) {
+    // navigate to transactions tab and that month's transaction
+    txGoToLinked(pay.txId);
+  } else {
+    // navigate to transactions tab for that month
+    const [y, m] = yymm.split("-").map(Number);
+    const now2   = new Date();
+    const diff   = (y - now2.getFullYear()) * 12 + (m - 1 - now2.getMonth());
+    txMonthOffset = Math.min(0, diff);
+    document.querySelectorAll(".tab-btn").forEach(b => {
+      if (b.dataset.tab === "tx") b.click();
+    });
+  }
 }
 
 // ── Wealth ─────────────────────────────────────────────────────────────────
