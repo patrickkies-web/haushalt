@@ -777,6 +777,46 @@
     table.fc tr.rot-aus td.cur        { background: var(--accent-tint); }
     table.fc tr.rot-aus td.past-col   { color: rgba(15,110,84,.45); }
 
+    table.fc tr.fc-avg td {
+      font-family: "Space Grotesk";
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-2);
+      font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.fc tr.fc-avg td.name .lbl { color: var(--text-2); font-weight: 600; font-size: 11px; }
+    table.fc tr.fc-avg td.cur      { background: var(--bg-2); }
+    table.fc tr.fc-avg td.past-col { opacity: .45; }
+
+    .rot-action {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 10px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      background: var(--accent-tint);
+    }
+    .rot-action-lbl {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .rot-action-val {
+      font-family: "Space Grotesk";
+      font-size: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .rot-action-val.pos { color: var(--accent); }
+    .rot-action-val.neg { color: var(--danger); }
+    .rot-action-hint { font-size: 12px; color: var(--text-2); }
+
     table.fc tr.rot-net td {
       font-family: "Space Grotesk";
       font-size: 12px;
@@ -2489,46 +2529,70 @@ function renderForecast() {
     }
   });
 
-  const futureIrr = irrTotals.slice(PAST);
-  const avg12Irr  = futureIrr.slice(0, 12).reduce((a, v) => a + v, 0) / 12;
-  let balIrr = 0, minBalIrr = 0;
-  const rawIrr = [];
-  for (let k = 0; k < FUTURE + 1; k++) {
-    balIrr += avg12Irr - futureIrr[k];
-    rawIrr.push(balIrr);
-    if (balIrr < minBalIrr) minBalIrr = balIrr;
+  // Forward-looking window: current month + next 23. Never the past.
+  const WIN    = 24;
+  const winEnd = Math.min(PAST + WIN, N);
+  const winLen = winEnd - PAST;
+  const sumWin = arr => arr.slice(PAST, winEnd).reduce((a, v) => a + v, 0);
+  const avgAll = sumWin(totals)    / winLen;  // all subs — what a month really costs
+  const avgIrr = sumWin(irrTotals) / winLen;  // irregular only — the Rotierkonto rate
+
+  // The deepest trough over the window decides the starting cushion
+  let b = 0, minB = 0;
+  for (let k = PAST; k < winEnd; k++) {
+    b += avgIrr - irrTotals[k];
+    if (b < minB) minB = b;
   }
-  const cushion = minBalIrr < -0.005 ? -minBalIrr : 0;
+  const cushion = minB < -0.005 ? -minB : 0;
+
+  // Running balance from the current month on, seeded with the cushion
+  const balAt = new Array(N).fill(null);
+  let run = cushion;
+  for (let k = PAST; k < N; k++) { run += avgIrr - irrTotals[k]; balAt[k] = run; }
+
+  const hasIrr = avgIrr > 0.005;
+
+  // Average row, right under Summe / Monat
+  let avgRow = `<td class="name"><span class="lbl">Ø / Monat · ${winLen} Mon.</span></td>`;
+  for (let k = 0; k < N; k++) {
+    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    avgRow += `<td class="${cls}">${avgAll > 0.005 ? eur.format(avgAll) : '–'}</td>`;
+  }
 
   let rotSep = `<td class="name"><span class="lbl">Rotierkonto</span></td>`;
   let rotEin = `<td class="name"><span class="lbl">↑ Einzahlen / Monat</span></td>`;
   let rotAus = `<td class="name"><span class="lbl">↓ Auszahlen wenn fällig</span></td>`;
-  let rotNet = `<td class="name"><span class="lbl">= Netto aufs Konto</span></td>`;
+  let rotNet = `<td class="name"><span class="lbl">= Netto · Überweisung</span></td>`;
   let rotRes = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
   for (let k = 0; k < N; k++) {
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
     const due = irrTotals[k];
-    const net = avg12Irr - due;
     rotSep += `<td class="${cls}"></td>`;
-    rotEin += `<td class="${cls}">${avg12Irr > 0.005 ? eur.format(avg12Irr) : '–'}</td>`;
-    rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
-    if (avg12Irr < 0.005) {
+    if (!hasIrr || isPast(k)) {
+      rotEin += `<td class="${cls}">–</td>`;
+      rotAus += `<td class="${cls}">–</td>`;
       rotNet += `<td class="${cls}">–</td>`;
-    } else {
-      const sign = net >= 0 ? '+' : '';
-      rotNet += `<td class="${cls} ${net < -0.005 ? 'rot-net-neg' : 'rot-net-pos'}">${sign}${eur.format(Math.abs(net) < 0.005 ? 0 : net)}</td>`;
-    }
-    if (isPast(k)) {
       rotRes += `<td class="${cls}">–</td>`;
-    } else {
-      const b = rawIrr[k - PAST] + cushion;
-      rotRes += `<td class="${cls}">${eur.format(Math.abs(b) < 0.005 ? 0 : b)}</td>`;
+      continue;
     }
+    const net = avgIrr - due;
+    rotEin += `<td class="${cls}">${eur.format(avgIrr)}</td>`;
+    rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
+    rotNet += `<td class="${cls} ${net < -0.005 ? 'rot-net-neg' : 'rot-net-pos'}">${net >= 0 ? '+' : '−'}${eur.format(Math.abs(net) < 0.005 ? 0 : Math.abs(net))}</td>`;
+    const bal = balAt[k];
+    rotRes += `<td class="${cls}">${eur.format(Math.abs(bal) < 0.005 ? 0 : bal)}</td>`;
   }
 
-  const note = avg12Irr < 0.005 ? '' : cushion > 0.005
-    ? `Starte das Rotierkonto mit <b>${eur.format(cushion)}</b> und zahle jeden Monat <b>${eur.format(avg12Irr)}</b> ein. In Monaten mit fälligen Rechnungen überweist du den Betrag aufs Gehaltskonto – so sind deine Ausgaben immer gleich.`
-    : `Zahle jeden Monat <b>${eur.format(avg12Irr)}</b> aufs Rotierkonto. In Monaten mit fälligen Rechnungen überweist du den Betrag aufs Gehaltskonto – kein Startpolster nötig.`;
+  const curNet  = avgIrr - irrTotals[PAST];
+  const note = !hasIrr ? '' : cushion > 0.005
+    ? `<b>Soll-Stand jetzt: ${eur.format(cushion)}</b> aufs Rotierkonto legen. Damit ist jede fällige Rechnung der nächsten ${winLen} Monate gedeckt, ohne dass das Konto ins Minus rutscht. Danach jeden Monat einfach den Netto-Betrag der Spalte überweisen – Plus heißt rein, Minus heißt zurück aufs Gehaltskonto.`
+    : `Kein Startpolster nötig. Überweise jeden Monat den Netto-Betrag der Spalte – im Schnitt <b>${eur.format(avgIrr)}</b> aufs Rotierkonto, in Rechnungsmonaten entsprechend zurück.`;
+
+  const action = !hasIrr ? '' : `<div class="rot-action">
+    <span class="rot-action-lbl">Diesen Monat</span>
+    <span class="rot-action-val ${curNet < -0.005 ? 'neg' : 'pos'}">${curNet >= 0 ? '+' : '−'}${eur.format(Math.abs(curNet) < 0.005 ? 0 : Math.abs(curNet))}</span>
+    <span class="rot-action-hint">${curNet < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto'}</span>
+  </div>`;
 
   // ── Income rows ──
   const iRow = (trCls, lbl, cells) =>
@@ -2579,9 +2643,10 @@ function renderForecast() {
       </div>
       <div class="avg">
         <span class="avg-label">Rotierkonto · Ø / Monat</span>
-        <span class="avg-val">${avg12Irr > 0.005 ? eur.format(avg12Irr) : '–'}</span>
+        <span class="avg-val">${hasIrr ? eur.format(avgIrr) : '–'}</span>
       </div>
     </div>
+    ${action}
     <div class="reserve-note">${note}</div>
     <div class="fc-scroll" id="fc-scroll">
       <table class="fc">
@@ -2589,6 +2654,7 @@ function renderForecast() {
         <tbody>
           ${body}
           <tr class="totals">${tot}</tr>
+          <tr class="fc-avg">${avgRow}</tr>
           <tr class="rot-sep">${rotSep}</tr>
           <tr class="rot-ein">${rotEin}</tr>
           <tr class="rot-aus">${rotAus}</tr>
