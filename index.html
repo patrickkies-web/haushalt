@@ -817,6 +817,42 @@
     .rot-action-val.neg { color: var(--danger); }
     .rot-action-hint { font-size: 12px; color: var(--text-2); }
 
+    .rot-cfg {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 0 0 12px;
+    }
+    .rot-cfg label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+    .rot-cfg input {
+      font: inherit;
+      font-family: "Space Grotesk";
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--text);
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg);
+      min-width: 140px;
+    }
+    .rot-cfg input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
     table.fc tr.rot-net td {
       font-family: "Space Grotesk";
       font-size: 12px;
@@ -1848,6 +1884,7 @@ const PKEY = "turnus:payments";
 const XKEY = "turnus:txcats";
 const SKEY = "turnus:settlements";
 const AKEY = "turnus:accounts";
+const RKEY = "turnus:rotierkonto";
 
 const TX_CATS = [
   "Lebensmittel","Restaurant & Café","Mobilität","Shopping",
@@ -1889,6 +1926,9 @@ let txUserCats    = [];
 let settlements   = [];
 let txAccCfg      = { a1: { label: "Gehaltskonto", number: "" }, a2: { label: "Gemeinschaftskonto", number: "" } };
 let txActiveAcc   = "a1";
+// Rotierkonto: start = first month of the rhythm (YYYY-MM, "" = next month),
+// balance = actual amount currently sitting on the account (null = unknown)
+let rotCfg        = { start: "", balance: null };
 
 const $ = id => document.getElementById(id);
 
@@ -1946,7 +1986,21 @@ async function load() {
       }
     }
   } catch (e) {}
+  try {
+    const rr = await window.storage.get(RKEY);
+    if (rr && rr.value) {
+      const d = JSON.parse(rr.value);
+      if (d && typeof d === 'object') {
+        if (typeof d.start === 'string') rotCfg.start = d.start;
+        if (typeof d.balance === 'number' || d.balance === null) rotCfg.balance = d.balance;
+      }
+    }
+  } catch (e) {}
   render();
+}
+
+async function persistRotCfg() {
+  try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
 }
 
 async function persist() {
@@ -2529,26 +2583,44 @@ function renderForecast() {
     }
   });
 
-  // Forward-looking window: current month + next 23. Never the past.
-  const WIN    = 24;
-  const winEnd = Math.min(PAST + WIN, N);
-  const winLen = winEnd - PAST;
-  const sumWin = arr => arr.slice(PAST, winEnd).reduce((a, v) => a + v, 0);
-  const avgAll = sumWin(totals)    / winLen;  // all subs — what a month really costs
-  const avgIrr = sumWin(irrTotals) / winLen;  // irregular only — the Rotierkonto rate
+  // Rhythm start: first month a transfer happens. Default = next month, so the
+  // cushion gets funded at the end of the current one.
+  const rotStartMk = (() => {
+    const m = /^(\d{4})-(\d{2})$/.exec(rotCfg.start || "");
+    return m ? (+m[1]) * 12 + (+m[2]) - 1 : curMk + 1;
+  })();
+  const rotStartCol = rotStartMk - startIdx;
+  const setupPhase  = rotStartCol > PAST;   // rhythm has not begun yet
 
-  // The deepest trough over the window decides the starting cushion
+  // Window is always forward-looking: 24 months from the rhythm start, but
+  // never reaching back before the current month once the rhythm is running.
+  const WIN     = 24;
+  const winFrom = Math.min(Math.max(rotStartCol, PAST), N - 1);
+  const winEnd  = Math.min(winFrom + WIN, N);
+  const winLen  = Math.max(1, winEnd - winFrom);
+  const sumWin  = arr => arr.slice(winFrom, winEnd).reduce((a, v) => a + v, 0);
+  const avgAll  = sumWin(totals)    / winLen;  // all subs — what a month really costs
+  const avgIrr  = sumWin(irrTotals) / winLen;  // irregular only — the Rotierkonto rate
+
+  // The deepest trough over the window decides the cushion
   let b = 0, minB = 0;
-  for (let k = PAST; k < winEnd; k++) {
+  for (let k = winFrom; k < winEnd; k++) {
     b += avgIrr - irrTotals[k];
     if (b < minB) minB = b;
   }
   const cushion = minB < -0.005 ? -minB : 0;
 
-  // Running balance from the current month on, seeded with the cushion
-  const balAt = new Array(N).fill(null);
-  let run = cushion;
-  for (let k = PAST; k < N; k++) { run += avgIrr - irrTotals[k]; balAt[k] = run; }
+  // Ideal balance track, seeded with the cushion at the start of the rhythm
+  const targetAt = new Array(N).fill(null);
+  let t = cushion;
+  for (let k = winFrom; k < N; k++) { t += avgIrr - irrTotals[k]; targetAt[k] = t; }
+
+  // One transfer per month: bring the account from where it is to where it
+  // should be. Without a known balance that is just the plain netto.
+  const ist        = typeof rotCfg.balance === 'number' ? rotCfg.balance : null;
+  const targetNow  = setupPhase ? cushion : (targetAt[PAST] ?? cushion);
+  const plainNet   = setupPhase ? cushion : avgIrr - irrTotals[PAST];
+  const action     = ist === null ? plainNet : targetNow - ist;
 
   const hasIrr = avgIrr > 0.005;
 
@@ -2568,7 +2640,7 @@ function renderForecast() {
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
     const due = irrTotals[k];
     rotSep += `<td class="${cls}"></td>`;
-    if (!hasIrr || isPast(k)) {
+    if (!hasIrr || k < winFrom) {
       rotEin += `<td class="${cls}">–</td>`;
       rotAus += `<td class="${cls}">–</td>`;
       rotNet += `<td class="${cls}">–</td>`;
@@ -2579,19 +2651,39 @@ function renderForecast() {
     rotEin += `<td class="${cls}">${eur.format(avgIrr)}</td>`;
     rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
     rotNet += `<td class="${cls} ${net < -0.005 ? 'rot-net-neg' : 'rot-net-pos'}">${net >= 0 ? '+' : '−'}${eur.format(Math.abs(net) < 0.005 ? 0 : Math.abs(net))}</td>`;
-    const bal = balAt[k];
+    const bal = targetAt[k];
     rotRes += `<td class="${cls}">${eur.format(Math.abs(bal) < 0.005 ? 0 : bal)}</td>`;
   }
 
-  const curNet  = avgIrr - irrTotals[PAST];
-  const note = !hasIrr ? '' : cushion > 0.005
-    ? `<b>Soll-Stand jetzt: ${eur.format(cushion)}</b> aufs Rotierkonto legen. Damit ist jede fällige Rechnung der nächsten ${winLen} Monate gedeckt, ohne dass das Konto ins Minus rutscht. Danach jeden Monat einfach den Netto-Betrag der Spalte überweisen – Plus heißt rein, Minus heißt zurück aufs Gehaltskonto.`
-    : `Kein Startpolster nötig. Überweise jeden Monat den Netto-Betrag der Spalte – im Schnitt <b>${eur.format(avgIrr)}</b> aufs Rotierkonto, in Rechnungsmonaten entsprechend zurück.`;
+  const mfLong   = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
+  const startLbl = mfLong.format(new Date(Math.floor(rotStartMk / 12), rotStartMk % 12, 1));
+  const fundBy   = mfLong.format(new Date(Math.floor((rotStartMk - 1) / 12), (rotStartMk - 1) % 12, 1));
 
-  const action = !hasIrr ? '' : `<div class="rot-action">
-    <span class="rot-action-lbl">Diesen Monat</span>
-    <span class="rot-action-val ${curNet < -0.005 ? 'neg' : 'pos'}">${curNet >= 0 ? '+' : '−'}${eur.format(Math.abs(curNet) < 0.005 ? 0 : Math.abs(curNet))}</span>
-    <span class="rot-action-hint">${curNet < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto'}</span>
+  const note = !hasIrr
+    ? ''
+    : setupPhase
+      ? (cushion > 0.005
+          ? `Der Rhythmus startet im <b>${startLbl}</b>. Leg bis Ende ${fundBy} <b>${eur.format(cushion)}</b> aufs Rotierkonto – damit ist jede fällige Rechnung der nächsten ${winLen} Monate gedeckt, ohne dass das Konto ins Minus rutscht.`
+          : `Der Rhythmus startet im <b>${startLbl}</b>. Ein Startpolster brauchst du nicht – die monatlichen Einzahlungen reichen aus.`)
+      : (ist === null
+          ? `Trag unten deinen aktuellen Kontostand ein, dann rechnet die App dir jeden Monat genau eine Überweisung aus. Solange kein Stand hinterlegt ist, siehst du den reinen Netto-Betrag der Spalte.`
+          : `Soll-Stand Ende dieses Monats: <b>${eur.format(targetNow)}</b>, aktuell drauf: <b>${eur.format(ist)}</b>. Die Differenz ist deine Überweisung – Abweichungen aus Vormonaten sind darin schon ausgeglichen.`);
+
+  const startInput = `${rotStartMk >= 0 ? String(Math.floor(rotStartMk / 12)).padStart(4, '0') : '0000'}-${String(rotStartMk % 12 + 1).padStart(2, '0')}`;
+  const cfgRow = !hasIrr ? '' : `<div class="rot-cfg">
+    <label>Rhythmus ab
+      <input type="month" id="rot-start" value="${startInput}">
+    </label>
+    <label>Kontostand aktuell
+      <input type="text" id="rot-bal" inputmode="decimal" placeholder="unbekannt"${ist !== null ? ` value="${String(ist).replace('.', ',')}"` : ''}>
+    </label>
+  </div>`;
+
+  const actLbl = setupPhase ? `Bis Ende ${fundBy}` : 'Diesen Monat';
+  const actBox = !hasIrr ? '' : `<div class="rot-action">
+    <span class="rot-action-lbl">${actLbl}</span>
+    <span class="rot-action-val ${action < -0.005 ? 'neg' : 'pos'}">${action >= 0 ? '+' : '−'}${eur.format(Math.abs(action) < 0.005 ? 0 : Math.abs(action))}</span>
+    <span class="rot-action-hint">${action < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto'}</span>
   </div>`;
 
   // ── Income rows ──
@@ -2646,8 +2738,9 @@ function renderForecast() {
         <span class="avg-val">${hasIrr ? eur.format(avgIrr) : '–'}</span>
       </div>
     </div>
-    ${action}
+    ${actBox}
     <div class="reserve-note">${note}</div>
+    ${cfgRow}
     <div class="fc-scroll" id="fc-scroll">
       <table class="fc">
         <thead><tr>${head}</tr></thead>
@@ -2687,6 +2780,26 @@ function renderForecast() {
       updateIncomeCol(mk);
     });
   });
+
+  // Rotierkonto config
+  const rs = $("rot-start");
+  if (rs) rs.addEventListener('change', async () => {
+    rotCfg.start = /^\d{4}-\d{2}$/.test(rs.value) ? rs.value : "";
+    await persistRotCfg();
+    renderForecast();
+  });
+
+  const rb = $("rot-bal");
+  if (rb) {
+    const commit = async () => {
+      const raw = rb.value.trim();
+      rotCfg.balance = raw === "" ? null : (parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0);
+      await persistRotCfg();
+      renderForecast();
+    };
+    rb.addEventListener('change', commit);
+    rb.addEventListener('keydown', e => { if (e.key === 'Enter') rb.blur(); });
+  }
 }
 
 function fcCellClick(subId, yymm) {
