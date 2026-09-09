@@ -817,6 +817,33 @@
     .rot-action-val.neg { color: var(--danger); }
     .rot-action-hint { font-size: 12px; color: var(--text-2); }
 
+    #sync-btn.sync-ok  { color: var(--accent); border-color: var(--accent); }
+    #sync-btn.sync-err { color: var(--danger); border-color: var(--danger); }
+    #sync-btn.sync-busy { opacity: .6; }
+    #sync-btn.sync-busy svg { animation: sync-spin 1s linear infinite; }
+    @keyframes sync-spin { to { transform: rotate(360deg); } }
+
+    .gh-popup .gh-note {
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--text-2);
+      margin: 0 0 14px;
+    }
+    .gh-popup .gh-note code {
+      font-family: "Space Grotesk";
+      font-size: 12px;
+      background: var(--bg-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .gh-popup .gh-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .gh-popup .gh-actions button { flex: 1; min-width: 150px; }
+
     .rot-cfg {
       display: flex;
       gap: 14px;
@@ -1805,6 +1832,10 @@
           Importieren
         </button>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+        <button class="btn-data" id="sync-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 3v4h-4M4.5 21v-4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="sync-btn-lbl">Sync</span>
+        </button>
       </div>
     </div>
 
@@ -2027,42 +2058,362 @@ async function load() {
       }
     }
   } catch (e) {}
+  try {
+    const rg = await window.storage.get(GKEY);
+    if (rg && rg.value) {
+      const d = JSON.parse(rg.value);
+      if (d && typeof d === 'object') gh = { ...gh, ...d };
+    }
+  } catch (e) {}
   render();
+  if (ghReady()) { syncBadge("ok", "Sync"); ghPull({ silent: true }); }
 }
 
 async function persistRotCfg() {
   try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
+  syncSoon();
+}
+
+// ── GitHub sync ────────────────────────────────────────────────────────────
+// Stores one JSON file in a private repo via the Contents API. No server: the
+// browser talks to api.github.com directly (it sends Access-Control-Allow-
+// Origin: *). The token lives only in this browser, never in the repo.
+const GKEY = "turnus:gh";
+let gh = { owner: "", repo: "", token: "", sha: null, updatedAt: 0 };
+let syncTimer = null, syncing = false, applyingRemote = false;
+
+const ghReady = () => !!(gh.owner && gh.repo && gh.token);
+
+async function persistGh() {
+  try { await window.storage.set(GKEY, JSON.stringify(gh)); } catch (e) {}
+}
+
+const b64enc = s => {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  bytes.forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin);
+};
+const b64dec = s => {
+  const bin = atob(String(s).replace(/\s/g, ""));
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+};
+
+function ghSnapshot() {
+  return {
+    v: 2, subs, cats: CATS, income,
+    transactions, payments, txcats: txUserCats, settlements,
+    accounts: txAccCfg, rotierkonto: rotCfg
+  };
+}
+
+function ghApply(d) {
+  if (!d || !Array.isArray(d.subs)) return false;
+  subs   = d.subs;
+  CATS   = (Array.isArray(d.cats) && d.cats.length) ? d.cats : [...DEFAULT_CATS];
+  income = (d.income && typeof d.income === 'object') ? d.income : {};
+  if (Array.isArray(d.transactions)) transactions = d.transactions;
+  if (d.payments && typeof d.payments === 'object') payments = d.payments;
+  if (Array.isArray(d.txcats))      txUserCats  = d.txcats;
+  if (Array.isArray(d.settlements)) settlements = d.settlements;
+  if (d.accounts && typeof d.accounts === 'object') {
+    if (d.accounts.a1) txAccCfg.a1 = { ...txAccCfg.a1, ...d.accounts.a1 };
+    if (d.accounts.a2) txAccCfg.a2 = { ...txAccCfg.a2, ...d.accounts.a2 };
+  }
+  if (d.rotierkonto && typeof d.rotierkonto === 'object') {
+    if (typeof d.rotierkonto.start === 'string') rotCfg.start = d.rotierkonto.start;
+    const b = d.rotierkonto.balance;
+    if (typeof b === 'number' || b === null) rotCfg.balance = b;
+  }
+  return true;
+}
+
+async function ghPersistAll() {
+  applyingRemote = true;
+  await Promise.all([
+    persist(), persistCats(), persistIncome(), persistTransactions(),
+    persistPayments(), persistTxCats(), persistSettlements(),
+    persistAccCfg(), persistRotCfg()
+  ]);
+  applyingRemote = false;
+}
+
+async function ghApi(path, opts = {}) {
+  const res = await fetch(`https://api.github.com/repos/${gh.owner}/${gh.repo}${path}`, {
+    ...opts,
+    headers: {
+      Authorization: `Bearer ${gh.token}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(opts.body ? { "Content-Type": "application/json" } : {})
+    }
+  });
+  return res;
+}
+
+// Returns { data, sha } — data is null when the file does not exist yet.
+async function ghFetchRemote() {
+  const res = await ghApi("/contents/data.json");
+  if (res.status === 404) return { data: null, sha: null };
+  if (res.status === 401) throw new Error("Token ungültig oder abgelaufen");
+  if (res.status === 403) throw new Error("Token hat keine Schreibrechte auf dieses Repo");
+  if (!res.ok) throw new Error(`GitHub ${res.status}`);
+  const j = await res.json();
+  // Files over 1 MB come back with an empty content field
+  let raw = j.content ? b64dec(j.content) : null;
+  if (raw === null || raw === "") {
+    const blob = await ghApi(`/git/blobs/${j.sha}`);
+    if (!blob.ok) throw new Error("Datei zu groß zum Laden");
+    raw = b64dec((await blob.json()).content);
+  }
+  return { data: JSON.parse(raw), sha: j.sha };
+}
+
+async function ghPut(payload, sha) {
+  return ghApi("/contents/data.json", {
+    method: "PUT",
+    body: JSON.stringify({
+      message: `Haushalt: ${new Date().toLocaleString("de-DE")}`,
+      content: b64enc(JSON.stringify(payload, null, 2)),
+      ...(sha ? { sha } : {})
+    })
+  });
+}
+
+function syncBadge(state, title) {
+  const b = $("sync-btn"), l = $("sync-btn-lbl");
+  if (!b) return;
+  b.classList.remove("sync-ok", "sync-busy", "sync-err");
+  if (state) b.classList.add(`sync-${state}`);
+  if (l) l.textContent = title;
+}
+
+// Pull remote and adopt it when it is newer than what we have.
+async function ghPull({ silent = false } = {}) {
+  if (!ghReady() || syncing) return;
+  syncing = true;
+  syncBadge("busy", "Lädt…");
+  try {
+    const { data, sha } = await ghFetchRemote();
+    gh.sha = sha;
+    if (data && (data.updatedAt || 0) > (gh.updatedAt || 0)) {
+      if (ghApply(data)) {
+        gh.updatedAt = data.updatedAt || Date.now();
+        await ghPersistAll();
+        render();
+        if (!silent) showToast("Daten von GitHub geladen");
+      }
+    } else if (!silent) {
+      showToast("Bereits aktuell");
+    }
+    await persistGh();
+    syncBadge("ok", "Sync");
+  } catch (e) {
+    syncBadge("err", "Sync");
+    if (!silent) showToast("Sync: " + e.message);
+  } finally {
+    syncing = false;
+  }
+}
+
+async function ghPush({ force = false } = {}) {
+  if (!ghReady() || syncing) return;
+  syncing = true;
+  syncBadge("busy", "Sichert…");
+  try {
+    const stamp   = Date.now();
+    const payload = { ...ghSnapshot(), updatedAt: stamp };
+    let res = await ghPut(payload, gh.sha);
+
+    // 409/422 means someone else wrote since we last read
+    if (res.status === 409 || res.status === 422) {
+      const remote = await ghFetchRemote();
+      const theirs = remote.data?.updatedAt || 0;
+      if (!force && theirs > gh.updatedAt) {
+        gh.sha = remote.sha;
+        await persistGh();
+        syncBadge("err", "Konflikt");
+        syncing = false;
+        ghConflict(remote);
+        return;
+      }
+      res = await ghPut(payload, remote.sha);
+    }
+
+    if (res.status === 401) throw new Error("Token ungültig oder abgelaufen");
+    if (res.status === 403) throw new Error("Token hat keine Schreibrechte");
+    if (res.status === 404) throw new Error("Repo nicht gefunden – Name oder Rechte prüfen");
+    if (!res.ok) throw new Error(`GitHub ${res.status}`);
+
+    gh.sha       = (await res.json()).content.sha;
+    gh.updatedAt = stamp;
+    await persistGh();
+    syncBadge("ok", "Sync");
+  } catch (e) {
+    syncBadge("err", "Sync");
+    showToast("Sync: " + e.message);
+  } finally {
+    syncing = false;
+  }
+}
+
+// Called after every change. Debounced so typing does not spam the API.
+// Suppressed while we are writing data that just came from the remote.
+function syncSoon() {
+  if (!ghReady() || applyingRemote) return;
+  clearTimeout(syncTimer);
+  syncBadge("busy", "…");
+  syncTimer = setTimeout(() => ghPush(), 2500);
+}
+
+function ghConflict(remote) {
+  const when = remote.data?.updatedAt
+    ? new Date(remote.data.updatedAt).toLocaleString("de-DE") : "unbekannt";
+  document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  const scrim = document.createElement("div");
+  scrim.className = "scrim on";
+  scrim.setAttribute("data-scrim", "1");
+  const box = document.createElement("div");
+  box.className = "sheet on gh-popup";
+  box.innerHTML = `
+    <div class="grab"></div>
+    <h2>Konflikt</h2>
+    <p class="gh-note">Auf GitHub liegt eine neuere Version (${esc(when)}), die von einem
+    anderen Gerät stammt. Welche soll gelten?</p>
+    <div class="gh-actions">
+      <button class="btn-primary" id="gh-take-remote">GitHub-Version laden</button>
+      <button class="btn-ghost" id="gh-keep-mine">Meine Version behalten</button>
+    </div>`;
+  document.body.append(scrim, box);
+  const close = () => document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  box.querySelector("#gh-take-remote").onclick = async () => {
+    close();
+    if (remote.data && ghApply(remote.data)) {
+      gh.sha = remote.sha;
+      gh.updatedAt = remote.data.updatedAt || Date.now();
+      await ghPersistAll();
+      await persistGh();
+      render();
+      showToast("GitHub-Version übernommen");
+    }
+  };
+  box.querySelector("#gh-keep-mine").onclick = () => { close(); ghPush({ force: true }); };
+  scrim.onclick = close;
+}
+
+function openSyncConfig() {
+  document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  const scrim = document.createElement("div");
+  scrim.className = "scrim on";
+  scrim.setAttribute("data-scrim", "1");
+  const box = document.createElement("div");
+  box.className = "sheet on gh-popup";
+  box.innerHTML = `
+    <div class="grab"></div>
+    <h2>Sync über GitHub</h2>
+    <p class="gh-note">Die App legt deine Daten als <code>data.json</code> in einem
+    <b>privaten</b> Repo ab. Nutz dafür nicht <code>haushalt</code> – das ist öffentlich.</p>
+    <div class="field"><label>GitHub-Benutzer</label>
+      <input id="gh-owner" type="text" placeholder="patrickkies-web" value="${esc(gh.owner)}"></div>
+    <div class="field"><label>Privates Repo</label>
+      <input id="gh-repo" type="text" placeholder="haushalt-data" value="${esc(gh.repo)}"></div>
+    <div class="field"><label>Token</label>
+      <input id="gh-token" type="password" placeholder="github_pat_…" value="${esc(gh.token)}"></div>
+    <p class="gh-note">Fine-grained Token, nur auf dieses eine Repo, Rechte
+    <b>Contents: Read and write</b>. Er wird nur in diesem Browser gespeichert.</p>
+    <div class="gh-actions">
+      <button class="btn-primary" id="gh-save">Verbinden</button>
+      ${ghReady() ? `<button class="btn-ghost" id="gh-off">Sync ausschalten</button>` : ""}
+    </div>`;
+  document.body.append(scrim, box);
+  const close = () => document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  scrim.onclick = close;
+
+  box.querySelector("#gh-save").onclick = async () => {
+    gh.owner = box.querySelector("#gh-owner").value.trim();
+    gh.repo  = box.querySelector("#gh-repo").value.trim().replace(/^.*\//, "");
+    gh.token = box.querySelector("#gh-token").value.trim();
+    gh.sha   = null;
+    if (!ghReady()) { showToast("Bitte alle drei Felder ausfüllen"); return; }
+    close();
+    syncBadge("busy", "Prüft…");
+    try {
+      const { data, sha } = await ghFetchRemote();
+      gh.sha = sha;
+      if (data && Array.isArray(data.subs)) {
+        // Remote already has data — let the user decide which side wins
+        const localCount = subs.length + transactions.length;
+        if (localCount === 0 || confirm(
+              `Auf GitHub liegen ${data.subs.length} Abos. Diese laden und lokale Daten ersetzen?\n\n` +
+              `Abbrechen = deine lokalen Daten hochladen.`)) {
+          ghApply(data);
+          gh.updatedAt = data.updatedAt || Date.now();
+          await ghPersistAll();
+          render();
+          showToast("Verbunden – Daten geladen");
+        } else {
+          await ghPush({ force: true });
+          showToast("Verbunden – lokale Daten hochgeladen");
+        }
+      } else {
+        await ghPush({ force: true });
+        showToast("Verbunden – Daten hochgeladen");
+      }
+      await persistGh();
+      syncBadge("ok", "Sync");
+    } catch (e) {
+      syncBadge("err", "Sync");
+      showToast("Fehler: " + e.message);
+    }
+  };
+
+  const off = box.querySelector("#gh-off");
+  if (off) off.onclick = async () => {
+    gh = { owner: "", repo: "", token: "", sha: null, updatedAt: 0 };
+    await persistGh();
+    close();
+    syncBadge("", "Sync");
+    showToast("Sync ausgeschaltet");
+  };
 }
 
 async function persist() {
   mem = subs;
   try { await window.storage.set(KEY, JSON.stringify(subs)); } catch (e) {}
+  syncSoon();
 }
 
 async function persistCats() {
   try { await window.storage.set(CKEY, JSON.stringify(CATS)); } catch (e) {}
+  syncSoon();
 }
 
 async function persistIncome() {
   try { await window.storage.set(IKEY, JSON.stringify(income)); } catch (e) {}
+  syncSoon();
 }
 
 async function persistAccCfg() {
   try { await window.storage.set(AKEY, JSON.stringify(txAccCfg)); } catch (e) {}
+  syncSoon();
 }
 
 async function persistTransactions() {
   try { await window.storage.set(TKEY, JSON.stringify(transactions)); } catch (e) {}
+  syncSoon();
 }
 
 async function persistPayments() {
   try { await window.storage.set(PKEY, JSON.stringify(payments)); } catch (e) {}
+  syncSoon();
 }
 async function persistTxCats() {
   try { await window.storage.set(XKEY, JSON.stringify(txUserCats)); } catch (e) {}
+  syncSoon();
 }
 async function persistSettlements() {
   try { await window.storage.set(SKEY, JSON.stringify(settlements)); } catch (e) {}
+  syncSoon();
 }
 
 // ── Payment helpers ────────────────────────────────────────────────────────
@@ -3914,6 +4265,12 @@ $("sort").onchange      = render;
 $("export-btn").onclick = exportData;
 $("import-btn").onclick = () => $("import-file").click();
 $("import-file").onchange = e => { importData(e.target.files[0]); e.target.value = ""; };
+$("sync-btn").onclick = () => ghReady() ? ghPull() : openSyncConfig();
+$("sync-btn").oncontextmenu = e => { e.preventDefault(); openSyncConfig(); };
+// Pick up changes made on another device when the tab comes back into focus
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && ghReady()) ghPull({ silent: true });
+});
 
 document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   const tab = btn.dataset.tab;
