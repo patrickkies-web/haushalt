@@ -1886,6 +1886,37 @@ const SKEY = "turnus:settlements";
 const AKEY = "turnus:accounts";
 const RKEY = "turnus:rotierkonto";
 
+// ── Storage ────────────────────────────────────────────────────────────────
+// Backed by localStorage, with an in-memory fallback for private windows or
+// browsers with site data switched off. Skipped if a host already provides one.
+if (!window.storage) {
+  const memStore = new Map();
+  let usable = true;
+  try {
+    localStorage.setItem("turnus:probe", "1");
+    localStorage.removeItem("turnus:probe");
+  } catch (e) { usable = false; }
+
+  window.storage = {
+    async get(k) {
+      if (usable) {
+        try {
+          const v = localStorage.getItem(k);
+          if (v !== null) return { value: v };
+        } catch (e) { usable = false; }
+      }
+      return memStore.has(k) ? { value: memStore.get(k) } : null;
+    },
+    async set(k, v) {
+      memStore.set(k, v);
+      if (usable) {
+        try { localStorage.setItem(k, v); }
+        catch (e) { usable = false; }
+      }
+    }
+  };
+}
+
 const TX_CATS = [
   "Lebensmittel","Restaurant & Café","Mobilität","Shopping",
   "Wohnen & Haushalt","Energie","Versicherungen","Streaming & Abo",
@@ -3802,7 +3833,13 @@ async function del() {
 // ── Import / Export ────────────────────────────────────────────────────────
 function exportData() {
   const date    = new Date().toISOString().slice(0, 10);
-  const payload = JSON.stringify({ subs, cats: CATS, income, exported: new Date().toISOString() }, null, 2);
+  const payload = JSON.stringify({
+    v: 2,
+    subs, cats: CATS, income,
+    transactions, payments, txcats: txUserCats, settlements,
+    accounts: txAccCfg, rotierkonto: rotCfg,
+    exported: new Date().toISOString()
+  }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement("a");
@@ -3821,15 +3858,35 @@ async function importData(file) {
     const text = await file.text();
     const data = JSON.parse(text);
     if (!Array.isArray(data.subs)) throw new Error("Kein gültiges Haushalt-Backup");
-    if (subs.length > 0 && !confirm(`${subs.length} vorhandene Einträge ersetzen?`)) return;
+    if ((subs.length > 0 || transactions.length > 0) &&
+        !confirm(`Vorhandene Daten ersetzen? (${subs.length} Abos, ${transactions.length} Umsätze)`)) return;
+
     subs   = data.subs;
     CATS   = (Array.isArray(data.cats) && data.cats.length) ? data.cats : [...DEFAULT_CATS];
     income = (data.income && typeof data.income === 'object') ? data.income : {};
-    await persist();
-    await persistCats();
-    await persistIncome();
+
+    // Everything below only exists in v2 backups — older files just skip it
+    if (Array.isArray(data.transactions)) transactions = data.transactions;
+    if (data.payments && typeof data.payments === 'object') payments = data.payments;
+    if (Array.isArray(data.txcats))       txUserCats  = data.txcats;
+    if (Array.isArray(data.settlements))  settlements = data.settlements;
+    if (data.accounts && typeof data.accounts === 'object') {
+      if (data.accounts.a1) txAccCfg.a1 = { ...txAccCfg.a1, ...data.accounts.a1 };
+      if (data.accounts.a2) txAccCfg.a2 = { ...txAccCfg.a2, ...data.accounts.a2 };
+    }
+    if (data.rotierkonto && typeof data.rotierkonto === 'object') {
+      const r = data.rotierkonto;
+      if (typeof r.start === 'string') rotCfg.start = r.start;
+      if (typeof r.balance === 'number' || r.balance === null) rotCfg.balance = r.balance;
+    }
+
+    await Promise.all([
+      persist(), persistCats(), persistIncome(), persistTransactions(),
+      persistPayments(), persistTxCats(), persistSettlements(),
+      persistAccCfg(), persistRotCfg()
+    ]);
     render();
-    showToast(`${subs.length} Einträge geladen`);
+    showToast(`${subs.length} Abos, ${transactions.length} Umsätze geladen`);
   } catch (e) {
     showToast("Fehler: " + e.message);
   }
