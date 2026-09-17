@@ -900,24 +900,48 @@
       margin: 0 0 2px;
     }
 
-    .fbars { display: flex; flex-direction: column; gap: 7px; }
-    .fbar { display: grid; grid-template-columns: 1fr 96px 62px; align-items: center; gap: 8px; }
-    .fbar-lbl { font-size: 12.5px; display: flex; flex-direction: column; gap: 1px; }
-    .fbar-n { font-size: 9.5px; color: var(--faint); }
-    .fbar-track {
-      position: relative; height: 15px;
-      background: var(--bg); border-radius: 4px; overflow: hidden;
+    .mrows { display: flex; flex-direction: column; gap: 13px; }
+    .mrow { display: flex; flex-direction: column; gap: 4px; }
+    .mrow-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .mrow-lbl { font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 1px; }
+    .mrow-u { font-size: 10px; font-weight: 400; color: var(--faint); }
+    .mrow-est {
+      font-family: "Space Grotesk"; font-size: 14px; font-weight: 700;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
     }
-    .fbar-mid {
-      position: absolute; left: 50%; top: 0; bottom: 0;
-      width: 1px; background: var(--line); transform: translateX(-.5px);
+    .mrow-track {
+      position: relative; height: 14px;
+      background: var(--bg); border-radius: 4px;
     }
-    .fbar-fill { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
-    .fbar-val {
-      font-family: "Space Grotesk"; font-size: 12px; font-weight: 700;
-      font-variant-numeric: tabular-nums; text-align: right;
+    .mrow-zero {
+      position: absolute; left: 50%; top: -1px; bottom: -1px;
+      width: 1px; background: var(--muted); transform: translateX(-.5px);
     }
-    .fbar.thin .fbar-lbl { color: var(--muted); }
+    .mrow-ci { position: absolute; top: 5px; height: 4px; border-radius: 2px; opacity: .45; }
+    .mrow-dot {
+      position: absolute; top: 3px; width: 8px; height: 8px;
+      border-radius: 50%; transform: translateX(-4px);
+      box-shadow: 0 0 0 1.5px var(--surface);
+    }
+    .mrow-foot {
+      display: flex; justify-content: space-between; gap: 10px;
+      font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums;
+    }
+    .mrow-raw.drift { color: var(--danger); font-weight: 600; }
+    .mrow.weak .mrow-lbl { color: var(--muted); font-weight: 500; }
+
+    .model-foot {
+      display: flex; gap: 8px; margin-top: 14px;
+    }
+    .model-stat {
+      flex: 1; background: var(--bg); border-radius: 9px;
+      padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .model-stat span {
+      font-size: 9px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .model-stat b { font-family: "Space Grotesk"; font-size: 14px; font-variant-numeric: tabular-nums; }
 
     .xtabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
     .xtab {
@@ -931,7 +955,6 @@
     @media (max-width: 430px) {
       .tab-btn { font-size: 12.5px; padding: 10px 2px; }
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
-      .fbar { grid-template-columns: 1fr 72px 58px; }
     }
 
     /* ── Day log ── */
@@ -3693,16 +3716,24 @@ function renderSleep() {
 // ── Analysis ───────────────────────────────────────────────────────────────
 // Diverging poles, validated for colour-vision deficiency (protan ΔE 20.0).
 // The app's green/red pair fails that check, so it is deliberately not used.
-const CH_FAST = "#3b6fb0";   // below the median — settled sooner
-const CH_SLOW = "#c2783f";   // above the median — took longer
-const CH_MUTE = "#9aa19e";
+const CH_FAST = "#3b6fb0";   // shortens the settling phase
+const CH_SLOW = "#c2783f";   // lengthens it
+const CH_MUTE = "#9aa19e";   // effect not separable from zero
 
-let statsX = "coffeeGap";
+const BOOT = 1500;           // bootstrap resamples
+const CIQ  = 0.05;           // 90 % interval (5th … 95th percentile)
+
+let statsX = "bed";
 
 const median = a => {
   if (!a.length) return null;
   const s = [...a].sort((x, y) => x - y), h = s.length >> 1;
   return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+};
+const quantile = (sorted, q) => {
+  if (!sorted.length) return null;
+  const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
 };
 
 // Minutes between a time earlier in the day and going to bed
@@ -3713,7 +3744,14 @@ function gapToBed(e, field) {
   return d > 20 * 60 ? null : d;   // implausible, treat as missing
 }
 
-// Nights where both ends of the span are known and plausible
+// Bedtime relative to 22:00, so 00:30 reads as +150 rather than −1290
+function bedOffset(e) {
+  if (!e.sleepAt) return null;
+  let d = minsOf(e.sleepAt) - 22 * 60;
+  if (d < -720) d += 1440;
+  return d;
+}
+
 function statRows() {
   return Object.keys(daylog).sort().map(d => {
     const e = getDay(d), span = restSpan(d, e);
@@ -3721,21 +3759,149 @@ function statRows() {
   }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60);
 }
 
-const FACTORS = [
-  { key: 'foodType',  label: 'Essen',       levels: [
-      { v: 'leicht', l: 'leicht' }, { v: 'fettig', l: 'fettig' }, { v: 'scharf', l: 'scharf' }] },
-  { key: 'coffee',    label: 'Kaffee',      levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
-  { key: 'brainwork', label: 'Brainwork',   levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
-  { key: 'relaxed',   label: 'Entspannt',   levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
-  { key: 'mast',      label: 'Masturbiert', levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] }
+// Predictors. `u` is the unit a coefficient is expressed per.
+const PRED = [
+  { k: 'bed',    l: 'Später ins Bett',    u: 'je Stunde',        bin: false,
+    get: e => { const b = bedOffset(e); return b === null ? null : b / 60; } },
+  { k: 'brain',  l: 'Brainwork davor',    u: 'ja statt nein',    bin: true,
+    get: e => e.brainwork === true ? 1 : e.brainwork === false ? 0 : null },
+  { k: 'relax',  l: 'Entspannt ins Bett', u: 'ja statt nein',    bin: true,
+    get: e => e.relaxed === true ? 1 : e.relaxed === false ? 0 : null },
+  { k: 'mast',   l: 'Masturbiert',        u: 'ja statt nein',    bin: true,
+    get: e => e.mast === true ? 1 : e.mast === false ? 0 : null },
+  { k: 'fett',   l: 'Fettig gegessen',    u: 'statt leicht',     bin: true,
+    get: e => e.foodType ? (e.foodType === 'fettig' ? 1 : 0) : null },
+  { k: 'scharf', l: 'Scharf gegessen',    u: 'statt leicht',     bin: true,
+    get: e => e.foodType ? (e.foodType === 'scharf' ? 1 : 0) : null },
+  { k: 'foodGap',l: 'Abstand Essen–Bett', u: 'je Stunde mehr',   bin: false,
+    get: e => { const g = gapToBed(e, 'foodTime'); return g === null ? null : g / 60; } },
+  { k: 'cups',   l: 'Tassen Kaffee',      u: 'je Tasse',         bin: false,
+    get: e => e.coffee === false ? 0 : (typeof e.coffeeCups === 'number' ? e.coffeeCups : null) },
+  { k: 'cofLate',l: 'Kaffee spät am Tag', u: 'je Stunde später', bin: false,
+    get: e => { if (e.coffee === false) return 0;
+                const g = gapToBed(e, 'coffeeLast');
+                return g === null ? null : Math.max(0, 12 - g / 60); } },
+  { k: 'sportLate', l: 'Sport spät',      u: 'je Stunde später', bin: false,
+    get: e => { if (!e.sportEnd) return 0;
+                const g = gapToBed(e, 'sportEnd');
+                return g === null ? 0 : Math.max(0, 8 - g / 60); } }
 ];
 
-const XAXES = [
-  { k: 'coffeeGap', l: 'Letzte Tasse',  get: e => gapToBed(e, 'coffeeLast'), unit: 'h vor dem Bett' },
-  { k: 'foodGap',   l: 'Letztes Essen', get: e => gapToBed(e, 'foodTime'),   unit: 'h vor dem Bett' },
-  { k: 'sportGap',  l: 'Sport-Ende',    get: e => gapToBed(e, 'sportEnd'),   unit: 'h vor dem Bett' },
-  { k: 'cups',      l: 'Tassen Kaffee', get: e => e.coffeeCups ?? null,      unit: 'Tassen', raw: true }
-];
+// Gaussian elimination with partial pivoting
+function gauss(A, b) {
+  const p = b.length;
+  const M = A.map((r, i) => [...r, b[i]]);
+  for (let c = 0; c < p; c++) {
+    let piv = c;
+    for (let r = c + 1; r < p; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    if (Math.abs(M[c][c]) < 1e-10) return null;
+    for (let r = 0; r < p; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / M[c][c];
+      for (let k = c; k <= p; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  return M.map((r, i) => r[p] / M[i][i]);
+}
+
+// Ridge keeps near-collinear predictors from blowing the solve up. Lambda is
+// deliberately small, so the shrinkage bias stays negligible.
+function ridgeFit(X, y, lambda) {
+  const n = X.length, p = X[0].length;
+  const A = Array.from({ length: p }, () => new Array(p).fill(0));
+  const b = new Array(p).fill(0);
+  for (let j = 0; j < p; j++) {
+    for (let k = j; k < p; k++) {
+      let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * X[i][k];
+      A[j][k] = s; A[k][j] = s;
+    }
+    let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * y[i];
+    b[j] = s;
+  }
+  for (let j = 0; j < p; j++) A[j][j] += lambda;
+  return gauss(A, b);
+}
+
+// Fits the full model and bootstraps every coefficient.
+function fitModel(rows) {
+  const n = rows.length;
+  if (n < 8) return null;
+
+  // Keep predictors that are actually observed and actually vary
+  let cols = PRED.map(pd => {
+    const raw = rows.map(r => pd.get(r.e));
+    const seen = raw.filter(v => v !== null);
+    const mean = seen.reduce((a, v) => a + v, 0) / (seen.length || 1);
+    const vals = raw.map(v => v === null ? mean : v);          // mean-impute
+    const sd = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / n);
+    return { pd, vals, mean, sd, cover: seen.length / n };
+  }).filter(c => c.sd > 1e-9 && c.cover >= 0.4);
+
+  // More predictors than nights cannot be identified — drop the thinnest
+  cols.sort((a, b) => b.cover - a.cover);
+  while (cols.length > Math.max(2, n - 3)) cols.pop();
+  if (!cols.length) return null;
+
+  const p  = cols.length;
+  const y  = rows.map(r => r.span);
+  const ym = y.reduce((a, v) => a + v, 0) / n;
+  const yc = y.map(v => v - ym);
+  // Standardise so ridge treats every predictor alike; undo it afterwards
+  const Xs = rows.map((_, i) => cols.map(c => (c.vals[i] - c.mean) / c.sd));
+  const lambda = Math.max(0.5, 0.02 * n);
+
+  const beta = ridgeFit(Xs, yc, lambda);
+  if (!beta) return null;
+
+  const boot = Array.from({ length: p }, () => []);
+  for (let b = 0; b < BOOT; b++) {
+    const Xi = [], yi = [];
+    for (let i = 0; i < n; i++) {
+      const r = (Math.random() * n) | 0;
+      Xi.push(Xs[r]); yi.push(yc[r]);
+    }
+    const bb = ridgeFit(Xi, yi, lambda);
+    if (bb) for (let j = 0; j < p; j++) boot[j].push(bb[j] / cols[j].sd);
+  }
+
+  // Unadjusted slope of the same predictor on its own, for comparison
+  const rawSlope = c => {
+    const xm = c.mean;
+    let sxy = 0, sxx = 0;
+    for (let i = 0; i < n; i++) { const dx = c.vals[i] - xm; sxy += dx * yc[i]; sxx += dx * dx; }
+    return sxx > 1e-9 ? sxy / sxx : 0;
+  };
+
+  const terms = cols.map((c, j) => {
+    const s = boot[j].slice().sort((a, b) => a - b);
+    const est = beta[j] / c.sd;
+    const lo = quantile(s, CIQ), hi = quantile(s, 1 - CIQ);
+    const sd = Math.sqrt(s.reduce((a, v) => a + (v - est) ** 2, 0) / (s.length || 1));
+    return {
+      ...c.pd, est, lo, hi, sd, cover: c.cover,
+      raw: rawSlope(c),
+      solid: lo !== null && hi !== null && lo * hi > 0,   // interval clear of zero
+      z: sd > 1e-9 ? Math.abs(est) / sd : 0
+    };
+  });
+
+  // Fitted values for R²
+  let ssr = 0;
+  for (let i = 0; i < n; i++) {
+    let f = 0; for (let j = 0; j < p; j++) f += Xs[i][j] * beta[j];
+    ssr += (yc[i] - f) ** 2;
+  }
+  const sst = yc.reduce((a, v) => a + v * v, 0);
+  const r2  = sst > 1e-9 ? 1 - ssr / sst : 0;
+
+  // What size of effect this much data could even resolve
+  const halfWidths = terms.filter(t => t.bin).map(t => (t.hi - t.lo) / 2).sort((a, b) => a - b);
+  const mde = halfWidths.length ? median(halfWidths) : null;
+
+  terms.sort((a, b) => (b.solid - a.solid) || (b.z - a.z));
+  return { n, p, terms, r2, adjR2: 1 - (1 - r2) * (n - 1) / Math.max(1, n - p - 1), mde, ym };
+}
 
 function setStatsX(k) { statsX = k; renderStats(); }
 
@@ -3749,7 +3915,7 @@ function renderStats() {
       <b>Noch zu wenig Daten</b>
       <p>Die Auswertung braucht Nächte, für die sowohl <i>Schlafen gegangen</i> als auch
       <i>Ruhepuls erreicht</i> eingetragen sind. Bisher: <b>${N}</b>.</p>
-      <p>Ab etwa 10 Nächten werden die ersten Muster sichtbar, ab 20 belastbar.</p>
+      <p>Ab etwa 15 Nächten lässt sich rechnen, ab 30 wird es belastbar.</p>
     </div>`;
     return;
   }
@@ -3770,13 +3936,13 @@ function renderStats() {
       </div>`).join('')}
   </div>`;
 
-  host.innerHTML = kpi + timelineChart(rows, med) + factorChart(rows, med, N) + scatterChart(rows);
+  host.innerHTML = kpi + timelineChart(rows, med) + modelSection(rows, N) + scatterChart(rows);
 }
 
 // ── Chart 1: one bar per night, diverging around the median ──
 function timelineChart(rows, med) {
   const data = rows.slice(-30);
-  const W = 100, H = 46, pad = 2;                    // viewBox units
+  const W = 100, H = 46, pad = 2;
   const hi = Math.max(...data.map(r => r.span), med) * 1.08;
   const bw = (W - pad * 2) / data.length;
   const y  = v => H - (v / hi) * (H - 8);
@@ -3808,95 +3974,133 @@ function timelineChart(rows, med) {
     </div>`;
 }
 
-// ── Chart 2: how each factor level shifts the median ──
-function factorChart(rows, med, N) {
-  const groups = [];
-  FACTORS.forEach(f => f.levels.forEach(lv => {
-    const sel = rows.filter(r => r.e[f.key] === lv.v).map(r => r.span);
-    if (sel.length) groups.push({
-      label: `${f.label} ${lv.l}`, n: sel.length,
-      delta: median(sel) - med, med: median(sel)
-    });
-  }));
-  if (!groups.length) return '';
+// ── Chart 2: the model — adjusted effects with bootstrap intervals ──
+function modelSection(rows, N) {
+  const m = fitModel(rows);
+  if (!m) {
+    return `
+      <h3 class="stats-h3">Faktoren</h3>
+      <p class="stats-sub">Für ein Modell braucht es mindestens acht auswertbare Nächte.
+        Bisher: ${N}.</p>`;
+  }
 
-  groups.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  const max = Math.max(...groups.map(g => Math.abs(g.delta)), 1);
+  const bound = Math.max(...m.terms.map(t => Math.max(Math.abs(t.lo), Math.abs(t.hi))), 1);
+  const pos   = v => 50 + (v / bound) * 48;   // percent across the track
 
-  const bars = groups.map(g => {
-    const thin = g.n < 3;                       // too few nights to mean anything
-    const pct  = Math.abs(g.delta) / max * 50;
-    const c    = thin ? CH_MUTE : (g.delta > 0 ? CH_SLOW : CH_FAST);
-    const sign = g.delta > 0 ? '+' : g.delta < 0 ? '−' : '';
-    return `<div class="fbar ${thin ? 'thin' : ''}">
-      <span class="fbar-lbl">${esc(g.label)}<span class="fbar-n">n=${g.n}${thin ? ' · zu wenig' : ''}</span></span>
-      <span class="fbar-track">
-        <span class="fbar-mid"></span>
-        <span class="fbar-fill" style="${g.delta > 0 ? 'left:50%' : `right:50%`};width:${pct.toFixed(1)}%;background:${c}"></span>
-      </span>
-      <span class="fbar-val" style="color:${thin ? 'var(--muted)' : c}">${sign}${esc(fmtSpan(Math.abs(g.delta)))}</span>
+  const bars = m.terms.map(t => {
+    const c  = !t.solid ? CH_MUTE : (t.est > 0 ? CH_SLOW : CH_FAST);
+    const l  = Math.min(pos(t.lo), pos(t.hi)), w = Math.abs(pos(t.hi) - pos(t.lo));
+    const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmtSpan(Math.abs(v));
+    const drift = Math.abs(t.raw - t.est) > Math.max(8, Math.abs(t.est) * 0.5);
+    return `<div class="mrow ${t.solid ? '' : 'weak'}">
+      <div class="mrow-head">
+        <span class="mrow-lbl">${esc(t.l)}<span class="mrow-u">${esc(t.u)}</span></span>
+        <span class="mrow-est" style="color:${c}">${esc(sg(t.est))}</span>
+      </div>
+      <div class="mrow-track">
+        <span class="mrow-zero"></span>
+        <span class="mrow-ci" style="left:${l.toFixed(1)}%;width:${Math.max(w, 0.6).toFixed(1)}%;background:${c}"></span>
+        <span class="mrow-dot" style="left:${pos(t.est).toFixed(1)}%;background:${c}"></span>
+      </div>
+      <div class="mrow-foot">
+        <span>90 % ${esc(sg(t.lo))} … ${esc(sg(t.hi))}</span>
+        <span class="mrow-raw${drift ? ' drift' : ''}">roh ${esc(sg(t.raw))}${drift ? ' ⚠' : ''}</span>
+      </div>
     </div>`;
   }).join('');
 
+  const solid = m.terms.filter(t => t.solid);
+  const verdict = solid.length
+    ? `<b>${solid.length} von ${m.terms.length}</b> Faktoren haben ein Intervall, das die Null nicht
+       enthält — nur bei diesen ist der Effekt durch deine Daten gedeckt.`
+    : `<b>Kein einziger Faktor</b> hat ein Intervall, das die Null ausschließt. Mit ${m.n} Nächten
+       ist das normal: es heißt nicht „kein Effekt", sondern „noch nicht unterscheidbar".`;
+
   return `
-    <h3 class="stats-h3">Was verschiebt die Einschlafphase?</h3>
-    <p class="stats-sub">Abweichung vom Median (${esc(fmtSpan(med))}) an den Tagen mit dem jeweiligen Merkmal.
-      Nach rechts = es dauerte länger.</p>
-    <div class="fbars">${bars}</div>
-    <p class="stats-note">Das zeigt <b>Zusammenhang, keine Ursache</b> — an fettigen Tagen trinkst du
-    vielleicht auch mehr Kaffee. Gruppen unter drei Nächten sind grau und aussagelos.
-    ${N < 14 ? `Bei ${N} Nächten insgesamt ist alles hier noch Rauschen.` : ''}</p>`;
+    <h3 class="stats-h3">Faktoren · bereinigt</h3>
+    <p class="stats-sub">Multiple Regression: jeder Wert ist der Effekt <b>bei sonst gleichen
+      Bedingungen</b>. Der Balken ist das 90-%-Intervall aus ${BOOT} Bootstrap-Ziehungen,
+      der Punkt die Schätzung. Kreuzt der Balken die Mittellinie, ist der Effekt nicht belegt.</p>
+    <div class="mrows">${bars}</div>
+    <div class="model-foot">
+      <div class="model-stat"><span>Nächte</span><b>${m.n}</b></div>
+      <div class="model-stat"><span>Faktoren</span><b>${m.p}</b></div>
+      <div class="model-stat"><span>erklärte Streuung</span><b>${(m.adjR2 * 100).toFixed(0)} %</b></div>
+    </div>
+    <p class="stats-note">${verdict}
+      ${m.mde !== null ? ` Effekte unter etwa <b>${esc(fmtSpan(m.mde))}</b> lassen sich bei dieser
+      Datenmenge grundsätzlich nicht von Null trennen.` : ''}
+      Weicht <i>roh</i> stark von der bereinigten Zahl ab (⚠), war der Faktor mit einem anderen
+      verwechselt — genau dafür ist die Bereinigung da.
+      ${m.n < 3 * m.p ? ` Bei ${m.n} Nächten auf ${m.p} Faktoren ist das Modell überladen; die
+      Intervalle sind entsprechend breit.` : ''}</p>`;
 }
 
-// ── Chart 3: continuous factor against the span ──
+// ── Chart 3: one continuous factor, with the fitted line ──
 function scatterChart(rows) {
+  const XAXES = PRED.filter(p => !p.bin);
   const ax   = XAXES.find(a => a.k === statsX) || XAXES[0];
   const pts  = rows.map(r => ({ x: ax.get(r.e), y: r.span, d: r.d })).filter(p => p.x !== null);
   const tabs = XAXES.map(a =>
-    `<button class="xtab ${a.k === statsX ? 'on' : ''}" onclick="setStatsX('${a.k}')">${a.l}</button>`).join('');
+    `<button class="xtab ${a.k === statsX ? 'on' : ''}" onclick="setStatsX('${a.k}')">${esc(a.l)}</button>`).join('');
 
   let body;
-  if (pts.length < 3) {
-    body = `<p class="stats-sub">Zu wenige Nächte mit „${esc(ax.l)}" — mindestens drei nötig.</p>`;
+  if (pts.length < 4) {
+    body = `<p class="stats-sub">Zu wenige Nächte mit diesem Wert — mindestens vier nötig.</p>`;
   } else {
     const W = 100, H = 58, L = 15, B = 5;
     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs) || 1;
-    const yLo = 0, yHi = Math.max(...ys) * 1.1;
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const yHi = Math.max(...ys) * 1.1;
     const sx = v => L + ((v - x0) / ((x1 - x0) || 1)) * (W - L - 3);
-    const sy = v => (H - B) - ((v - yLo) / (yHi - yLo)) * (H - B - 4);
+    const sy = v => (H - B) - (v / yHi) * (H - B - 4);
+
+    // Least squares fit plus Pearson r
+    const n = pts.length;
+    const mx = xs.reduce((a, v) => a + v, 0) / n, my = ys.reduce((a, v) => a + v, 0) / n;
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < n; i++) {
+      const dx = xs[i] - mx, dy = ys[i] - my;
+      sxy += dx * dy; sxx += dx * dx; syy += dy * dy;
+    }
+    const slope = sxx > 1e-9 ? sxy / sxx : 0;
+    const r     = (sxx > 1e-9 && syy > 1e-9) ? sxy / Math.sqrt(sxx * syy) : 0;
+    const fit   = v => my + slope * (v - mx);
+
     const medY = median(ys);
-    // Three ticks are enough to read the scale without crowding the plot
     const ticks = [0, yHi / 2, yHi].map(v => `
       <line x1="${L}" x2="${W}" y1="${sy(v).toFixed(2)}" y2="${sy(v).toFixed(2)}"
-            stroke="var(--line-soft)" stroke-width="0.25"/>
+            stroke="var(--line)" stroke-width="0.2"/>
       <text x="${L - 1.5}" y="${(sy(v) + 1.1).toFixed(2)}" text-anchor="end"
             font-size="3" fill="var(--muted)">${esc(fmtSpan(v))}</text>`).join('');
-    const dots = pts.map(p => {
-      const c = p.y > medY ? CH_SLOW : CH_FAST;
-      return `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.5"
-        fill="${c}" stroke="#fff" stroke-width="0.5"
-        ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${
-          ax.raw ? p.x + ' ' + ax.unit : (p.x / 60).toFixed(1) + ' ' + ax.unit
-        } · ${esc(fmtSpan(p.y))}</title></circle>`;
-    }).join('');
-    const fmtX = v => ax.raw ? String(v) : (v / 60).toFixed(1);
+
+    const dots = pts.map(p => `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.5"
+      fill="${p.y > medY ? CH_SLOW : CH_FAST}" stroke="#fff" stroke-width="0.5"
+      ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${
+        esc(p.x.toFixed(1))} · ${esc(fmtSpan(p.y))}</title></circle>`).join('');
+
+    const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmtSpan(Math.abs(v));
     body = `
       <p class="stats-axis-y">↑ Einschlafphase</p>
       <svg class="chart chart-tall" viewBox="0 0 ${W} ${H}" role="img"
            aria-label="Einschlafphase gegen ${esc(ax.l)}">
         ${ticks}
+        <line x1="${sx(x0).toFixed(2)}" y1="${sy(Math.max(0, Math.min(yHi, fit(x0)))).toFixed(2)}"
+              x2="${sx(x1).toFixed(2)}" y2="${sy(Math.max(0, Math.min(yHi, fit(x1)))).toFixed(2)}"
+              stroke="var(--ink)" stroke-width="0.4" stroke-dasharray="1.5 1.5" opacity=".55"/>
         ${dots}
       </svg>
       <div class="chart-axis">
-        <span>${esc(fmtX(x0))}</span>
-        <span>${esc(ax.unit)} →</span>
-        <span>${esc(fmtX(x1))}</span>
-      </div>`;
+        <span>${esc(x0.toFixed(1))}</span>
+        <span>${esc(ax.l)} →</span>
+        <span>${esc(x1.toFixed(1))}</span>
+      </div>
+      <p class="stats-note">Steigung <b>${esc(sg(slope))}</b> ${esc(ax.u)} · r = ${esc(r.toFixed(2).replace('-', '−'))}.
+        Das ist der <i>unbereinigte</i> Zusammenhang — die bereinigte Zahl steht oben im Modell.</p>`;
   }
 
   return `
-    <h3 class="stats-h3">Zusammenhänge</h3>
+    <h3 class="stats-h3">Einzelner Faktor</h3>
     <div class="xtabs">${tabs}</div>
     ${body}`;
 }
