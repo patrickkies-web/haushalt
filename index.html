@@ -844,6 +844,96 @@
     }
     .gh-popup .gh-actions button { flex: 1; min-width: 150px; }
 
+    /* ── Analysis ── */
+    .stats-empty {
+      padding: 26px 20px;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    .stats-empty b { font-size: 15px; }
+    .stats-empty p { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 10px 0 0; }
+
+    .stats-h3 {
+      font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--muted);
+      margin: 26px 0 6px;
+    }
+    .stats-h3:first-of-type { margin-top: 4px; }
+    .stats-sub { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
+    .stats-note {
+      font-size: 11.5px; color: var(--muted); line-height: 1.55;
+      margin: 12px 0 0; padding: 11px 13px;
+      background: var(--bg); border-radius: 10px;
+    }
+    .sw {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 2px; margin: 0 1px 0 4px;
+    }
+
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 12px; padding: 11px 9px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .kpi-lbl {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .kpi-val {
+      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+    }
+    .kpi-sub { font-size: 9.5px; color: var(--faint); }
+
+    .chart { width: 100%; height: 130px; display: block; overflow: visible; }
+    .chart-tall { height: 190px; }
+    .chart-axis {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10.5px; color: var(--muted); margin-top: 5px;
+    }
+    .med-tag { font-weight: 600; }
+    .stats-axis-y {
+      font-size: 10.5px; font-weight: 600; color: var(--muted);
+      margin: 0 0 2px;
+    }
+
+    .fbars { display: flex; flex-direction: column; gap: 7px; }
+    .fbar { display: grid; grid-template-columns: 1fr 96px 62px; align-items: center; gap: 8px; }
+    .fbar-lbl { font-size: 12.5px; display: flex; flex-direction: column; gap: 1px; }
+    .fbar-n { font-size: 9.5px; color: var(--faint); }
+    .fbar-track {
+      position: relative; height: 15px;
+      background: var(--bg); border-radius: 4px; overflow: hidden;
+    }
+    .fbar-mid {
+      position: absolute; left: 50%; top: 0; bottom: 0;
+      width: 1px; background: var(--line); transform: translateX(-.5px);
+    }
+    .fbar-fill { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; }
+    .fbar-val {
+      font-family: "Space Grotesk"; font-size: 12px; font-weight: 700;
+      font-variant-numeric: tabular-nums; text-align: right;
+    }
+    .fbar.thin .fbar-lbl { color: var(--muted); }
+
+    .xtabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+    .xtab {
+      font-family: inherit; font-size: 11.5px; font-weight: 600;
+      color: var(--muted); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 8px;
+      padding: 6px 10px; cursor: pointer;
+    }
+    .xtab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    @media (max-width: 430px) {
+      .tab-btn { font-size: 12.5px; padding: 10px 2px; }
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .fbar { grid-template-columns: 1fr 72px 58px; }
+    }
+
     /* ── Day log ── */
     .sleep-h3 {
       font-size: 10.5px;
@@ -1980,6 +2070,7 @@
       <button class="tab-btn active" data-tab="turnus">Turnus</button>
       <button class="tab-btn" data-tab="tx">Transaktionen</button>
       <button class="tab-btn" data-tab="sleep">Schlaf</button>
+      <button class="tab-btn" data-tab="stats">Auswertung</button>
     </div>
 
     <div id="pane-turnus">
@@ -2021,6 +2112,10 @@
 
     <div id="pane-sleep" style="display:none">
       <section id="sleep"></section>
+    </div>
+
+    <div id="pane-stats" style="display:none">
+      <section id="stats"></section>
     </div>
   </div>
 
@@ -3398,6 +3493,7 @@ const getDay = key => daylog[key] || {};
 const minsOf = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
 const fmtSpan = m => {
   if (m === null) return '';
+  m = Math.round(m);                     // medians of even-sized groups land on halves
   const neg = m < 0, a = Math.abs(m);
   const s = a < 60 ? `${a} min` : `${Math.floor(a / 60)} h ${String(a % 60).padStart(2, '0')} min`;
   return neg ? `−${s}` : s;
@@ -3592,6 +3688,217 @@ function renderSleep() {
     ${row('Schlafen gegangen', timeField('sleepAt', e.sleepAt), 'Handy weg, Augen zu')}
 
     <div id="sleep-hist-slot">${hist}</div>`;
+}
+
+// ── Analysis ───────────────────────────────────────────────────────────────
+// Diverging poles, validated for colour-vision deficiency (protan ΔE 20.0).
+// The app's green/red pair fails that check, so it is deliberately not used.
+const CH_FAST = "#3b6fb0";   // below the median — settled sooner
+const CH_SLOW = "#c2783f";   // above the median — took longer
+const CH_MUTE = "#9aa19e";
+
+let statsX = "coffeeGap";
+
+const median = a => {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y), h = s.length >> 1;
+  return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+};
+
+// Minutes between a time earlier in the day and going to bed
+function gapToBed(e, field) {
+  if (!e.sleepAt || !e[field]) return null;
+  let d = minsOf(e.sleepAt) - minsOf(e[field]);
+  if (d < 0) d += 1440;
+  return d > 20 * 60 ? null : d;   // implausible, treat as missing
+}
+
+// Nights where both ends of the span are known and plausible
+function statRows() {
+  return Object.keys(daylog).sort().map(d => {
+    const e = getDay(d), span = restSpan(d, e);
+    return { d, e, span };
+  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60);
+}
+
+const FACTORS = [
+  { key: 'foodType',  label: 'Essen',       levels: [
+      { v: 'leicht', l: 'leicht' }, { v: 'fettig', l: 'fettig' }, { v: 'scharf', l: 'scharf' }] },
+  { key: 'coffee',    label: 'Kaffee',      levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
+  { key: 'brainwork', label: 'Brainwork',   levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
+  { key: 'relaxed',   label: 'Entspannt',   levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] },
+  { key: 'mast',      label: 'Masturbiert', levels: [{ v: true, l: 'ja' }, { v: false, l: 'nein' }] }
+];
+
+const XAXES = [
+  { k: 'coffeeGap', l: 'Letzte Tasse',  get: e => gapToBed(e, 'coffeeLast'), unit: 'h vor dem Bett' },
+  { k: 'foodGap',   l: 'Letztes Essen', get: e => gapToBed(e, 'foodTime'),   unit: 'h vor dem Bett' },
+  { k: 'sportGap',  l: 'Sport-Ende',    get: e => gapToBed(e, 'sportEnd'),   unit: 'h vor dem Bett' },
+  { k: 'cups',      l: 'Tassen Kaffee', get: e => e.coffeeCups ?? null,      unit: 'Tassen', raw: true }
+];
+
+function setStatsX(k) { statsX = k; renderStats(); }
+
+function renderStats() {
+  const host = $("stats");
+  const rows = statRows();
+  const N    = rows.length;
+
+  if (N < 2) {
+    host.innerHTML = `<div class="stats-empty">
+      <b>Noch zu wenig Daten</b>
+      <p>Die Auswertung braucht Nächte, für die sowohl <i>Schlafen gegangen</i> als auch
+      <i>Ruhepuls erreicht</i> eingetragen sind. Bisher: <b>${N}</b>.</p>
+      <p>Ab etwa 10 Nächten werden die ersten Muster sichtbar, ab 20 belastbar.</p>
+    </div>`;
+    return;
+  }
+
+  const spans = rows.map(r => r.span);
+  const med   = median(spans);
+  const lo    = Math.min(...spans), hi = Math.max(...spans);
+
+  const kpi = `<div class="kpi-row">
+    ${[['Nächte', String(N), ''],
+       ['Median', fmtSpan(med), 'bis zum Ruhepuls'],
+       ['Kürzeste', fmtSpan(lo), ''],
+       ['Längste', fmtSpan(hi), '']].map(([l, v, s]) => `
+      <div class="kpi">
+        <span class="kpi-lbl">${l}</span>
+        <span class="kpi-val">${esc(v)}</span>
+        ${s ? `<span class="kpi-sub">${s}</span>` : ''}
+      </div>`).join('')}
+  </div>`;
+
+  host.innerHTML = kpi + timelineChart(rows, med) + factorChart(rows, med, N) + scatterChart(rows);
+}
+
+// ── Chart 1: one bar per night, diverging around the median ──
+function timelineChart(rows, med) {
+  const data = rows.slice(-30);
+  const W = 100, H = 46, pad = 2;                    // viewBox units
+  const hi = Math.max(...data.map(r => r.span), med) * 1.08;
+  const bw = (W - pad * 2) / data.length;
+  const y  = v => H - (v / hi) * (H - 8);
+
+  const bars = data.map((r, i) => {
+    const x = pad + i * bw, h = Math.max(0.6, H - y(r.span));
+    const c = r.span > med ? CH_SLOW : CH_FAST;
+    return `<rect x="${(x + bw * .14).toFixed(2)}" y="${y(r.span).toFixed(2)}"
+      width="${(bw * .72).toFixed(2)}" height="${h.toFixed(2)}" rx="0.7" fill="${c}"
+      ><title>${esc(dayLabel(r.d, { weekday: 'short', day: 'numeric', month: 'short' }))} · ${esc(fmtSpan(r.span))}</title></rect>`;
+  }).join('');
+
+  const first = data[0], last = data[data.length - 1];
+  return `
+    <h3 class="stats-h3">Einschlafphase pro Nacht</h3>
+    <p class="stats-sub">Vom Zubettgehen bis zum Ruhepuls.
+      <span class="sw" style="background:${CH_FAST}"></span> schneller als der Median,
+      <span class="sw" style="background:${CH_SLOW}"></span> langsamer.</p>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+         aria-label="Einschlafphase je Nacht">
+      <line x1="0" x2="${W}" y1="${y(med).toFixed(2)}" y2="${y(med).toFixed(2)}"
+            stroke="${CH_MUTE}" stroke-width="0.3" stroke-dasharray="1.2 1.2"/>
+      ${bars}
+    </svg>
+    <div class="chart-axis">
+      <span>${esc(dayLabel(first.d, { day: 'numeric', month: 'short' }))}</span>
+      <span class="med-tag">Median ${esc(fmtSpan(med))}</span>
+      <span>${esc(dayLabel(last.d, { day: 'numeric', month: 'short' }))}</span>
+    </div>`;
+}
+
+// ── Chart 2: how each factor level shifts the median ──
+function factorChart(rows, med, N) {
+  const groups = [];
+  FACTORS.forEach(f => f.levels.forEach(lv => {
+    const sel = rows.filter(r => r.e[f.key] === lv.v).map(r => r.span);
+    if (sel.length) groups.push({
+      label: `${f.label} ${lv.l}`, n: sel.length,
+      delta: median(sel) - med, med: median(sel)
+    });
+  }));
+  if (!groups.length) return '';
+
+  groups.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const max = Math.max(...groups.map(g => Math.abs(g.delta)), 1);
+
+  const bars = groups.map(g => {
+    const thin = g.n < 3;                       // too few nights to mean anything
+    const pct  = Math.abs(g.delta) / max * 50;
+    const c    = thin ? CH_MUTE : (g.delta > 0 ? CH_SLOW : CH_FAST);
+    const sign = g.delta > 0 ? '+' : g.delta < 0 ? '−' : '';
+    return `<div class="fbar ${thin ? 'thin' : ''}">
+      <span class="fbar-lbl">${esc(g.label)}<span class="fbar-n">n=${g.n}${thin ? ' · zu wenig' : ''}</span></span>
+      <span class="fbar-track">
+        <span class="fbar-mid"></span>
+        <span class="fbar-fill" style="${g.delta > 0 ? 'left:50%' : `right:50%`};width:${pct.toFixed(1)}%;background:${c}"></span>
+      </span>
+      <span class="fbar-val" style="color:${thin ? 'var(--muted)' : c}">${sign}${esc(fmtSpan(Math.abs(g.delta)))}</span>
+    </div>`;
+  }).join('');
+
+  return `
+    <h3 class="stats-h3">Was verschiebt die Einschlafphase?</h3>
+    <p class="stats-sub">Abweichung vom Median (${esc(fmtSpan(med))}) an den Tagen mit dem jeweiligen Merkmal.
+      Nach rechts = es dauerte länger.</p>
+    <div class="fbars">${bars}</div>
+    <p class="stats-note">Das zeigt <b>Zusammenhang, keine Ursache</b> — an fettigen Tagen trinkst du
+    vielleicht auch mehr Kaffee. Gruppen unter drei Nächten sind grau und aussagelos.
+    ${N < 14 ? `Bei ${N} Nächten insgesamt ist alles hier noch Rauschen.` : ''}</p>`;
+}
+
+// ── Chart 3: continuous factor against the span ──
+function scatterChart(rows) {
+  const ax   = XAXES.find(a => a.k === statsX) || XAXES[0];
+  const pts  = rows.map(r => ({ x: ax.get(r.e), y: r.span, d: r.d })).filter(p => p.x !== null);
+  const tabs = XAXES.map(a =>
+    `<button class="xtab ${a.k === statsX ? 'on' : ''}" onclick="setStatsX('${a.k}')">${a.l}</button>`).join('');
+
+  let body;
+  if (pts.length < 3) {
+    body = `<p class="stats-sub">Zu wenige Nächte mit „${esc(ax.l)}" — mindestens drei nötig.</p>`;
+  } else {
+    const W = 100, H = 58, L = 15, B = 5;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs) || 1;
+    const yLo = 0, yHi = Math.max(...ys) * 1.1;
+    const sx = v => L + ((v - x0) / ((x1 - x0) || 1)) * (W - L - 3);
+    const sy = v => (H - B) - ((v - yLo) / (yHi - yLo)) * (H - B - 4);
+    const medY = median(ys);
+    // Three ticks are enough to read the scale without crowding the plot
+    const ticks = [0, yHi / 2, yHi].map(v => `
+      <line x1="${L}" x2="${W}" y1="${sy(v).toFixed(2)}" y2="${sy(v).toFixed(2)}"
+            stroke="var(--line-soft)" stroke-width="0.25"/>
+      <text x="${L - 1.5}" y="${(sy(v) + 1.1).toFixed(2)}" text-anchor="end"
+            font-size="3" fill="var(--muted)">${esc(fmtSpan(v))}</text>`).join('');
+    const dots = pts.map(p => {
+      const c = p.y > medY ? CH_SLOW : CH_FAST;
+      return `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.5"
+        fill="${c}" stroke="#fff" stroke-width="0.5"
+        ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${
+          ax.raw ? p.x + ' ' + ax.unit : (p.x / 60).toFixed(1) + ' ' + ax.unit
+        } · ${esc(fmtSpan(p.y))}</title></circle>`;
+    }).join('');
+    const fmtX = v => ax.raw ? String(v) : (v / 60).toFixed(1);
+    body = `
+      <p class="stats-axis-y">↑ Einschlafphase</p>
+      <svg class="chart chart-tall" viewBox="0 0 ${W} ${H}" role="img"
+           aria-label="Einschlafphase gegen ${esc(ax.l)}">
+        ${ticks}
+        ${dots}
+      </svg>
+      <div class="chart-axis">
+        <span>${esc(fmtX(x0))}</span>
+        <span>${esc(ax.unit)} →</span>
+        <span>${esc(fmtX(x1))}</span>
+      </div>`;
+  }
+
+  return `
+    <h3 class="stats-h3">Zusammenhänge</h3>
+    <div class="xtabs">${tabs}</div>
+    ${body}`;
 }
 
 function fcCellClick(subId, yymm) {
@@ -4689,9 +4996,11 @@ document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   $("pane-turnus").style.display = tab === "turnus" ? "" : "none";
   $("pane-tx").style.display     = tab === "tx"     ? "" : "none";
   $("pane-sleep").style.display  = tab === "sleep"  ? "" : "none";
+  $("pane-stats").style.display  = tab === "stats"  ? "" : "none";
   $("fab").style.display         = tab === "turnus" ? "flex" : "none";
   if (tab === "tx")    renderTransactions();
   if (tab === "sleep") renderSleep();
+  if (tab === "stats") renderStats();
 });
 
 load();
