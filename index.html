@@ -844,6 +844,163 @@
     }
     .gh-popup .gh-actions button { flex: 1; min-width: 150px; }
 
+    /* ── Day log ── */
+    .sleep-h3 {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 22px 0 8px;
+    }
+    .sleep-h3:first-of-type { margin-top: 6px; }
+
+    .sleep-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .sleep-lbl { font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+    .sleep-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+    .sleep-ctl { flex-shrink: 0; }
+
+    .sleep-row input[type="time"] {
+      font-family: "Space Grotesk";
+      font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 10px;
+      min-width: 104px;
+    }
+    .sleep-row input[type="time"]:focus { outline: none; border-color: var(--accent); }
+
+    .seg-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      padding: 7px 13px;
+      cursor: pointer;
+      margin-left: -1px;
+    }
+    .seg-btn:first-child { border-radius: 9px 0 0 9px; margin-left: 0; }
+    .seg-btn:last-child  { border-radius: 0 9px 9px 0; }
+    .seg-btn.on {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      position: relative;
+    }
+
+    .cups { display: flex; align-items: center; gap: 2px; }
+    .cups button {
+      width: 34px; height: 34px;
+      font-size: 17px; font-weight: 600;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .cups button:first-child { border-radius: 9px 0 0 9px; }
+    .cups button:last-child  { border-radius: 0 9px 9px 0; margin-left: -1px; }
+    .cups span {
+      font-family: "Space Grotesk";
+      font-size: 15px; font-weight: 700;
+      min-width: 40px; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sleep-today {
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--accent);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 0 0 10px;
+    }
+
+    .sleep-nudge {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 13px 15px;
+      margin-bottom: 14px;
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      background: var(--accent-tint);
+    }
+    .sleep-nudge-txt { display: flex; flex-direction: column; gap: 2px; }
+    .sleep-nudge-txt b { font-size: 13.5px; }
+    .sleep-nudge-txt span { font-size: 11.5px; color: var(--muted); }
+    .sleep-nudge input {
+      font-family: "Space Grotesk";
+      font-size: 15px; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    .sleep-hist-wrap { overflow-x: auto; }
+    table.sleep-hist {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    table.sleep-hist th {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+      padding: 0 8px 6px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    table.sleep-hist td {
+      padding: 8px 8px 8px 0;
+      border-bottom: 1px solid var(--line-soft);
+      font-variant-numeric: tabular-nums;
+    }
+    table.sleep-hist tr { cursor: pointer; }
+    table.sleep-hist tr:hover td { background: var(--bg); }
+    table.sleep-hist tr.sel td { background: var(--accent-tint); }
+    table.sleep-hist td.d  { font-weight: 600; }
+    table.sleep-hist td.hr { font-family: "Space Grotesk"; font-weight: 700; color: var(--accent); }
+    table.sleep-hist .sub  { color: var(--muted); font-size: 11px; }
+    table.sleep-hist i     { font-style: normal; }
+    table.sleep-hist .m-yes { color: var(--accent); font-weight: 700; }
+    table.sleep-hist .m-no  { color: var(--muted); }
+    table.sleep-hist .m-un  { color: var(--line); }
+    .ft {
+      display: inline-block;
+      margin-left: 5px;
+      width: 16px; height: 16px;
+      line-height: 16px; text-align: center;
+      border-radius: 5px;
+      font-size: 9.5px; font-weight: 700;
+      color: #fff;
+    }
+    .ft-leicht { background: #4c9a7a; }
+    .ft-fettig { background: #b0556a; }
+    .ft-scharf { background: #c8763a; }
+
     .rot-cfg {
       display: flex;
       gap: 14px;
@@ -1804,6 +1961,7 @@
     <div class="tab-nav">
       <button class="tab-btn active" data-tab="turnus">Turnus</button>
       <button class="tab-btn" data-tab="tx">Transaktionen</button>
+      <button class="tab-btn" data-tab="sleep">Schlaf</button>
     </div>
 
     <div id="pane-turnus">
@@ -1841,6 +1999,10 @@
 
     <div id="pane-tx" style="display:none">
       <section id="transactions"></section>
+    </div>
+
+    <div id="pane-sleep" style="display:none">
+      <section id="sleep"></section>
     </div>
   </div>
 
@@ -1916,6 +2078,7 @@ const XKEY = "turnus:txcats";
 const SKEY = "turnus:settlements";
 const AKEY = "turnus:accounts";
 const RKEY = "turnus:rotierkonto";
+const DKEY = "turnus:daylog";
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // Backed by localStorage, with an in-memory fallback for private windows or
@@ -1991,6 +2154,10 @@ let txActiveAcc   = "a1";
 // Rotierkonto: start = first month of the rhythm (YYYY-MM, "" = next month),
 // balance = actual amount currently sitting on the account (null = unknown)
 let rotCfg        = { start: "", balance: null };
+// Day log, keyed YYYY-MM-DD. restingHr belongs to the day whose behaviour
+// caused it, but gets filled in the next morning.
+let daylog        = {};
+let sleepDay      = null;   // YYYY-MM-DD currently shown, null = today
 
 const $ = id => document.getElementById(id);
 
@@ -2059,6 +2226,10 @@ async function load() {
     }
   } catch (e) {}
   try {
+    const rd = await window.storage.get(DKEY);
+    if (rd && rd.value) { const d = JSON.parse(rd.value); if (d && typeof d === 'object') daylog = d; }
+  } catch (e) {}
+  try {
     const rg = await window.storage.get(GKEY);
     if (rg && rg.value) {
       const d = JSON.parse(rg.value);
@@ -2071,6 +2242,11 @@ async function load() {
 
 async function persistRotCfg() {
   try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
+  syncSoon();
+}
+
+async function persistDaylog() {
+  try { await window.storage.set(DKEY, JSON.stringify(daylog)); } catch (e) {}
   syncSoon();
 }
 
@@ -2103,7 +2279,7 @@ function ghSnapshot() {
   return {
     v: 2, subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog
   };
 }
 
@@ -2125,6 +2301,7 @@ function ghApply(d) {
     const b = d.rotierkonto.balance;
     if (typeof b === 'number' || b === null) rotCfg.balance = b;
   }
+  if (d.daylog && typeof d.daylog === 'object') daylog = d.daylog;
   return true;
 }
 
@@ -2133,7 +2310,7 @@ async function ghPersistAll() {
   await Promise.all([
     persist(), persistCats(), persistIncome(), persistTransactions(),
     persistPayments(), persistTxCats(), persistSettlements(),
-    persistAccCfg(), persistRotCfg()
+    persistAccCfg(), persistRotCfg(), persistDaylog()
   ]);
   applyingRemote = false;
 }
@@ -3184,6 +3361,149 @@ function renderForecast() {
   }
 }
 
+// ── Day log ────────────────────────────────────────────────────────────────
+const dayKey  = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const todayKey = () => dayKey(new Date());
+const shiftDay = (key, n) => {
+  const [y, m, d] = key.split('-').map(Number);
+  return dayKey(new Date(y, m - 1, d + n));
+};
+const dayLabel = (key, opts) => {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Intl.DateTimeFormat("de-DE", opts || { weekday: "short", day: "numeric", month: "long" })
+    .format(new Date(y, m - 1, d));
+};
+const getDay = key => daylog[key] || {};
+
+async function setDay(key, field, value) {
+  const e = daylog[key] || (daylog[key] = {});
+  if (value === null || value === "" || value === undefined) delete e[field];
+  else e[field] = value;
+  if (Object.keys(e).length === 0) delete daylog[key];
+  await persistDaylog();
+  renderSleep();
+}
+
+// Tri-state: clicking the active button clears the field again
+function dayToggle(key, field, value) {
+  setDay(key, field, getDay(key)[field] === value ? null : value);
+}
+
+function dayCups(key, delta) {
+  const cur = getDay(key).coffeeCups || 0;
+  const next = Math.max(0, Math.min(30, cur + delta));
+  setDay(key, 'coffeeCups', next === 0 ? null : next);
+}
+
+function sleepGo(n)   { sleepDay = shiftDay(sleepDay || todayKey(), n); renderSleep(); }
+function sleepToday() { sleepDay = null; renderSleep(); }
+
+function renderSleep() {
+  const host = $("sleep");
+  const key  = sleepDay || todayKey();
+  const e    = getDay(key);
+  const isToday  = key === todayKey();
+  const isFuture = key > todayKey();
+  const nextKey  = shiftDay(key, 1);
+  const prevKey  = shiftDay(key, -1);
+
+  // Strings need single quotes here — double ones would close the onclick attribute
+  const lit = v => typeof v === 'string' ? `'${v}'` : String(v);
+  const seg = (field, opts) => opts.map(o =>
+    `<button class="seg-btn ${e[field] === o.v ? 'on' : ''}" onclick="dayToggle('${key}','${field}',${lit(o.v)})">${o.l}</button>`
+  ).join('');
+
+  const timeField = (field, val) =>
+    `<input type="time" value="${val || ''}" onchange="setDay('${key}','${field}',this.value)">`;
+
+  // Yesterday's resting heart rate is the thing most easily forgotten
+  const prev = getDay(prevKey);
+  const nudge = (isToday && !prev.restingHr && Object.keys(prev).length > 0)
+    ? `<div class="sleep-nudge">
+         <div class="sleep-nudge-txt">
+           <b>Ruhepuls von gestern fehlt</b>
+           <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span>
+         </div>
+         <input type="time" onchange="setDay('${prevKey}','restingHr',this.value)">
+       </div>`
+    : '';
+
+  const row = (label, body, hint) => `<div class="sleep-row">
+      <div class="sleep-lbl">${label}${hint ? `<span class="sleep-hint">${hint}</span>` : ''}</div>
+      <div class="sleep-ctl">${body}</div>
+    </div>`;
+
+  // Recent history, most recent first
+  const days = [];
+  for (let i = 0; i < 14; i++) days.push(shiftDay(todayKey(), -i));
+  const filled = days.filter(d => Object.keys(getDay(d)).length > 0);
+  const mark = v => v === true ? '<i class="m-yes">✓</i>' : v === false ? '<i class="m-no">–</i>' : '<i class="m-un">·</i>';
+  const hist = filled.length === 0 ? '' : `
+    <h3 class="sleep-h3">Verlauf</h3>
+    <div class="sleep-hist-wrap">
+    <table class="sleep-hist">
+      <thead><tr>
+        <th>Tag</th><th>Ruhepuls</th><th>Essen</th><th>Kaffee</th>
+        <th title="Sport beendet">Sport</th><th title="Masturbiert">Mast.</th>
+        <th title="Brainwork in der Stunde vor dem Bett">Brain</th>
+        <th title="Entspannt ins Bett">Entsp.</th>
+      </tr></thead>
+      <tbody>${filled.map(d => {
+        const x = getDay(d);
+        return `<tr class="${d === key ? 'sel' : ''}" onclick="sleepDay='${d}';renderSleep()">
+          <td class="d">${esc(dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
+          <td class="hr">${x.restingHr ? esc(x.restingHr) : '–'}</td>
+          <td>${x.foodTime ? esc(x.foodTime) : '–'}${x.foodType ? `<span class="ft ft-${x.foodType}">${x.foodType[0].toUpperCase()}</span>` : ''}</td>
+          <td>${x.coffeeCups ? `${x.coffeeCups}×` : (x.coffee === false ? '–' : '')}${x.coffeeLast ? ` <span class="sub">${esc(x.coffeeLast)}</span>` : ''}</td>
+          <td>${x.sportEnd ? esc(x.sportEnd) : '–'}</td>
+          <td>${x.mastTime ? esc(x.mastTime) : mark(x.mast)}</td>
+          <td>${mark(x.brainwork)}</td>
+          <td>${mark(x.relaxed)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+
+  host.innerHTML = `
+    <div class="tx-month-nav">
+      <button onclick="sleepGo(-1)">‹</button>
+      <span class="tx-month-label">${esc(dayLabel(key))}${isToday ? ' · heute' : ''}</span>
+      <button onclick="sleepGo(1)" ${isFuture ? 'disabled' : ''}>›</button>
+    </div>
+    ${!isToday ? `<button class="sleep-today" onclick="sleepToday()">Zurück zu heute</button>` : ''}
+    ${nudge}
+
+    <h3 class="sleep-h3">Ergebnis</h3>
+    ${row('Ruhepuls erreicht', timeField('restingHr', e.restingHr),
+          `Nacht auf ${esc(dayLabel(nextKey, { day: 'numeric', month: 'short' }))} · am Folgetag eintragen`)}
+
+    <h3 class="sleep-h3">Essen</h3>
+    ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
+    ${row('Art', seg('foodType', [
+        { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }]))}
+
+    <h3 class="sleep-h3">Kaffee</h3>
+    ${row('Getrunken', seg('coffee', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
+    ${e.coffee === false ? '' : `
+      ${row('Tassen', `<div class="cups">
+          <button onclick="dayCups('${key}',-1)">−</button>
+          <span>${e.coffeeCups || 0}</span>
+          <button onclick="dayCups('${key}',1)">+</button>
+        </div>`)}
+      ${row('Letzte Tasse', timeField('coffeeLast', e.coffeeLast))}`}
+
+    <h3 class="sleep-h3">Körper</h3>
+    ${row('Sport beendet', timeField('sportEnd', e.sportEnd))}
+    ${row('Masturbiert', seg('mast', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
+    ${e.mast === true ? row('Uhrzeit', timeField('mastTime', e.mastTime)) : ''}
+
+    <h3 class="sleep-h3">Vor dem Schlafen</h3>
+    ${row('Brainwork', seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]),
+          'in der Stunde vor dem Zubettgehen')}
+    ${row('Entspannt ins Bett', seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
+
+    ${hist}`;
+}
+
 function fcCellClick(subId, yymm) {
   const pay = getPayment(subId, yymm);
   if (pay) {
@@ -4188,7 +4508,7 @@ function exportData() {
     v: 2,
     subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg,
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog,
     exported: new Date().toISOString()
   }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
@@ -4230,6 +4550,7 @@ async function importData(file) {
       if (typeof r.start === 'string') rotCfg.start = r.start;
       if (typeof r.balance === 'number' || r.balance === null) rotCfg.balance = r.balance;
     }
+    if (data.daylog && typeof data.daylog === 'object') daylog = data.daylog;
 
     await Promise.all([
       persist(), persistCats(), persistIncome(), persistTransactions(),
@@ -4277,8 +4598,10 @@ document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
   $("pane-turnus").style.display = tab === "turnus" ? "" : "none";
   $("pane-tx").style.display     = tab === "tx"     ? "" : "none";
+  $("pane-sleep").style.display  = tab === "sleep"  ? "" : "none";
   $("fab").style.display         = tab === "turnus" ? "flex" : "none";
-  if (tab === "tx") renderTransactions();
+  if (tab === "tx")    renderTransactions();
+  if (tab === "sleep") renderSleep();
 });
 
 load();
