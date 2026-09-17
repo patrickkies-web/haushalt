@@ -956,7 +956,22 @@
       color: var(--ink);
     }
 
+    .sleep-span {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 8px 0 0;
+      text-align: right;
+    }
+
     .sleep-hist-wrap { overflow-x: auto; }
+    table.sleep-hist td.hr .sub {
+      display: block;
+      font-weight: 600;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
     table.sleep-hist {
       width: 100%;
       border-collapse: collapse;
@@ -3375,6 +3390,18 @@ const dayLabel = (key, opts) => {
 };
 const getDay = key => daylog[key] || {};
 
+// Times are stored as plain HH:MM. Going to bed at 23:40 and settling at
+// 01:20 crosses midnight, so a negative span wraps into the next day.
+const minsOf = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+const spanMin = (from, to) => {
+  if (!from || !to) return null;
+  let d = minsOf(to) - minsOf(from);
+  if (d < 0) d += 1440;
+  return d;
+};
+const fmtSpan = m => m === null ? '' : m < 60 ? `${m} min`
+  : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+
 async function setDay(key, field, value) {
   const e = daylog[key] || (daylog[key] = {});
   if (value === null || value === "" || value === undefined) delete e[field];
@@ -3443,7 +3470,9 @@ function renderSleep() {
     <div class="sleep-hist-wrap">
     <table class="sleep-hist">
       <thead><tr>
-        <th>Tag</th><th>Ruhepuls</th><th>Essen</th><th>Kaffee</th>
+        <th>Tag</th><th title="Handy weg, Augen zu">Bett</th>
+        <th title="Ruhepuls erreicht, darunter die Spanne ab dem Zubettgehen">Ruhepuls</th>
+        <th>Essen</th><th>Kaffee</th>
         <th title="Sport beendet">Sport</th><th title="Masturbiert">Mast.</th>
         <th title="Brainwork in der Stunde vor dem Bett">Brain</th>
         <th title="Entspannt ins Bett">Entsp.</th>
@@ -3452,7 +3481,10 @@ function renderSleep() {
         const x = getDay(d);
         return `<tr class="${d === key ? 'sel' : ''}" onclick="sleepDay='${d}';renderSleep()">
           <td class="d">${esc(dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
-          <td class="hr">${x.restingHr ? esc(x.restingHr) : '–'}</td>
+          <td>${x.sleepAt ? esc(x.sleepAt) : '–'}</td>
+          <td class="hr">${x.restingHr ? esc(x.restingHr) : '–'}${
+            spanMin(x.sleepAt, x.restingHr) === null ? ''
+              : `<span class="sub">+${esc(fmtSpan(spanMin(x.sleepAt, x.restingHr)))}</span>`}</td>
           <td>${x.foodTime ? esc(x.foodTime) : '–'}${x.foodType ? `<span class="ft ft-${x.foodType}">${x.foodType[0].toUpperCase()}</span>` : ''}</td>
           <td>${x.coffeeCups ? `${x.coffeeCups}×` : (x.coffee === false ? '–' : '')}${x.coffeeLast ? ` <span class="sub">${esc(x.coffeeLast)}</span>` : ''}</td>
           <td>${x.sportEnd ? esc(x.sportEnd) : '–'}</td>
@@ -3475,6 +3507,8 @@ function renderSleep() {
     <h3 class="sleep-h3">Ergebnis</h3>
     ${row('Ruhepuls erreicht', timeField('restingHr', e.restingHr),
           `Nacht auf ${esc(dayLabel(nextKey, { day: 'numeric', month: 'short' }))} · am Folgetag eintragen`)}
+    ${spanMin(e.sleepAt, e.restingHr) === null ? '' :
+      `<div class="sleep-span">${fmtSpan(spanMin(e.sleepAt, e.restingHr))} nach dem Zubettgehen</div>`}
 
     <h3 class="sleep-h3">Essen</h3>
     ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
@@ -3500,6 +3534,7 @@ function renderSleep() {
     ${row('Brainwork', seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]),
           'in der Stunde vor dem Zubettgehen')}
     ${row('Entspannt ins Bett', seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
+    ${row('Schlafen gegangen', timeField('sleepAt', e.sleepAt), 'Handy weg, Augen zu')}
 
     ${hist}`;
 }
