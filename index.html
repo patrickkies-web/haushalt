@@ -867,6 +867,7 @@
     .sleep-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
     .sleep-ctl { flex-shrink: 0; }
 
+    .sleep-row input[type="date"],
     .sleep-row input[type="time"] {
       font-family: "Space Grotesk";
       font-size: 15px;
@@ -879,7 +880,9 @@
       padding: 7px 10px;
       min-width: 104px;
     }
+    .sleep-row input[type="date"]:focus,
     .sleep-row input[type="time"]:focus { outline: none; border-color: var(--accent); }
+    .sleep-row input[type="date"] { min-width: 132px; }
 
     .seg-btn {
       font-family: inherit;
@@ -3393,22 +3396,68 @@ const getDay = key => daylog[key] || {};
 // Times are stored as plain HH:MM. Going to bed at 23:40 and settling at
 // 01:20 crosses midnight, so a negative span wraps into the next day.
 const minsOf = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
-const spanMin = (from, to) => {
-  if (!from || !to) return null;
-  let d = minsOf(to) - minsOf(from);
-  if (d < 0) d += 1440;
-  return d;
+const fmtSpan = m => {
+  if (m === null) return '';
+  const neg = m < 0, a = Math.abs(m);
+  const s = a < 60 ? `${a} min` : `${Math.floor(a / 60)} h ${String(a % 60).padStart(2, '0')} min`;
+  return neg ? `−${s}` : s;
 };
-const fmtSpan = m => m === null ? '' : m < 60 ? `${m} min`
-  : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
 
-async function setDay(key, field, value) {
+// Span from bedtime to resting heart rate. With an explicit date the
+// difference is exact; without one a time before bedtime is read as the
+// following morning.
+function restSpan(key, e) {
+  if (!e.sleepAt || !e.restingHr) return null;
+  const bed = new Date(`${key}T${e.sleepAt}:00`);
+  const hr  = new Date(`${e.restingHrDate || key}T${e.restingHr}:00`);
+  let d = Math.round((hr - bed) / 60000);
+  if (!e.restingHrDate && d < 0) d += 1440;
+  return d;
+}
+
+function writeDay(key, field, value) {
   const e = daylog[key] || (daylog[key] = {});
   if (value === null || value === "" || value === undefined) delete e[field];
   else e[field] = value;
   if (Object.keys(e).length === 0) delete daylog[key];
+}
+
+async function setDay(key, field, value) {
+  writeDay(key, field, value);
   await persistDaylog();
   renderSleep();
+}
+
+// Time and date inputs must not trigger a full re-render: replacing the input
+// mid-interaction closes the native picker. Only the derived parts refresh.
+async function setDayTime(key, field, value) {
+  writeDay(key, field, value);
+  // Entering the resting time without a date: infer which morning it was
+  if (field === 'restingHr' && value) {
+    const e = getDay(key);
+    if (!e.restingHrDate) {
+      writeDay(key, 'restingHrDate',
+        (e.sleepAt && value < e.sleepAt) ? shiftDay(key, 1) : key);
+    }
+  }
+  await persistDaylog();
+  refreshDerived();
+}
+
+// Refresh only what depends on the values, never the inputs themselves.
+function refreshDerived() {
+  const key  = sleepDay || todayKey();
+  const e    = getDay(key);
+  const span = $("sleep-span-slot");
+  if (span) {
+    const m = restSpan(key, e);
+    span.innerHTML = m === null ? ''
+      : `<div class="sleep-span">${esc(fmtSpan(m))} nach dem Zubettgehen</div>`;
+  }
+  const hist = $("sleep-hist-slot");
+  if (hist) hist.innerHTML = sleepHistHtml(key);
+  const date = $("sleep-hr-date");
+  if (date && date.value !== (e.restingHrDate || '')) date.value = e.restingHrDate || '';
 }
 
 // Tri-state: clicking the active button clears the field again
@@ -3424,6 +3473,43 @@ function dayCups(key, delta) {
 
 function sleepGo(n)   { sleepDay = shiftDay(sleepDay || todayKey(), n); renderSleep(); }
 function sleepToday() { sleepDay = null; renderSleep(); }
+
+function sleepHistHtml(key) {
+  // Recent history, most recent first
+  const days = [];
+  for (let i = 0; i < 14; i++) days.push(shiftDay(todayKey(), -i));
+  const filled = days.filter(d => Object.keys(getDay(d)).length > 0);
+  const mark = v => v === true ? '<i class="m-yes">✓</i>' : v === false ? '<i class="m-no">–</i>' : '<i class="m-un">·</i>';
+  return filled.length === 0 ? '' : `
+    <h3 class="sleep-h3">Verlauf</h3>
+    <div class="sleep-hist-wrap">
+    <table class="sleep-hist">
+      <thead><tr>
+        <th>Tag</th><th title="Handy weg, Augen zu">Bett</th>
+        <th title="Ruhepuls erreicht, darunter die Spanne ab dem Zubettgehen">Ruhepuls</th>
+        <th>Essen</th><th>Kaffee</th>
+        <th title="Sport beendet">Sport</th><th title="Masturbiert">Mast.</th>
+        <th title="Brainwork in der Stunde vor dem Bett">Brain</th>
+        <th title="Entspannt ins Bett">Entsp.</th>
+      </tr></thead>
+      <tbody>${filled.map(d => {
+        const x = getDay(d);
+        return `<tr class="${d === key ? 'sel' : ''}" onclick="sleepDay='${d}';renderSleep()">
+          <td class="d">${esc(dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
+          <td>${x.sleepAt ? esc(x.sleepAt) : '–'}</td>
+          <td class="hr">${x.restingHr ? esc(x.restingHr) : '–'}${
+            restSpan(d, x) === null ? ''
+              : `<span class="sub">+${esc(fmtSpan(restSpan(d, x)))}</span>`}</td>
+          <td>${x.foodTime ? esc(x.foodTime) : '–'}${x.foodType ? `<span class="ft ft-${x.foodType}">${x.foodType[0].toUpperCase()}</span>` : ''}</td>
+          <td>${x.coffeeCups ? `${x.coffeeCups}×` : (x.coffee === false ? '–' : '')}${x.coffeeLast ? ` <span class="sub">${esc(x.coffeeLast)}</span>` : ''}</td>
+          <td>${x.sportEnd ? esc(x.sportEnd) : '–'}</td>
+          <td>${x.mastTime ? esc(x.mastTime) : mark(x.mast)}</td>
+          <td>${mark(x.brainwork)}</td>
+          <td>${mark(x.relaxed)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+}
 
 function renderSleep() {
   const host = $("sleep");
@@ -3441,7 +3527,7 @@ function renderSleep() {
   ).join('');
 
   const timeField = (field, val) =>
-    `<input type="time" value="${val || ''}" onchange="setDay('${key}','${field}',this.value)">`;
+    `<input type="time" value="${val || ''}" onchange="setDayTime('${key}','${field}',this.value)">`;
 
   // Yesterday's resting heart rate is the thing most easily forgotten
   const prev = getDay(prevKey);
@@ -3460,40 +3546,7 @@ function renderSleep() {
       <div class="sleep-ctl">${body}</div>
     </div>`;
 
-  // Recent history, most recent first
-  const days = [];
-  for (let i = 0; i < 14; i++) days.push(shiftDay(todayKey(), -i));
-  const filled = days.filter(d => Object.keys(getDay(d)).length > 0);
-  const mark = v => v === true ? '<i class="m-yes">✓</i>' : v === false ? '<i class="m-no">–</i>' : '<i class="m-un">·</i>';
-  const hist = filled.length === 0 ? '' : `
-    <h3 class="sleep-h3">Verlauf</h3>
-    <div class="sleep-hist-wrap">
-    <table class="sleep-hist">
-      <thead><tr>
-        <th>Tag</th><th title="Handy weg, Augen zu">Bett</th>
-        <th title="Ruhepuls erreicht, darunter die Spanne ab dem Zubettgehen">Ruhepuls</th>
-        <th>Essen</th><th>Kaffee</th>
-        <th title="Sport beendet">Sport</th><th title="Masturbiert">Mast.</th>
-        <th title="Brainwork in der Stunde vor dem Bett">Brain</th>
-        <th title="Entspannt ins Bett">Entsp.</th>
-      </tr></thead>
-      <tbody>${filled.map(d => {
-        const x = getDay(d);
-        return `<tr class="${d === key ? 'sel' : ''}" onclick="sleepDay='${d}';renderSleep()">
-          <td class="d">${esc(dayLabel(d, { weekday: 'short', day: 'numeric', month: 'short' }))}</td>
-          <td>${x.sleepAt ? esc(x.sleepAt) : '–'}</td>
-          <td class="hr">${x.restingHr ? esc(x.restingHr) : '–'}${
-            spanMin(x.sleepAt, x.restingHr) === null ? ''
-              : `<span class="sub">+${esc(fmtSpan(spanMin(x.sleepAt, x.restingHr)))}</span>`}</td>
-          <td>${x.foodTime ? esc(x.foodTime) : '–'}${x.foodType ? `<span class="ft ft-${x.foodType}">${x.foodType[0].toUpperCase()}</span>` : ''}</td>
-          <td>${x.coffeeCups ? `${x.coffeeCups}×` : (x.coffee === false ? '–' : '')}${x.coffeeLast ? ` <span class="sub">${esc(x.coffeeLast)}</span>` : ''}</td>
-          <td>${x.sportEnd ? esc(x.sportEnd) : '–'}</td>
-          <td>${x.mastTime ? esc(x.mastTime) : mark(x.mast)}</td>
-          <td>${mark(x.brainwork)}</td>
-          <td>${mark(x.relaxed)}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div>`;
+  const hist = sleepHistHtml(key);
 
   host.innerHTML = `
     <div class="tx-month-nav">
@@ -3507,8 +3560,10 @@ function renderSleep() {
     <h3 class="sleep-h3">Ergebnis</h3>
     ${row('Ruhepuls erreicht', timeField('restingHr', e.restingHr),
           `Nacht auf ${esc(dayLabel(nextKey, { day: 'numeric', month: 'short' }))} · am Folgetag eintragen`)}
-    ${spanMin(e.sleepAt, e.restingHr) === null ? '' :
-      `<div class="sleep-span">${fmtSpan(spanMin(e.sleepAt, e.restingHr))} nach dem Zubettgehen</div>`}
+    ${row('Datum', `<input type="date" id="sleep-hr-date" value="${e.restingHrDate || ''}" onchange="setDayTime('${key}','restingHrDate',this.value)">`,
+          'in welcher Nacht erreicht')}
+    <div id="sleep-span-slot">${restSpan(key, e) === null ? ''
+      : `<div class="sleep-span">${esc(fmtSpan(restSpan(key, e)))} nach dem Zubettgehen</div>`}</div>
 
     <h3 class="sleep-h3">Essen</h3>
     ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
@@ -3536,7 +3591,7 @@ function renderSleep() {
     ${row('Entspannt ins Bett', seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
     ${row('Schlafen gegangen', timeField('sleepAt', e.sleepAt), 'Handy weg, Augen zu')}
 
-    ${hist}`;
+    <div id="sleep-hist-slot">${hist}</div>`;
 }
 
 function fcCellClick(subId, yymm) {
