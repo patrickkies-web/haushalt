@@ -1118,6 +1118,18 @@
     }
 
     .lv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lv.wide { grid-column: 1 / -1; }
+    .lv-pick { display: flex; gap: 5px; padding: 0 9px 9px; flex-wrap: wrap; }
+    .lv-pick button {
+      flex: 1; min-width: 88px; font-family: inherit;
+      font-size: 11.5px; font-weight: 600; color: var(--muted);
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 8px; padding: 7px 6px; cursor: pointer;
+    }
+    .lv-pick button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .lv.wide .lv-hit { border-radius: 13px 13px 0 0; border-bottom: none; padding-bottom: 11px; }
+    .lv.wide.set { background: var(--accent-tint); border: 1px solid var(--accent); border-radius: 13px; }
+    .lv.wide.set .lv-hit { border: none; background: transparent; }
     .lv { position: relative; }
     .lv-hit {
       width: 100%; text-align: left; cursor: pointer;
@@ -2569,7 +2581,21 @@ async function load() {
   } catch (e) {}
   try {
     const rd = await window.storage.get(DKEY);
-    if (rd && rd.value) { const d = JSON.parse(rd.value); if (d && typeof d === 'object') daylog = d; }
+    if (rd && rd.value) {
+      const d = JSON.parse(rd.value);
+      if (d && typeof d === 'object') {
+        daylog = d;
+        // 'normal' became 'frueh' when the shift options were named properly;
+        // the separate sauna infusion time was folded into the last session
+        Object.values(daylog).forEach(x => {
+          if (x && x.shift === 'normal') x.shift = 'frueh';
+          if (x && x.saunaInfusion !== undefined) {
+            if (!x.saunaEnd) x.saunaEnd = x.saunaInfusion;
+            delete x.saunaInfusion;
+          }
+        });
+      }
+    }
   } catch (e) {}
   try {
     const rg = await window.storage.get(GKEY);
@@ -3804,9 +3830,20 @@ const QUALS = [
 const QUAL_SCORE = { gut: 1, mittel: 0, schlecht: -1 };
 
 const SHIFTS = [
-  { v: 'normal', l: 'Normal' },
-  { v: 'spaet',  l: 'Spät' },
-  { v: 'nacht',  l: 'Nacht' }
+  { v: 'frueh', l: 'Früh' },
+  { v: 'spaet', l: 'Spät' },
+  { v: 'nacht', l: 'Nacht' }
+];
+const COFFEE_TYPES = [
+  { v: 'filter',     l: 'Filterkaffee' },
+  { v: 'cappuccino', l: 'Cappuccino' },
+  { v: 'unterwegs',  l: 'Unterwegs' }
+];
+// The stored value stays 'leicht' so entries made before the rename keep working
+const FOOD_TYPES = [
+  { v: 'leicht', l: 'Gesund' },
+  { v: 'fettig', l: 'Fettig' },
+  { v: 'scharf', l: 'Scharf' }
 ];
 
 function sleepGo(n)   { sleepDay = shiftDay(sleepDay || todayKey(), n); renderSleep(); }
@@ -3873,7 +3910,7 @@ function demoEntries() {
     let shift;
     if (nightRun > 0) { shift = 'nacht'; nightRun--; }
     else if (rnd() < 0.09) { shift = 'nacht'; nightRun = 1 + Math.floor(rnd() * 2); }
-    else shift = rnd() < 0.22 ? 'spaet' : 'normal';
+    else shift = rnd() < 0.22 ? 'spaet' : 'frueh';
 
     // After a night shift you go to bed in the morning
     const bed = shift === 'nacht' ? 7 * 60 + Math.floor(rnd() * 90)
@@ -3887,11 +3924,12 @@ function demoEntries() {
     const noCoffee = rnd() < 0.12;
     let cofGapH = null;
     if (!noCoffee) {
-      const cups = 1 + Math.floor(rnd() * (shift === 'normal' ? 3 : 4));
+      const cups = 1 + Math.floor(rnd() * (shift === 'frueh' ? 3 : 4));
       const last = shift === 'nacht' ? 2 * 60 + Math.floor(rnd() * 180)
         : shift === 'spaet' ? 15 * 60 + Math.floor(rnd() * 240)
         : 9 * 60 + Math.floor(rnd() * 480);
       e.coffee = true; e.coffeeCups = cups; e.coffeeLast = hhmm(last);
+      e.coffeeType = ['filter', 'cappuccino', 'unterwegs'][Math.floor(rnd() * 3)];
       cofGapH = (((bed - last) % 1440) + 1440) % 1440 / 60;
     } else e.coffee = false;
 
@@ -3915,11 +3953,11 @@ function demoEntries() {
     let saunaGapH = null;
     if (rnd() < 0.13) {
       const end = 18 * 60 + Math.floor(rnd() * 210);
-      e.sauna = true; e.saunaEnd = hhmm(end); e.saunaInfusion = hhmm(end - 15 - Math.floor(rnd() * 25));
+      e.sauna = true; e.saunaEnd = hhmm(end);
       saunaGapH = ((((bed - end) % 1440) + 1440) % 1440) / 60;
     } else e.sauna = false;
 
-    e.brainwork = rnd() < (shift === 'normal' ? 0.3 : 0.5);
+    e.brainwork = rnd() < (shift === 'frueh' ? 0.3 : 0.5);
     e.relaxed   = rnd() < 0.55;
     if (rnd() < 0.3) { e.mast = true; e.mastTime = hhmm(bed - 10 - Math.floor(rnd() * 70)); }
     else e.mast = false;
@@ -3991,14 +4029,16 @@ const nowHHMM = () => {
 };
 
 const LIVE = [
-  { k: 'coffeeLast', l: 'Kaffee', hint: 'Tasse getrunken',
-    clear: ['coffee', 'coffeeCups', 'coffeeLast'],
+  { k: 'coffeeLast', l: 'Kaffee', hint: 'Tasse getrunken', wide: true,
+    clear: ['coffee', 'coffeeCups', 'coffeeLast', 'coffeeType'],
     set: (e, t) => ({ coffee: true, coffeeCups: (e.coffeeCups || 0) + 1, coffeeLast: t }),
-    show: e => e.coffeeLast ? `${e.coffeeCups || 1}× · zuletzt ${e.coffeeLast}` : null },
-  { k: 'foodTime', l: 'Gegessen', hint: 'letzte Mahlzeit',
-    clear: ['foodTime'],
+    show: e => e.coffeeLast ? `${e.coffeeCups || 1}× · zuletzt ${e.coffeeLast}` : null,
+    pick: { field: 'coffeeType', opts: COFFEE_TYPES } },
+  { k: 'foodTime', l: 'Gegessen', hint: 'letzte Mahlzeit', wide: true,
+    clear: ['foodTime', 'foodType'],
     set: () => ({}), setTime: 'foodTime',
-    show: e => e.foodTime || null },
+    show: e => e.foodTime || null,
+    pick: { field: 'foodType', opts: FOOD_TYPES } },
   { k: 'alcLast', l: 'Alkohol', hint: 'eine Einheit',
     clear: ['alcohol', 'alcUnits', 'alcLast'],
     set: (e, t) => ({ alcohol: true, alcUnits: (e.alcUnits || 0) + 1, alcLast: t }),
@@ -4007,12 +4047,8 @@ const LIVE = [
     clear: ['sport', 'sportEnd'],
     set: (e, t) => ({ sport: true, sportEnd: t }),
     show: e => e.sportEnd || null },
-  { k: 'saunaInfusion', l: 'Aufguss', hint: 'gerade vorbei',
-    clear: ['saunaInfusion'],
-    set: (e, t) => ({ sauna: true, saunaInfusion: t }),
-    show: e => e.saunaInfusion || null },
   { k: 'saunaEnd', l: 'Sauna beendet', hint: 'letzter Gang',
-    clear: ['sauna', 'saunaEnd', 'saunaInfusion'],
+    clear: ['sauna', 'saunaEnd'],
     set: (e, t) => ({ sauna: true, saunaEnd: t }),
     show: e => e.saunaEnd || null },
   { k: 'mastTime', l: 'Masturbiert', hint: 'gerade eben',
@@ -4067,12 +4103,17 @@ function renderSleepLive() {
 
   const cards = LIVE.map(a => {
     const v = a.show(e);
-    return `<div class="lv ${v ? 'set' : ''}">
+    // The tap stamps the time first; the choice can follow at leisure
+    const picker = (v && a.pick) ? `<div class="lv-pick">${a.pick.opts.map(op =>
+      `<button class="${e[a.pick.field] === op.v ? 'on' : ''}"
+         onclick="liveToggle('${a.pick.field}','${op.v}')">${esc(op.l)}</button>`).join('')}</div>` : '';
+    return `<div class="lv ${v ? 'set' : ''} ${a.wide ? 'wide' : ''}">
       <button class="lv-hit" onclick="liveTap('${a.k}')">
         <span class="lv-l">${esc(a.l)}</span>
         <span class="lv-v">${v ? esc(v) : esc(a.hint)}</span>
       </button>
       ${v ? `<button class="lv-x" onclick="liveClear('${a.k}')" title="Zurücksetzen">✕</button>` : ''}
+      ${picker}
     </div>`;
   }).join('');
 
@@ -4112,11 +4153,6 @@ function renderSleepLive() {
     <div class="lv-grid">${cards}</div>
 
     <h3 class="sleep-h3">Einordnen</h3>
-    ${e.foodTime ? `<div class="sleep-row">
-      <div class="sleep-lbl">Art des Essens</div>
-      <div class="sleep-ctl">${seg('foodType', [
-        { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }])}</div>
-    </div>` : ''}
     <div class="sleep-row">
       <div class="sleep-lbl">Dienst</div>
       <div class="sleep-ctl">${seg('shift', SHIFTS)}</div>
@@ -4215,8 +4251,7 @@ function renderSleep() {
 
     <h3 class="sleep-h3">Essen</h3>
     ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
-    ${row('Art', seg('foodType', [
-        { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }]))}
+    ${row('Art', seg('foodType', FOOD_TYPES))}
 
     <h3 class="sleep-h3">Kaffee</h3>
     ${row('Getrunken', seg('coffee', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
@@ -4226,7 +4261,8 @@ function renderSleep() {
           <span>${e.coffeeCups || 0}</span>
           <button onclick="dayCups('${key}','coffeeCups',1)">+</button>
         </div>`)}
-      ${row('Letzte Tasse', timeField('coffeeLast', e.coffeeLast))}`}
+      ${row('Letzte Tasse', timeField('coffeeLast', e.coffeeLast))}
+      ${row('Art', seg('coffeeType', COFFEE_TYPES))}`}
 
     <h3 class="sleep-h3">Alkohol</h3>
     ${row('Getrunken', seg('alcohol', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
@@ -4246,9 +4282,7 @@ function renderSleep() {
 
     <h3 class="sleep-h3">Sauna</h3>
     ${row('In der Sauna', seg('sauna', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.sauna !== true ? '' : `
-      ${row('Letzter Aufguss', timeField('saunaInfusion', e.saunaInfusion))}
-      ${row('Letzter Gang beendet', timeField('saunaEnd', e.saunaEnd))}`}
+    ${e.sauna !== true ? '' : row('Letzter Gang beendet', timeField('saunaEnd', e.saunaEnd))}
 
     <h3 class="sleep-h3">Vor dem Schlafen</h3>
     ${row('Brainwork', seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]),
@@ -4330,8 +4364,6 @@ const WINDOWS = [
     edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Sport' },
   { k: 'saunaEnd', l: 'Letzter Saunagang', off: e => e.sauna === false,
     edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
-  { k: 'saunaInfusion', l: 'Letzter Aufguss', off: e => e.sauna === false,
-    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
   { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
     edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' }
 ];
@@ -4340,8 +4372,8 @@ const WINDOWS = [
 const GROUPS = [
   { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
   { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
-  { l: 'Essen',     get: e => e.foodType,  levels: [
-      { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }] },
+  { l: 'Art des Essens', get: e => e.foodType,   levels: FOOD_TYPES },
+  { l: 'Art des Kaffees', get: e => e.coffeeType, levels: COFFEE_TYPES },
   { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
 ];
 
@@ -4365,7 +4397,9 @@ const COMBOS = [
   { k: 'brain', l: 'Brainwork davor',
     on: e => e.brainwork === true ? true : e.brainwork === false ? false : null },
   { k: 'nacht', l: 'Nachtdienst',
-    on: e => e.shift ? e.shift === 'nacht' : null }
+    on: e => e.shift ? e.shift === 'nacht' : null },
+  { k: 'spaet', l: 'Spätdienst',
+    on: e => e.shift ? e.shift === 'spaet' : null }
 ];
 function nearBed(e, field, mins) {
   const g = gapToBed(e, field);
