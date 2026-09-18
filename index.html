@@ -991,6 +991,34 @@
     .wblock-s.thin { color: var(--faint); font-weight: 400; }
     .wbar { display: grid; grid-template-columns: 96px 1fr 74px; align-items: center; gap: 8px; }
     .dstrip { width: 100%; height: auto; display: block; overflow: visible; }
+    .sblock { width: 100%; height: auto; display: block; margin-top: 4px; }
+    .sxaxis {
+      display: flex; justify-content: space-between;
+      margin: 1px 3% 0 17%;
+      font-size: 9px; color: var(--faint); font-variant-numeric: tabular-nums;
+    }
+    .sxlbl {
+      font-size: 10px; color: var(--muted); text-align: center;
+      margin-top: 3px; display: flex; align-items: center;
+      justify-content: center; gap: 4px; flex-wrap: wrap;
+    }
+    .sxlbl .dash {
+      display: inline-block; width: 14px; height: 0;
+      border-top: 1.5px dashed var(--muted); vertical-align: middle;
+    }
+    .sbins {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line-soft);
+    }
+    .sbins span {
+      flex: 1; min-width: 78px;
+      font-size: 10px; color: var(--muted); line-height: 1.35;
+    }
+    .sbins b {
+      display: block; font-family: "Space Grotesk"; font-size: 12px;
+      color: var(--ink); font-variant-numeric: tabular-nums;
+    }
+    .sbins i { font-style: normal; color: var(--faint); }
     .wscale {
       display: flex; justify-content: space-between;
       font-size: 9px; color: var(--faint);
@@ -4035,10 +4063,13 @@ function gapToBed(e, field) {
 
 const OUTCOMES = [
   { k: 'span', l: 'Einschlafphase', lowGood: true,
-    get: r => r.span, fmt: v => fmtSpan(v) },
+    get: r => r.span, fmt: v => fmtSpan(v),
+    // Axis ticks need to fit in a narrow margin, so 2:35 rather than 2 h 35 min
+    tick: v => { const m = Math.round(v); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; } },
   { k: 'quality', l: 'Nachtgefühl', lowGood: false,
     get: r => r.e.quality ? QUAL_SCORE[r.e.quality] : null,
-    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2) }
+    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2),
+    tick: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) }
 ];
 const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
 function setStatsY(k) { statsY = k; renderStats(); }
@@ -4227,85 +4258,132 @@ function compareSection(rows) {
       <p class="stats-sub">Dafür braucht es mindestens sechs auswertbare Nächte.</p>`;
   }
   const overall = median(use.map(r => O.get(r)));
-  const allVals = use.map(r => O.get(r));
-  const xMin = Math.min(...allVals), xMax = Math.max(...allVals);
-  const dom = Math.max(xMax, xMin + 1) * 1.04;
+  const yDom = Math.max(...use.map(r => O.get(r))) * 1.06 || 1;
 
-  const build = (title, cells, isShift) => {
-    const stat = cells.filter(c => c.rows.length > 0)
-      .map(c => ({ ...c, n: c.rows.length, med: median(c.rows.map(r => O.get(r))) }));
-    if (stat.length < 2) return null;
+  const blocks = [];
+
+  // Timed factors: the whole night plotted against how long before it happened
+  WINDOWS.forEach(w => {
+    const pts = [], skipped = [];
+    use.forEach(r => {
+      if (w.none && w.off(r.e)) { skipped.push(O.get(r)); return; }
+      const g = gapToBed(r.e, w.k);
+      if (g !== null) pts.push({ x: g / 60, y: O.get(r), d: r.d, e: r.e });
+    });
+    if (pts.length < 4) return;
+
+    // Bin medians still go underneath as plain numbers
+    const bins = w.labels.map((l, i) => ({ l, v: pts.filter(p => {
+      const h = p.x;
+      return i === 0 ? h < w.edges[0] : i === 1 ? (h >= w.edges[0] && h < w.edges[1]) : h >= w.edges[1];
+    }).map(p => p.y) })).filter(b => b.v.length);
+    const spread = bins.length > 1
+      ? Math.max(...bins.map(b => median(b.v))) - Math.min(...bins.map(b => median(b.v))) : 0;
+
+    blocks.push({
+      spread, thin: pts.length < MIN_BIN,
+      html: scatterBlock(w, pts, skipped, yDom, overall, O, bins)
+    });
+  });
+
+  // Factors without a time of their own keep the stacked dots
+  GROUPS.forEach(g => {
+    const cells = g.levels.map(lv => ({ l: lv.l, rows: use.filter(r => g.get(r.e) === lv.v) }))
+      .filter(c => c.rows.length > 0);
+    if (cells.length < 2) return;
+    const stat = cells.map(c => ({ ...c, n: c.rows.length, med: median(c.rows.map(r => O.get(r))) }));
     const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
-    const spread = hi - lo;
-    const minN = Math.min(...stat.map(s => s.n));
-    const thin = minN < MIN_BIN;
-
-
     const bars = stat.map(s => {
       const good = O.lowGood ? s.med <= overall : s.med >= overall;
       const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
       return `<div class="wbar">
         <span class="wbar-l">${esc(s.l)}</span>
-        ${dotStrip(s.rows.map(r => O.get(r)), dom, c)}
+        ${dotStrip(s.rows.map(r => O.get(r)), yDom, c)}
         <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">${s.n} Nächte</span></span>
       </div>`;
     }).join('');
-
-    return { spread, thin, html: `
-      <div class="wblock">
-        <div class="wblock-head">
-          <span class="wblock-t">${esc(title)}</span>
-          <span class="wblock-s ${thin ? 'thin' : ''}">${thin
-            ? `kleinste Gruppe ${minN} Nächte`
-            : `Unterschied ${esc(O.fmt(spread))}`}</span>
-        </div>
+    blocks.push({
+      spread: hi - lo, thin: Math.min(...stat.map(s => s.n)) < MIN_BIN,
+      html: `<div class="wblock">
+        <div class="wblock-head"><span class="wblock-t">${esc(g.l)}</span>
+          <span class="wblock-s">Unterschied ${esc(O.fmt(hi - lo))}</span></div>
         ${bars}
-        <div class="wscale"><span>0</span><span>${esc(O.fmt(dom / 2))}</span><span>${esc(O.fmt(dom))}</span></div>
-      </div>` };
-  };
-
-  const blocks = [];
-
-  WINDOWS.forEach(w => {
-    const cells = w.labels.map(l => ({ l, rows: [] }));
-    const none = { l: w.none, rows: [] };
-    use.forEach(r => {
-      if (w.none && w.off(r.e)) { none.rows.push(r); return; }
-      const g = gapToBed(r.e, w.k);
-      if (g === null) return;
-      const h = g / 60;
-      cells[h < w.edges[0] ? 0 : h < w.edges[1] ? 1 : 2].rows.push(r);
-    });
-    const b = build(w.l, w.none ? [...cells, none] : cells);
-    if (b) blocks.push(b);
-  });
-
-  GROUPS.forEach(g => {
-    const b = build(g.l, g.levels.map(lv => ({
-      l: lv.l, rows: use.filter(r => g.get(r.e) === lv.v)
-    })), g.l === 'Dienst');
-    if (b) blocks.push(b);
+        <div class="wscale"><span>0</span><span>${esc(O.fmt(yDom / 2))}</span><span>${esc(O.fmt(yDom))}</span></div>
+      </div>` }); 
   });
 
   if (!blocks.length) {
     return `<h3 class="stats-h3">Vergleich</h3>
-      <p class="stats-sub">Noch keine Faktoren mit genug verschiedenen Ausprägungen.</p>`;
+      <p class="stats-sub">Noch keine Faktoren mit genug Nächten.</p>`;
   }
   blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
 
   return `
     <h3 class="stats-h3">Vergleich</h3>
-    <p class="stats-sub">${esc(O.l)} je Gruppe — die mittlere Nacht, ausgezählt.
-      <span class="sw" style="background:${CH_GOOD}"></span> besser und
-      <span class="sw" style="background:${CH_BAD}"></span> schlechter als dein Median.
-      <b>Ein Punkt ist eine Nacht</b>, der senkrechte Strich die mittlere. Liegen die Punkte
-      zweier Gruppen übereinander, ist der Unterschied nichts wert — trennen sie sich, ist er echt.
-      Zeitangaben zählen ab dem Moment, in dem du die Augen zumachst.</p>
+    <p class="stats-sub">Ein Punkt ist eine Nacht. Waagerecht, wie lange vor dem Augen-zumachen
+      es passiert ist, senkrecht die Einschlafphase dieser Nacht. Die Linie ist der gleitende
+      Mittelwert — wo sie steigt, wird es teuer.</p>
     <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
-    <p class="stats-note">Jede Zahl ist die mittlere Nacht ihrer Gruppe, nichts gerechnet.
-      Jeder Faktor steht für sich. Gruppen unter ${MIN_BIN} Nächten stehen ganz unten und sind
-      noch nicht belastbar. Ob zwei Faktoren bei dir zusammenhängen, siehst du weiter unten
-      unter <b>Kombination</b>.</p>`;
+    <p class="stats-note">Jeder Faktor steht für sich. Ob zwei davon bei dir zusammenhängen,
+      siehst du weiter unten unter <b>Kombination</b>.</p>`;
+}
+
+// Scatter of one timed factor, with a running median through the cloud
+function scatterBlock(w, pts, skipped, yDom, overall, O, bins) {
+  const W = 100, H = 60, L = 17, B = 8, T = 3;
+  const xMax = Math.max(...pts.map(p => p.x), 1) * 1.05;
+  const sx = v => L + (v / xMax) * (W - L - 3);
+  const sy = v => (H - B) - (v / yDom) * (H - B - T);
+
+  // Running median over the nearest neighbours — no curve is invented where
+  // there are no nights, and one outlier cannot drag the line
+  const sorted = [...pts].sort((a, b) => a.x - b.x);
+  const k = Math.max(3, Math.round(sorted.length / 4));
+  const line = sorted.map((_, i) => {
+    const from = Math.max(0, i - (k >> 1)), win = sorted.slice(from, from + k);
+    return { x: sorted[i].x, y: median(win.map(p => p.y)) };
+  });
+  const path = line.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`).join(' ');
+
+  const ticks = [0, yDom / 2, yDom].map(v => `
+    <line x1="${L}" x2="${W}" y1="${sy(v).toFixed(2)}" y2="${sy(v).toFixed(2)}"
+          stroke="var(--line)" stroke-width="0.2"/>
+    <text x="${L - 1.5}" y="${(sy(v) + 1.1).toFixed(2)}" text-anchor="end"
+          font-size="3" fill="var(--muted)">${esc((O.tick || O.fmt)(v))}</text>`).join('');
+
+  const none = skipped.length >= 3 ? median(skipped) : null;
+  const noneLine = none === null ? '' : `
+    <line x1="${L}" x2="${W}" y1="${sy(none).toFixed(2)}" y2="${sy(none).toFixed(2)}"
+          stroke="${CH_MUTE}" stroke-width="0.45" stroke-dasharray="1.6 1.4"/>`;
+
+  const dots = pts.map(p => {
+    const good = O.lowGood ? p.y <= overall : p.y >= overall;
+    return `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.6"
+      fill="${good ? CH_GOOD : CH_BAD}" fill-opacity=".8" stroke="#fff" stroke-width="0.4"
+      ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${p.x.toFixed(1)} Std. vorher · ${esc(O.fmt(p.y))}</title></circle>`;
+  }).join('');
+
+  const xt = [0, xMax / 2, xMax].map(v =>
+    `<span>${v.toFixed(v < 10 ? 1 : 0)}</span>`).join('');
+
+  return `<div class="wblock">
+    <div class="wblock-head">
+      <span class="wblock-t">${esc(w.l)}</span>
+      <span class="wblock-s">${pts.length} Nächte${none !== null ? ` · ${skipped.length} ohne` : ''}</span>
+    </div>
+    <svg class="sblock" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(w.l)}">
+      ${ticks}${noneLine}
+      <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="0.7"
+            stroke-linejoin="round" opacity=".7"/>
+      ${dots}
+    </svg>
+    <div class="sxaxis">${xt}</div>
+    <div class="sxlbl">Stunden vor dem Augen-zumachen${none === null ? ''
+      : ` · <span class="dash"></span> ${esc(w.none)}: ${esc(O.fmt(none))}`}</div>
+    <div class="sbins">${bins.map(b =>
+      `<span><b>${esc(O.fmt(median(b.v)))}</b> ${esc(b.l.replace(' vorher', ''))} <i>${b.v.length}</i></span>`
+    ).join('')}</div>
+  </div>`;
 }
 
 // Two factors at once: the four combinations side by side
