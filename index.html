@@ -1089,6 +1089,69 @@
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
     }
 
+    /* ── Live logging ── */
+    .mode-bar {
+      display: flex; gap: 4px; background: var(--bg);
+      padding: 4px; border-radius: 12px; margin-bottom: 16px;
+    }
+    .mode-bar button {
+      flex: 1; font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--muted); background: transparent; border: none;
+      border-radius: 9px; padding: 9px 4px; cursor: pointer;
+      transition: all .15s ease;
+    }
+    .mode-bar button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+    .live-day {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 12px;
+    }
+    .live-day span {
+      font-family: "Space Grotesk"; font-weight: 600; font-size: 16px;
+      letter-spacing: -.01em;
+    }
+    .live-day button {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; padding: 8px 14px;
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--muted); cursor: pointer;
+    }
+
+    .lv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .lv { position: relative; }
+    .lv-hit {
+      width: 100%; text-align: left; cursor: pointer;
+      font-family: inherit;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 13px; padding: 14px 13px;
+      display: flex; flex-direction: column; gap: 3px;
+      transition: transform .09s ease, border-color .15s ease;
+    }
+    .lv-hit:active { transform: scale(.97); }
+    .lv-l { font-size: 14px; font-weight: 600; color: var(--ink); }
+    .lv-v { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+    .lv.set .lv-hit { border-color: var(--accent); background: var(--accent-tint); }
+    .lv.set .lv-v { color: var(--accent); font-weight: 600; }
+    .lv-x {
+      position: absolute; top: 6px; right: 6px;
+      width: 24px; height: 24px; border-radius: 7px;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--faint); font-size: 12px; line-height: 1;
+    }
+    .lv-x:hover { color: var(--danger); background: var(--surface); }
+
+    .lv-sleep {
+      width: 100%; margin-top: 22px; cursor: pointer; font-family: inherit;
+      background: var(--accent); border: none; border-radius: 15px;
+      padding: 19px 16px; color: #fff;
+      display: flex; flex-direction: column; gap: 4px;
+      transition: transform .09s ease;
+    }
+    .lv-sleep:active { transform: scale(.985); }
+    .lv-sleep-l { font-family: "Space Grotesk"; font-size: 17px; font-weight: 700; }
+    .lv-sleep-v { font-size: 11.5px; opacity: .8; font-variant-numeric: tabular-nums; }
+    .lv-sleep.set { background: var(--ink); }
+
     /* ── Day log ── */
     .sleep-h3 {
       font-size: 10.5px;
@@ -3909,8 +3972,180 @@ async function clearDemo() {
   showToast('Beispieltage entfernt');
 }
 
+// ── Live logging ───────────────────────────────────────────────────────────
+// Tapping records the current clock time, so nothing has to be reconstructed
+// in bed later. The logbook day rolls over at 05:00, not at midnight: a tap
+// at 00:30 belongs to the day whose evening it still is.
+let sleepMode = 'live';     // 'live' | 'form'
+let liveDay   = null;       // null = whichever day the clock says
+
+function logDayKey() {
+  const d = new Date();
+  if (d.getHours() < 5) d.setDate(d.getDate() - 1);
+  return dayKey(d);
+}
+const liveKey = () => liveDay || logDayKey();
+const nowHHMM = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+const LIVE = [
+  { k: 'coffeeLast', l: 'Kaffee', hint: 'Tasse getrunken',
+    clear: ['coffee', 'coffeeCups', 'coffeeLast'],
+    set: (e, t) => ({ coffee: true, coffeeCups: (e.coffeeCups || 0) + 1, coffeeLast: t }),
+    show: e => e.coffeeLast ? `${e.coffeeCups || 1}× · zuletzt ${e.coffeeLast}` : null },
+  { k: 'foodTime', l: 'Gegessen', hint: 'letzte Mahlzeit',
+    clear: ['foodTime'],
+    set: () => ({}), setTime: 'foodTime',
+    show: e => e.foodTime || null },
+  { k: 'alcLast', l: 'Alkohol', hint: 'eine Einheit',
+    clear: ['alcohol', 'alcUnits', 'alcLast'],
+    set: (e, t) => ({ alcohol: true, alcUnits: (e.alcUnits || 0) + 1, alcLast: t }),
+    show: e => e.alcLast ? `${e.alcUnits || 1}× · zuletzt ${e.alcLast}` : null },
+  { k: 'sportEnd', l: 'Sport beendet', hint: 'gerade aufgehört',
+    clear: ['sport', 'sportEnd'],
+    set: (e, t) => ({ sport: true, sportEnd: t }),
+    show: e => e.sportEnd || null },
+  { k: 'saunaInfusion', l: 'Aufguss', hint: 'gerade vorbei',
+    clear: ['saunaInfusion'],
+    set: (e, t) => ({ sauna: true, saunaInfusion: t }),
+    show: e => e.saunaInfusion || null },
+  { k: 'saunaEnd', l: 'Sauna beendet', hint: 'letzter Gang',
+    clear: ['sauna', 'saunaEnd', 'saunaInfusion'],
+    set: (e, t) => ({ sauna: true, saunaEnd: t }),
+    show: e => e.saunaEnd || null },
+  { k: 'mastTime', l: 'Masturbiert', hint: 'gerade eben',
+    clear: ['mast', 'mastTime'],
+    set: (e, t) => ({ mast: true, mastTime: t }),
+    show: e => e.mastTime || null }
+];
+
+async function liveTap(k) {
+  const act = LIVE.find(a => a.k === k);
+  if (!act) return;
+  const key = liveKey(), t = nowHHMM();
+  const patch = act.setTime ? { [act.setTime]: t } : act.set(getDay(key), t);
+  Object.entries(patch).forEach(([f, v]) => writeDay(key, f, v));
+  await persistDaylog();
+  renderSleep();
+  showToast(`${act.l} · ${t}`);
+}
+
+async function liveClear(k) {
+  const act = LIVE.find(a => a.k === k);
+  if (!act) return;
+  const key = liveKey();
+  act.clear.forEach(f => writeDay(key, f, null));
+  await persistDaylog();
+  renderSleep();
+}
+
+async function liveSleep() {
+  const key = liveKey(), t = nowHHMM();
+  writeDay(key, 'sleepAt', t);
+  await persistDaylog();
+  renderSleep();
+  showToast(`Augen zu · ${t}`);
+}
+
+async function liveToggle(field, value) {
+  const key = liveKey();
+  writeDay(key, field, getDay(key)[field] === value ? null : value);
+  await persistDaylog();
+  renderSleep();
+}
+
+function setSleepMode(m) { sleepMode = m; renderSleep(); }
+function liveGo(n) { liveDay = shiftDay(liveKey(), n); renderSleep(); }
+function liveNow() { liveDay = null; renderSleep(); }
+
+function renderSleepLive() {
+  const key = liveKey();
+  const e = getDay(key);
+  const auto = key === logDayKey();
+
+  const cards = LIVE.map(a => {
+    const v = a.show(e);
+    return `<div class="lv ${v ? 'set' : ''}">
+      <button class="lv-hit" onclick="liveTap('${a.k}')">
+        <span class="lv-l">${esc(a.l)}</span>
+        <span class="lv-v">${v ? esc(v) : esc(a.hint)}</span>
+      </button>
+      ${v ? `<button class="lv-x" onclick="liveClear('${a.k}')" title="Zurücksetzen">✕</button>` : ''}
+    </div>`;
+  }).join('');
+
+  const seg = (field, opts) => opts.map(o =>
+    `<button class="seg-btn ${e[field] === o.v ? 'on' : ''}"
+       onclick="liveToggle('${field}',${typeof o.v === 'string' ? `'${o.v}'` : o.v})">${o.l}</button>`
+  ).join('');
+
+  // What is still missing from yesterday, asked where it is easy to answer
+  const prevKey = shiftDay(key, -1), prev = getDay(prevKey);
+  const prevUsed = Object.keys(prev).length > 0;
+  const nudges = [];
+  if (prevUsed && !prev.restingHr) nudges.push(`
+    <div class="sleep-nudge">
+      <div class="sleep-nudge-txt"><b>Ruhepuls von gestern</b>
+        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span></div>
+      <input type="time" onchange="setDayTime('${prevKey}','restingHr',this.value)">
+    </div>`);
+  if (prevUsed && !prev.quality) nudges.push(`
+    <div class="sleep-nudge">
+      <div class="sleep-nudge-txt"><b>Wie war die Nacht?</b>
+        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span></div>
+      <span class="nudge-seg">${QUALS.map(q =>
+        `<button class="seg-btn" onclick="setDay('${prevKey}','quality','${q.v}')">${q.l}</button>`).join('')}</span>
+    </div>`);
+
+  return `
+    <div class="live-day">
+      <button onclick="liveGo(-1)">‹</button>
+      <span>${esc(dayLabel(key))}${auto ? '' : ' · nicht heute'}</span>
+      <button onclick="liveGo(1)">›</button>
+    </div>
+    ${auto ? '' : `<button class="sleep-today" onclick="liveNow()">Zurück zu heute</button>`}
+    ${nudges.join('')}
+
+    <h3 class="sleep-h3">Tagsüber</h3>
+    <div class="lv-grid">${cards}</div>
+
+    <h3 class="sleep-h3">Einordnen</h3>
+    ${e.foodTime ? `<div class="sleep-row">
+      <div class="sleep-lbl">Art des Essens</div>
+      <div class="sleep-ctl">${seg('foodType', [
+        { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }])}</div>
+    </div>` : ''}
+    <div class="sleep-row">
+      <div class="sleep-lbl">Dienst</div>
+      <div class="sleep-ctl">${seg('shift', SHIFTS)}</div>
+    </div>
+    <div class="sleep-row">
+      <div class="sleep-lbl">Brainwork<span class="sleep-hint">in der Stunde vor dem Bett</span></div>
+      <div class="sleep-ctl">${seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }])}</div>
+    </div>
+    <div class="sleep-row">
+      <div class="sleep-lbl">Entspannt ins Bett</div>
+      <div class="sleep-ctl">${seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }])}</div>
+    </div>
+
+    <button class="lv-sleep ${e.sleepAt ? 'set' : ''}" onclick="liveSleep()">
+      <span class="lv-sleep-l">Augen zu · Handy weg</span>
+      <span class="lv-sleep-v">${e.sleepAt
+        ? `${esc(e.sleepAt)} — nochmal tippen zum Korrigieren`
+        : 'Jetzt tippen, wenn du schlafen gehst'}</span>
+    </button>`;
+}
+
 function renderSleep() {
   const host = $("sleep");
+  const modeBar = `<div class="mode-bar">
+    <button class="${sleepMode === 'live' ? 'on' : ''}" onclick="setSleepMode('live')">Jetzt</button>
+    <button class="${sleepMode === 'form' ? 'on' : ''}" onclick="setSleepMode('form')">Nachtragen</button>
+  </div>`;
+  if (sleepMode === 'live') { host.innerHTML = modeBar + renderSleepLive(); return; }
+
   const key  = sleepDay || todayKey();
   const e    = getDay(key);
   const isToday  = key === todayKey();
@@ -3957,7 +4192,7 @@ function renderSleep() {
 
   const hist = sleepHistHtml(key);
 
-  host.innerHTML = `
+  host.innerHTML = modeBar + `
     <div class="tx-month-nav">
       <button onclick="sleepGo(-1)">‹</button>
       <span class="tx-month-label">${esc(dayLabel(key))}${isToday ? ' · heute' : ''}</span>
