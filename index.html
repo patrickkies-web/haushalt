@@ -3656,6 +3656,12 @@ const QUALS = [
 ];
 const QUAL_SCORE = { gut: 1, mittel: 0, schlecht: -1 };
 
+const SHIFTS = [
+  { v: 'normal', l: 'Normal' },
+  { v: 'spaet',  l: 'Spät' },
+  { v: 'nacht',  l: 'Nacht' }
+];
+
 function sleepGo(n)   { sleepDay = shiftDay(sleepDay || todayKey(), n); renderSleep(); }
 function sleepToday() { sleepDay = null; renderSleep(); }
 
@@ -3764,6 +3770,9 @@ function renderSleep() {
       : `<div class="sleep-span">${esc(fmtSpan(restSpan(key, e)))} nach dem Zubettgehen</div>`}</div>
     ${row('Nacht bewertet', seg('quality', QUALS), 'am Morgen danach')}
 
+    <h3 class="sleep-h3">Tag</h3>
+    ${row('Dienst', seg('shift', SHIFTS))}
+
     <h3 class="sleep-h3">Essen</h3>
     ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
     ${row('Art', seg('foodType', [
@@ -3794,6 +3803,12 @@ function renderSleep() {
     ${e.sport !== true ? '' : row('Sport beendet', timeField('sportEnd', e.sportEnd))}
     ${row('Masturbiert', seg('mast', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
     ${e.mast === true ? row('Uhrzeit', timeField('mastTime', e.mastTime)) : ''}
+
+    <h3 class="sleep-h3">Sauna</h3>
+    ${row('In der Sauna', seg('sauna', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
+    ${e.sauna !== true ? '' : `
+      ${row('Letzter Aufguss', timeField('saunaInfusion', e.saunaInfusion))}
+      ${row('Letzter Gang beendet', timeField('saunaEnd', e.saunaEnd))}`}
 
     <h3 class="sleep-h3">Vor dem Schlafen</h3>
     ${row('Brainwork', seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]),
@@ -3880,6 +3895,13 @@ const sportAtBed = e => {
   const g = gapToBed(e, 'sportEnd');
   return g === null ? null : Math.pow(0.5, g / 60 / 3);
 };
+// Sauna: core temperature needs roughly 1.5 h to come back down
+const saunaAtBed = e => {
+  if (e.sauna === false) return 0;
+  if (e.sauna !== true) return null;
+  const g = gapToBed(e, 'saunaEnd');
+  return g === null ? null : Math.pow(0.5, g / 60 / 1.5);
+};
 const mastAtBed = e => {
   if (e.mast === false) return 0;
   if (e.mast !== true) return null;
@@ -3899,7 +3921,20 @@ const PRED = [
   { k: 'alc',  l: 'Restalkohol', u: 'je Einheit', bin: false, get: alcoholAtBed },
   { k: 'food', l: 'Verdauungslast', u: 'je Einheit', bin: false, get: foodAtBed },
   { k: 'sport',l: 'Sport-Nachwirkung', u: 'je Einheit', bin: false, get: sportAtBed },
-  { k: 'mast', l: 'Masturbation', u: 'je Einheit', bin: false, get: mastAtBed }
+  { k: 'mast', l: 'Masturbation', u: 'je Einheit', bin: false, get: mastAtBed },
+  { k: 'sauna', l: 'Sauna-Nachwärme', u: 'je Einheit', bin: false, get: saunaAtBed },
+  { k: 'spaet', l: 'Spätdienst', u: 'statt Normaldienst', bin: true,
+    get: e => e.shift ? (e.shift === 'spaet' ? 1 : 0) : null },
+  { k: 'nacht', l: 'Nachtdienst', u: 'statt Normaldienst', bin: true,
+    get: e => e.shift ? (e.shift === 'nacht' ? 1 : 0) : null }
+];
+
+// Factors without a time of their own — compared level against level
+const GROUPS = [
+  { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
+  { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
+  { l: 'Essen',     get: e => e.foodType,  levels: [
+      { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }] }
 ];
 
 // Windows answer "by when?" — binned by distance to bedtime, plus a bar for
@@ -3914,7 +3949,11 @@ const WINDOWS = [
   { k: 'sportEnd', l: 'Sport-Ende', off: e => e.sport === false,
     edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Sport' },
   { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
-    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' }
+    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' },
+  { k: 'saunaEnd', l: 'Letzter Saunagang', off: e => e.sauna === false,
+    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
+  { k: 'saunaInfusion', l: 'Letzter Aufguss', off: e => e.sauna === false,
+    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' }
 ];
 
 const OUTCOMES = [
@@ -3979,8 +4018,12 @@ function fitModel(rows) {
     const mean = seen.reduce((a, v) => a + v, 0) / (seen.length || 1);
     const vals = raw.map(v => (v === null || v === undefined) ? mean : v);
     const sd = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / n);
-    return { pd, vals, mean, sd, cover: seen.length / n };
-  }).filter(c => c.sd > 1e-9 && c.cover >= 0.7);   // imputing more than 30 % fabricates data
+    const distinct = new Set(vals.map(v => v.toFixed(4))).size;
+    return { pd, vals, mean, sd, distinct, cover: seen.length / n };
+  }).filter(c =>
+    c.cover >= 0.7 &&                                  // imputing more than 30 % fabricates data
+    c.sd > 1e-9 &&
+    c.distinct >= (c.pd.bin ? 2 : 3));                 // a near-constant column cannot be estimated
 
   cols.sort((a, b) => b.cover - a.cover);
   while (cols.length > Math.max(2, n - 4)) cols.pop();
@@ -4004,12 +4047,21 @@ function fitModel(rows) {
     if (bb) for (let j = 0; j < p; j++) boot[j].push(bb[j] / cols[j].sd);
   }
 
+  // A coefficient "per unit" is unreadable for a composite index whose unit is
+  // far larger than the range actually observed. Report the effect of moving
+  // across the real spread instead: 10th to 90th percentile, or 0 to 1 binary.
   const terms = cols.map((c, j) => {
-    const s = boot[j].slice().sort((a, b) => a - b);
-    const est = beta[j] / c.sd;
+    const sorted = [...c.vals].sort((a, b) => a - b);
+    const span = c.pd.bin ? 1 : (quantile(sorted, 0.9) - quantile(sorted, 0.1));
+    const scale = (span > 1e-9 ? span : 1) / c.sd;
+    const s = boot[j].map(v => v * (span > 1e-9 ? span : 1)).sort((a, b) => a - b);
+    const est = beta[j] * scale;
     const lo = quantile(s, CIQ), hi = quantile(s, 1 - CIQ);
     const sd = Math.sqrt(s.reduce((a, v) => a + (v - est) ** 2, 0) / (s.length || 1));
+    const fmtN = v => Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1);
     return { ...c.pd, est, lo, hi, cover: c.cover,
+             u: c.pd.bin ? c.pd.u
+                : `${fmtN(quantile(sorted, 0.1))} → ${fmtN(quantile(sorted, 0.9))}`,
              solid: lo !== null && hi !== null && lo * hi > 0,
              z: sd > 1e-9 ? Math.abs(est) / sd : 0 };
   });
@@ -4059,7 +4111,7 @@ function renderStats() {
   ).join('')}</div>`;
 
   host.innerHTML = kpi + ySwitch + timelineChart(rows, med)
-    + feelVsBody(rows) + windowSection(rows) + modelSection(rows, N);
+    + feelVsBody(rows) + windowSection(rows) + groupSection(rows) + modelSection(rows, N);
 }
 
 // ── Does the gut feeling match the body? ──
@@ -4182,6 +4234,54 @@ function windowSection(rows) {
       Fenster unter ${MIN_BIN} Nächten sind noch nicht belastbar.</p>`;
 }
 
+// Factors that have no time of their own still deserve a plain comparison
+function groupSection(rows) {
+  const O = outcome();
+  const use = rows.filter(r => O.get(r) !== null);
+  const all = use.map(r => O.get(r));
+  if (all.length < 6) return '';
+  const overall = median(all);
+
+  const blocks = GROUPS.map(g => {
+    const cells = g.levels.map(lv => ({
+      l: lv.l, v: use.filter(r => g.get(r.e) === lv.v).map(r => O.get(r))
+    })).filter(c => c.v.length > 0);
+    if (cells.length < 2) return null;
+    const stat = cells.map(c => ({ ...c, n: c.v.length, med: median(c.v) }));
+    const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
+    const minN = Math.min(...stat.map(s => s.n));
+    const bars = stat.map(s => {
+      const good = O.lowGood ? s.med <= overall : s.med >= overall;
+      const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
+      const rel = hi - lo < 1e-9 ? 50 : ((s.med - lo) / (hi - lo)) * 78 + 18;
+      return `<div class="wbar">
+        <span class="wbar-l">${esc(s.l)}</span>
+        <span class="wbar-track"><span class="wbar-fill" style="width:${rel.toFixed(1)}%;background:${c}"></span></span>
+        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">n=${s.n}</span></span>
+      </div>`;
+    }).join('');
+    return { spread: hi - lo, thin: minN < MIN_BIN, html: `
+      <div class="wblock">
+        <div class="wblock-head">
+          <span class="wblock-t">${esc(g.l)}</span>
+          <span class="wblock-s ${minN < MIN_BIN ? 'thin' : ''}">${minN < MIN_BIN
+            ? `kleinste Gruppe n=${minN}` : `Unterschied ${esc(O.fmt(hi - lo))}`}</span>
+        </div>${bars}
+      </div>` };
+  }).filter(Boolean);
+  if (!blocks.length) return '';
+  blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
+
+  return `
+    <h3 class="stats-h3">Umstände ohne Uhrzeit</h3>
+    <p class="stats-sub">${esc(O.l)} je Gruppe, ebenfalls unbereinigt.</p>
+    <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
+    <p class="stats-note">Beim <b>Nachtdienst</b> ist Vorsicht angebracht: da verschiebt sich dein
+      ganzer Rhythmus, die Nacht ist also physiologisch keine vergleichbare Nacht. Wenn sich dort
+      genug Daten sammeln, lohnt es sich, Nachtdienste getrennt zu betrachten statt sie
+      mitzumitteln.</p>`;
+}
+
 function modelSection(rows, N) {
   const O = outcome();
   const m = fitModel(rows);
@@ -4227,8 +4327,10 @@ function modelSection(rows, N) {
       ? `<b>${solid.length} von ${m.terms.length}</b> Faktoren sind durch deine Daten gedeckt.`
       : `<b>Kein Faktor</b> ist bisher gedeckt — bei ${m.n} Nächten heißt das „noch nicht
          unterscheidbar", nicht „kein Effekt".`}
-      Koffein zerfällt mit 5 Std. Halbwertszeit, Alkohol linear mit 1 Einheit je Stunde,
-      Verdauungslast mit 3 Std. — die Werte sind also Belastung <i>zum Zubettgehen</i>, nicht Menge.
+      Die Zahl ist der Effekt über deine <b>tatsächlich beobachtete Spanne</b> (unter der
+      Bezeichnung steht sie), nicht je abstrakter Einheit. Koffein zerfällt mit 5 Std.
+      Halbwertszeit, Alkohol linear mit 1 Einheit je Stunde, Verdauungslast und Sauna-Nachwärme
+      mit 3 bzw. 1,5 Std. — die Werte sind Belastung <i>zum Zubettgehen</i>, nicht Menge.
       „Entspannt ins Bett" fehlt bewusst: es misst denselben Zustand wie der Ruhepuls und würde
       die echten Ursachen verdecken.</p>`;
 }
