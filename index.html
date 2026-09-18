@@ -4003,12 +4003,6 @@ function gapToBed(e, field) {
   if (d < 0) d += 1440;
   return d > 20 * 60 ? null : d;
 }
-function bedOffset(e) {
-  if (!e.sleepAt) return null;
-  let d = minsOf(e.sleepAt) - 22 * 60;
-  if (d < -720) d += 1440;
-  return d;
-}
 
 // ── Physiological load at bedtime ──
 // Caffeine: half-life about 5 h, so a cup at noon is largely gone by 23:00.
@@ -4055,8 +4049,6 @@ const mastAtBed = e => {
 // the same arousal the resting heart rate measures, so using it as a predictor
 // would absorb variance belonging to the real causes.
 const PRED = [
-  { k: 'bed',  l: 'Später ins Bett', u: 'je Stunde', bin: false,
-    get: e => { const b = bedOffset(e); return b === null ? null : b / 60; } },
   { k: 'brain', l: 'Brainwork davor', u: 'ja statt nein', bin: true,
     get: e => e.brainwork === true ? 1 : e.brainwork === false ? 0 : null },
   { k: 'caf',  l: 'Restkoffein', u: 'je Tassen-Äquivalent', bin: false, get: caffeineAtBed },
@@ -4419,10 +4411,8 @@ function groupSection(rows) {
     <h3 class="stats-h3">Umstände ohne Uhrzeit</h3>
     <p class="stats-sub">${esc(O.l)} je Gruppe, ebenfalls unbereinigt.</p>
     <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
-    <p class="stats-note">Beim <b>Nachtdienst</b> ist Vorsicht angebracht: da verschiebt sich dein
-      ganzer Rhythmus, die Nacht ist also physiologisch keine vergleichbare Nacht. Wenn sich dort
-      genug Daten sammeln, lohnt es sich, Nachtdienste getrennt zu betrachten statt sie
-      mitzumitteln.</p>`;
+    <p class="stats-note">Der Dienst zählt hier wie jeder andere Faktor. Die Zielgröße ist immer
+      dieselbe Zeitspanne — Augen zu bis Ruhepuls — egal, zu welcher Tageszeit sie beginnt.</p>`;
 }
 
 function modelSection(rows, N) {
@@ -4470,6 +4460,8 @@ function modelSection(rows, N) {
       ? `<b>${solid.length} von ${m.terms.length}</b> Faktoren sind durch deine Daten gedeckt.`
       : `<b>Kein Faktor</b> ist bisher gedeckt — bei ${m.n} Nächten heißt das „noch nicht
          unterscheidbar", nicht „kein Effekt".`}
+      Alle Faktoren sind <b>relativ zum Augen-zu-Zeitpunkt</b> gerechnet, nie gegen die Uhrzeit —
+      eine Tasse sechs Stunden vor dem Einschlafen zählt gleich, ob das um 23 Uhr oder um 7 Uhr war.
       Die Zahl ist der Effekt über deine <b>tatsächlich beobachtete Spanne</b> (unter der
       Bezeichnung steht sie), nicht je abstrakter Einheit. Koffein zerfällt mit 5 Std.
       Halbwertszeit, Alkohol linear mit 1 Einheit je Stunde, Verdauungslast und Sauna-Nachwärme
