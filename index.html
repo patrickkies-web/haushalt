@@ -4040,10 +4040,12 @@ const GROUPS = [
   { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
 ];
 
-// Night shifts push every span up, so a group that happens to hold most of
-// them looks worse for reasons that have nothing to do with the factor. This
-// just counts them per group — no test, no threshold on the numbers
-// themselves, only on how lopsided the split is.
+// Every value here is already measured against lights-out, so a five-hour gap
+// is a five-hour gap whatever the shift. The point of this check is different:
+// when a group holds nearly all the night shifts, the data contains no night
+// where the two differ, so nothing can tell them apart. It counts, and where
+// there are enough nights outside the night shift, it simply redoes the
+// comparison without them.
 function shiftSkew(stat, fullSpread, O) {
   const parts = stat.filter(s => s.n >= 3).map(s => ({
     l: s.l, n: s.n, nacht: s.rows.filter(r => r.e.shift === 'nacht').length
@@ -4057,15 +4059,16 @@ function shiftSkew(stat, fullSpread, O) {
 
   // If enough normal-shift nights remain in at least two groups, say what is
   // left of the difference once only those are counted.
-  let rest = null;
+  let rest = null, restN = 0;
   const sub = stat
-    .map(c => ({ v: c.rows.filter(r => r.e.shift === 'normal').map(r => O.get(r)) }))
+    .map(c => ({ v: c.rows.filter(r => r.e.shift !== 'nacht').map(r => O.get(r)) }))
     .filter(c => c.v.length >= 3);
   if (sub.length >= 2 && fullSpread > 0) {
     const meds = sub.map(c => median(c.v));
     rest = Math.max(...meds) - Math.min(...meds);
+    restN = sub.reduce((a, c) => a + c.v.length, 0);
   }
-  return { worst, best, rest };
+  return { worst, best, rest, restN };
 }
 
 function renderStats() {
@@ -4176,13 +4179,13 @@ function compareSection(rows) {
     }).join('');
 
     const warn = !skew ? '' : `<div class="wwarn">
-      Die Nachtdienste verteilen sich ungleich: <b>${esc(skew.worst.l)}</b> enthält
-      ${skew.worst.nacht} von ${skew.worst.n} Nächten aus dem Nachtdienst,
-      <b>${esc(skew.best.l)}</b> nur ${skew.best.nacht} von ${skew.best.n}.
-      Da Nachtdienste ohnehin länger brauchen, kommt ein Teil des Unterschieds wahrscheinlich
-      daher.${skew.rest !== null
-        ? ` Zählt man nur Normaldienst-Nächte, bleiben <b>${esc(O.fmt(skew.rest))}</b> Unterschied.`
-        : ' Für einen Vergleich unter reinem Normaldienst fehlen noch Nächte.'}</div>`;
+      ${skew.rest !== null
+        ? `<b>Ohne Nachtdienste: ${esc(O.fmt(skew.rest))}</b> statt ${esc(O.fmt(spread))}
+           Unterschied (${skew.restN} Nächte). `
+        : ''}Von den ${skew.worst.n} Nächten in <b>${esc(skew.worst.l)}</b> sind
+      ${skew.worst.nacht} aus dem Nachtdienst, in <b>${esc(skew.best.l)}</b> nur
+      ${skew.best.nacht} von ${skew.best.n}.${skew.rest === null
+        ? ' Für einen Vergleich ohne Nachtdienste fehlen noch Nächte.' : ''}</div>`;
 
     return { spread, thin, html: `
       <div class="wblock">
