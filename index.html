@@ -855,6 +855,20 @@
     .stats-empty b { font-size: 15px; }
     .stats-empty p { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 10px 0 0; }
 
+    .demo-row {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+      margin: 28px 0 4px; padding-top: 18px; border-top: 1px solid var(--line);
+    }
+    .demo-btn {
+      font-family: inherit; font-size: 12.5px; font-weight: 600;
+      color: var(--muted); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 9px;
+      padding: 9px 14px; cursor: pointer; margin-top: 10px;
+    }
+    .demo-btn:hover { color: var(--ink); }
+    .demo-btn.warn { color: var(--danger); border-color: var(--danger); }
+    .demo-note { font-size: 11px; color: var(--faint); }
+
     .stats-h3 {
       font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
       text-transform: uppercase; color: var(--muted);
@@ -3704,6 +3718,127 @@ function sleepHistHtml(key) {
     </table></div>`;
 }
 
+// ── Demo data ──────────────────────────────────────────────────────────────
+// Thirty plausible nights so the analysis can be judged before real logging
+// starts. Every entry carries demo:true and can be removed again in one go.
+function demoEntries() {
+  let seed = 20260918;                       // fixed, so the demo never changes
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const noise = () => { let s = 0; for (let i = 0; i < 6; i++) s += rnd(); return (s - 3) / 0.707; };
+  const pad = n => String(n).padStart(2, '0');
+  const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; };
+  const out = {};
+
+  let nightRun = 0;
+  for (let back = 30; back >= 1; back--) {
+    const key = shiftDay(todayKey(), -back);
+    const [Y, M, D] = key.split('-').map(Number);
+    const dow = new Date(Y, M - 1, D).getDay();          // 0 So … 6 Sa
+    const weekend = dow === 5 || dow === 6;
+
+    // Night shifts come in short runs, as they usually do in a rota
+    let shift;
+    if (nightRun > 0) { shift = 'nacht'; nightRun--; }
+    else if (rnd() < 0.09) { shift = 'nacht'; nightRun = 1 + Math.floor(rnd() * 2); }
+    else shift = rnd() < 0.22 ? 'spaet' : 'normal';
+
+    // After a night shift you go to bed in the morning
+    const bed = shift === 'nacht' ? 7 * 60 + Math.floor(rnd() * 90)
+      : shift === 'spaet' ? 23 * 60 + 40 + Math.floor(rnd() * 70)
+      : weekend ? 23 * 60 + 15 + Math.floor(rnd() * 90)
+      : 22 * 60 + 20 + Math.floor(rnd() * 75);
+
+    const e = { demo: true, sleepAt: hhmm(bed), shift };
+
+    // Coffee almost every day, later on late and night shifts
+    const noCoffee = rnd() < 0.12;
+    let cofGapH = null;
+    if (!noCoffee) {
+      const cups = 1 + Math.floor(rnd() * (shift === 'normal' ? 3 : 4));
+      const last = shift === 'nacht' ? 2 * 60 + Math.floor(rnd() * 180)
+        : shift === 'spaet' ? 15 * 60 + Math.floor(rnd() * 240)
+        : 9 * 60 + Math.floor(rnd() * 480);
+      e.coffee = true; e.coffeeCups = cups; e.coffeeLast = hhmm(last);
+      cofGapH = (((bed - last) % 1440) + 1440) % 1440 / 60;
+    } else e.coffee = false;
+
+    // Dinner, heavier and later at the weekend
+    const foodAt = (weekend ? 19 * 60 + 30 : 18 * 60 + 30) + Math.floor(rnd() * 120);
+    e.foodTime = hhmm(shift === 'nacht' ? 1 * 60 + Math.floor(rnd() * 120) : foodAt);
+    e.foodType = rnd() < (weekend ? 0.45 : 0.25) ? 'fettig' : rnd() < 0.3 ? 'scharf' : 'leicht';
+
+    // Alcohol mostly at the weekend
+    let alcRest = 0;
+    if (rnd() < (weekend ? 0.55 : 0.12)) {
+      const units = 1 + Math.floor(rnd() * 3);
+      const last = 20 * 60 + Math.floor(rnd() * 180);
+      e.alcohol = true; e.alcUnits = units; e.alcLast = hhmm(last);
+      alcRest = Math.max(0, units - ((((bed - last) % 1440) + 1440) % 1440) / 60);
+    } else e.alcohol = false;
+
+    // Sport two or three times a week, sauna now and then
+    if (rnd() < 0.38) { e.sport = true; e.sportEnd = hhmm(17 * 60 + Math.floor(rnd() * 210)); }
+    else e.sport = false;
+    let saunaGapH = null;
+    if (rnd() < 0.13) {
+      const end = 18 * 60 + Math.floor(rnd() * 210);
+      e.sauna = true; e.saunaEnd = hhmm(end); e.saunaInfusion = hhmm(end - 15 - Math.floor(rnd() * 25));
+      saunaGapH = ((((bed - end) % 1440) + 1440) % 1440) / 60;
+    } else e.sauna = false;
+
+    e.brainwork = rnd() < (shift === 'normal' ? 0.3 : 0.5);
+    e.relaxed   = rnd() < 0.55;
+    if (rnd() < 0.3) { e.mast = true; e.mastTime = hhmm(bed - 10 - Math.floor(rnd() * 70)); }
+    else e.mast = false;
+
+    // The settling span: a few real effects, plus day-to-day noise that keeps
+    // most of them short of proof at thirty nights — which is the honest picture.
+    let span = 58 + noise() * 15;
+    if (shift === 'nacht') span += 40;
+    if (cofGapH !== null && cofGapH < 5) span += 26;
+    span += alcRest * 20;
+    if (saunaGapH !== null && saunaGapH < 2) span += 30;
+    if (e.brainwork) span += 9;
+    span = Math.max(18, Math.round(span));
+
+    // The night rolls over only when the clock time falls back past bedtime,
+    // which is not the same as the raw minute count passing 1440
+    const bedClock = ((bed % 1440) + 1440) % 1440;
+    const hrClock  = (((bed + span) % 1440) + 1440) % 1440;
+    e.restingHr = hhmm(hrClock);
+    e.restingHrDate = hrClock < bedClock ? shiftDay(key, 1) : key;
+
+    // The rating follows the body loosely — people misjudge their own nights
+    if (rnd() > 0.1) {
+      const noisy = span + noise() * 22;
+      e.quality = noisy < 68 ? 'gut' : noisy < 100 ? 'mittel' : 'schlecht';
+    }
+    out[key] = e;
+  }
+  return out;
+}
+
+const hasDemo = () => Object.values(daylog).some(e => e && e.demo);
+
+async function loadDemo() {
+  const real = Object.entries(daylog).filter(([, e]) => e && !e.demo).length;
+  const warn = real ? `\n\nAchtung: ${real} eigene Einträge bleiben erhalten, die Auswertung mischt sie dann mit den Beispieltagen.` : '';
+  const sync = ghReady() ? '\n\nSync ist aktiv — die Beispieldaten landen auch auf GitHub.' : '';
+  if (!confirm(`30 Beispieltage laden?${warn}${sync}\n\nDu kannst sie jederzeit wieder entfernen.`)) return;
+  Object.assign(daylog, demoEntries());
+  await persistDaylog();
+  renderSleep();
+  showToast('30 Beispieltage geladen');
+}
+
+async function clearDemo() {
+  if (!confirm('Alle Beispieltage entfernen? Eigene Einträge bleiben.')) return;
+  Object.keys(daylog).forEach(k => { if (daylog[k] && daylog[k].demo) delete daylog[k]; });
+  await persistDaylog();
+  renderSleep();
+  showToast('Beispieltage entfernt');
+}
+
 function renderSleep() {
   const host = $("sleep");
   const key  = sleepDay || todayKey();
@@ -3816,7 +3951,14 @@ function renderSleep() {
     ${row('Entspannt ins Bett', seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
     ${row('Schlafen gegangen', timeField('sleepAt', e.sleepAt), 'Handy weg, Augen zu')}
 
-    <div id="sleep-hist-slot">${hist}</div>`;
+    <div id="sleep-hist-slot">${hist}</div>
+    <div class="demo-row">
+      ${hasDemo()
+        ? `<button class="demo-btn warn" onclick="clearDemo()">Beispieltage entfernen</button>
+           <span class="demo-note">Die Auswertung enthält gerade Beispieldaten.</span>`
+        : `<button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
+           <span class="demo-note">Zum Ausprobieren der Auswertung, jederzeit entfernbar.</span>`}
+    </div>`;
 }
 
 // ── Analysis ───────────────────────────────────────────────────────────────
@@ -4089,6 +4231,7 @@ function renderStats() {
       <p>Die Auswertung braucht Nächte mit <i>Schlafen gegangen</i> und <i>Ruhepuls erreicht</i>.
       Bisher: <b>${N}</b>.</p>
       <p>Große Effekte zeigen sich ab etwa 25 Nächten, feine brauchen deutlich mehr.</p>
+      <button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
     </div>`;
     return;
   }
