@@ -1101,12 +1101,22 @@
       transition: all .15s ease;
     }
     .mode-bar button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+    .mode-hint {
+      font-size: 11.5px; color: var(--faint);
+      margin: -10px 0 14px; padding: 0 4px;
+    }
+    .day-scope {
+      font-size: 11.5px; color: var(--muted);
+      background: var(--bg); border-radius: 9px;
+      padding: 8px 11px; margin: 0 0 14px;
+    }
+    .day-scope b { color: var(--ink); font-weight: 600; }
 
     .live-day {
       display: flex; align-items: center; justify-content: space-between;
       gap: 10px; margin-bottom: 12px;
     }
-    .live-day span {
+    .live-day-t {
       font-family: "Space Grotesk"; font-weight: 600; font-size: 16px;
       letter-spacing: -.01em;
     }
@@ -3743,6 +3753,13 @@ const dayLabel = (key, opts) => {
 };
 const getDay = key => daylog[key] || {};
 
+// One entry covers a waking day plus the night that follows it, so any date
+// shown for a night names both of its days — "Fr., 18. → Sa., 19. Sept."
+const nightLabel = key =>
+  `${dayLabel(key, { weekday: 'short', day: 'numeric' })} → ${dayLabel(shiftDay(key, 1), { weekday: 'short', day: 'numeric', month: 'short' })}`;
+const morningLabel = key =>
+  dayLabel(shiftDay(key, 1), { weekday: 'long', day: 'numeric', month: 'short' });
+
 // Times are stored as plain HH:MM. Going to bed at 23:40 and settling at
 // 01:20 crosses midnight, so a negative span wraps into the next day.
 const minsOf = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
@@ -4128,14 +4145,14 @@ function renderSleepLive() {
   const nudges = [];
   if (prevUsed && !prev.restingHr) nudges.push(`
     <div class="sleep-nudge">
-      <div class="sleep-nudge-txt"><b>Ruhepuls von gestern</b>
-        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span></div>
+      <div class="sleep-nudge-txt"><b>Ruhepuls nachtragen</b>
+        <span>Nacht ${esc(nightLabel(prevKey))} · heute früh erreicht</span></div>
       <input type="time" onchange="setDayTime('${prevKey}','restingHr',this.value)">
     </div>`);
   if (prevUsed && !prev.quality) nudges.push(`
     <div class="sleep-nudge">
       <div class="sleep-nudge-txt"><b>Wie war die Nacht?</b>
-        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span></div>
+        <span>Nacht ${esc(nightLabel(prevKey))}</span></div>
       <span class="nudge-seg">${QUALS.map(q =>
         `<button class="seg-btn" onclick="setDay('${prevKey}','quality','${q.v}')">${q.l}</button>`).join('')}</span>
     </div>`);
@@ -4143,9 +4160,10 @@ function renderSleepLive() {
   return `
     <div class="live-day">
       <button onclick="liveGo(-1)">‹</button>
-      <span>${esc(dayLabel(key))}${auto ? '' : ' · nicht heute'}</span>
+      <span class="live-day-t">${esc(dayLabel(key))}${auto ? '' : ' · nicht heute'}</span>
       <button onclick="liveGo(1)">›</button>
     </div>
+    <div class="day-scope">Dieser Tag und die <b>Nacht ${esc(nightLabel(key))}</b></div>
     ${auto ? '' : `<button class="sleep-today" onclick="liveNow()">Zurück zu heute</button>`}
     ${nudges.join('')}
 
@@ -4169,17 +4187,20 @@ function renderSleepLive() {
     <button class="lv-sleep ${e.sleepAt ? 'set' : ''}" onclick="liveSleep()">
       <span class="lv-sleep-l">Augen zu · Handy weg</span>
       <span class="lv-sleep-v">${e.sleepAt
-        ? `${esc(e.sleepAt)} — nochmal tippen zum Korrigieren`
-        : 'Jetzt tippen, wenn du schlafen gehst'}</span>
+        ? `${esc(e.sleepAt)} — Start der Nacht ${esc(nightLabel(key))}`
+        : `Jetzt tippen — startet die Nacht ${esc(nightLabel(key))}`}</span>
     </button>`;
 }
 
 function renderSleep() {
   const host = $("sleep");
   const modeBar = `<div class="mode-bar">
-    <button class="${sleepMode === 'live' ? 'on' : ''}" onclick="setSleepMode('live')">Jetzt</button>
-    <button class="${sleepMode === 'form' ? 'on' : ''}" onclick="setSleepMode('form')">Nachtragen</button>
-  </div>`;
+    <button class="${sleepMode === 'live' ? 'on' : ''}" onclick="setSleepMode('live')">Jetzt tippen</button>
+    <button class="${sleepMode === 'form' ? 'on' : ''}" onclick="setSleepMode('form')">Zeiten tippen</button>
+  </div>
+  <p class="mode-hint">${sleepMode === 'live'
+    ? 'Ein Tipp stempelt die aktuelle Uhrzeit.'
+    : 'Uhrzeiten von Hand eintragen oder korrigieren.'}</p>`;
   if (sleepMode === 'live') { host.innerHTML = modeBar + renderSleepLive(); return; }
 
   const key  = sleepDay || todayKey();
@@ -4205,8 +4226,8 @@ function renderSleep() {
   if (isToday && prevUsed && !prev.restingHr) nudges.push(`
     <div class="sleep-nudge">
       <div class="sleep-nudge-txt">
-        <b>Ruhepuls von gestern fehlt</b>
-        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span>
+        <b>Ruhepuls nachtragen</b>
+        <span>Nacht ${esc(nightLabel(prevKey))} · heute früh erreicht</span>
       </div>
       <input type="time" onchange="setDayTime('${prevKey}','restingHr',this.value)">
     </div>`);
@@ -4214,7 +4235,7 @@ function renderSleep() {
     <div class="sleep-nudge">
       <div class="sleep-nudge-txt">
         <b>Wie war die Nacht?</b>
-        <span>Nacht auf ${esc(dayLabel(key, { day: 'numeric', month: 'long' }))}</span>
+        <span>Nacht ${esc(nightLabel(prevKey))}</span>
       </div>
       <span class="nudge-seg">${QUALS.map(q =>
         `<button class="seg-btn" onclick="setDay('${prevKey}','quality','${q.v}')">${q.l}</button>`).join('')}</span>
@@ -4234,17 +4255,19 @@ function renderSleep() {
       <span class="tx-month-label">${esc(dayLabel(key))}${isToday ? ' · heute' : ''}</span>
       <button onclick="sleepGo(1)" ${isFuture ? 'disabled' : ''}>›</button>
     </div>
+    <div class="day-scope">Dieser Tag und die <b>Nacht ${esc(nightLabel(key))}</b></div>
     ${!isToday ? `<button class="sleep-today" onclick="sleepToday()">Zurück zu heute</button>` : ''}
     ${nudge}
 
-    <h3 class="sleep-h3">Ergebnis</h3>
+    <h3 class="sleep-h3">Ergebnis der Nacht</h3>
     ${row('Ruhepuls erreicht', timeField('restingHr', e.restingHr),
-          `Nacht auf ${esc(dayLabel(nextKey, { day: 'numeric', month: 'short' }))} · am Folgetag eintragen`)}
+          `Nacht ${esc(nightLabel(key))} · trägst du am ${esc(morningLabel(key))} früh ein`)}
     ${row('Datum', `<input type="date" id="sleep-hr-date" value="${e.restingHrDate || ''}" onchange="setDayTime('${key}','restingHrDate',this.value)">`,
-          'in welcher Nacht erreicht')}
+          `meist ${esc(dayLabel(nextKey, { weekday: 'long', day: 'numeric', month: 'short' }))}, nach Mitternacht`)}
     <div id="sleep-span-slot">${restSpan(key, e) === null ? ''
       : `<div class="sleep-span">${esc(fmtSpan(restSpan(key, e)))} nach dem Zubettgehen</div>`}</div>
-    ${row('Nacht bewertet', seg('quality', QUALS), 'am Morgen danach')}
+    ${row('Nacht bewertet', seg('quality', QUALS),
+          `Nacht ${esc(nightLabel(key))} · am ${esc(morningLabel(key))} früh`)}
 
     <h3 class="sleep-h3">Tag</h3>
     ${row('Dienst', seg('shift', SHIFTS))}
