@@ -998,6 +998,12 @@
       font-variant-numeric: tabular-nums; text-align: right;
       display: flex; flex-direction: column; align-items: flex-end;
     }
+    .wwarn {
+      margin-top: 9px; padding: 9px 11px;
+      background: var(--bg); border-left: 3px solid var(--danger);
+      border-radius: 0 7px 7px 0;
+      font-size: 11px; line-height: 1.5; color: var(--muted);
+    }
     .wbar-n { font-size: 9px; font-weight: 400; color: var(--faint); }
 
     @media (max-width: 430px) {
@@ -3962,16 +3968,15 @@ function renderSleep() {
 }
 
 // ── Analysis ───────────────────────────────────────────────────────────────
-// Diverging poles, validated for colour-vision deficiency (protan ΔE 20.0).
-// The app's green/red pair fails that check, so it is deliberately not used.
+// Everything here is a counted median over real nights. No models, no
+// estimates: each number is "the middle night of this group", nothing more.
+// Diverging poles validated for colour-vision deficiency (protan ΔE 20.0);
+// the app's green/red pair fails that check and is deliberately not used.
 const CH_GOOD = "#3b6fb0";
 const CH_BAD  = "#c2783f";
 const CH_MUTE = "#9aa19e";
 
-const BOOT   = 1200;   // bootstrap resamples for the model
-const BOOT_M = 400;    // resamples for a single bin median
-const CIQ    = 0.05;   // 90 % interval
-const MIN_BIN = 8;     // nights per window before it is worth reading
+const MIN_BIN = 8;     // nights per group before a comparison is worth reading
 
 let statsY = "span";
 
@@ -3980,23 +3985,10 @@ const median = a => {
   const s = [...a].sort((x, y) => x - y), h = s.length >> 1;
   return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
 };
-const quantile = (sorted, q) => {
-  if (!sorted.length) return null;
-  const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
-  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
-};
-function medCI(vals) {
-  if (vals.length < 3) return null;
-  const out = [];
-  for (let b = 0; b < BOOT_M; b++) {
-    const s = [];
-    for (let i = 0; i < vals.length; i++) s.push(vals[(Math.random() * vals.length) | 0]);
-    out.push(median(s));
-  }
-  out.sort((a, b) => a - b);
-  return [quantile(out, CIQ), quantile(out, 1 - CIQ)];
-}
 
+// Minutes between something earlier in the day and closing your eyes.
+// Everything is measured against that moment, never against the wall clock,
+// so a cup six hours before counts the same at 23:00 and at 07:00.
 function gapToBed(e, field) {
   if (!e.sleepAt || !e[field]) return null;
   let d = minsOf(e.sleepAt) - minsOf(e[field]);
@@ -4004,75 +3996,24 @@ function gapToBed(e, field) {
   return d > 20 * 60 ? null : d;
 }
 
-// ── Physiological load at bedtime ──
-// Caffeine: half-life about 5 h, so a cup at noon is largely gone by 23:00.
-const caffeineAtBed = e => {
-  if (e.coffee === false) return 0;
-  const cups = typeof e.coffeeCups === 'number' ? e.coffeeCups : null;
-  const g = gapToBed(e, 'coffeeLast');
-  return (cups === null || g === null) ? null : cups * Math.pow(0.5, g / 60 / 5);
-};
-// Alcohol clears at roughly one unit per hour — linear, not exponential.
-const alcoholAtBed = e => {
-  if (e.alcohol === false) return 0;
-  const u = typeof e.alcUnits === 'number' ? e.alcUnits : null;
-  const g = gapToBed(e, 'alcLast');
-  return (u === null || g === null) ? null : Math.max(0, u - g / 60);
-};
-// Digestive load: fat is the slow one, so it carries the most weight.
-const FOOD_W = { leicht: 1, scharf: 1.5, fettig: 2 };
-const foodAtBed = e => {
-  const w = FOOD_W[e.foodType], g = gapToBed(e, 'foodTime');
-  return (w === undefined || g === null) ? null : w * Math.pow(0.5, g / 60 / 3);
-};
-const sportAtBed = e => {
-  if (e.sport === false) return 0;
-  if (e.sport !== true && !e.sportEnd) return null;
-  const g = gapToBed(e, 'sportEnd');
-  return g === null ? null : Math.pow(0.5, g / 60 / 3);
-};
-// Sauna: core temperature needs roughly 1.5 h to come back down
-const saunaAtBed = e => {
-  if (e.sauna === false) return 0;
-  if (e.sauna !== true) return null;
-  const g = gapToBed(e, 'saunaEnd');
-  return g === null ? null : Math.pow(0.5, g / 60 / 1.5);
-};
-const mastAtBed = e => {
-  if (e.mast === false) return 0;
-  if (e.mast !== true) return null;
-  const g = gapToBed(e, 'mastTime');
-  return g === null ? null : Math.pow(0.5, g / 60 / 2);
-};
-
-// "Entspannt ins Bett" is deliberately absent: it is a subjective reading of
-// the same arousal the resting heart rate measures, so using it as a predictor
-// would absorb variance belonging to the real causes.
-const PRED = [
-  { k: 'brain', l: 'Brainwork davor', u: 'ja statt nein', bin: true,
-    get: e => e.brainwork === true ? 1 : e.brainwork === false ? 0 : null },
-  { k: 'caf',  l: 'Restkoffein', u: 'je Tassen-Äquivalent', bin: false, get: caffeineAtBed },
-  { k: 'alc',  l: 'Restalkohol', u: 'je Einheit', bin: false, get: alcoholAtBed },
-  { k: 'food', l: 'Verdauungslast', u: 'je Einheit', bin: false, get: foodAtBed },
-  { k: 'sport',l: 'Sport-Nachwirkung', u: 'je Einheit', bin: false, get: sportAtBed },
-  { k: 'mast', l: 'Masturbation', u: 'je Einheit', bin: false, get: mastAtBed },
-  { k: 'sauna', l: 'Sauna-Nachwärme', u: 'je Einheit', bin: false, get: saunaAtBed },
-  { k: 'spaet', l: 'Spätdienst', u: 'statt Normaldienst', bin: true,
-    get: e => e.shift ? (e.shift === 'spaet' ? 1 : 0) : null },
-  { k: 'nacht', l: 'Nachtdienst', u: 'statt Normaldienst', bin: true,
-    get: e => e.shift ? (e.shift === 'nacht' ? 1 : 0) : null }
+const OUTCOMES = [
+  { k: 'span', l: 'Einschlafphase', lowGood: true,
+    get: r => r.span, fmt: v => fmtSpan(v) },
+  { k: 'quality', l: 'Nachtgefühl', lowGood: false,
+    get: r => r.e.quality ? QUAL_SCORE[r.e.quality] : null,
+    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2) }
 ];
+const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
+function setStatsY(k) { statsY = k; renderStats(); }
 
-// Factors without a time of their own — compared level against level
-const GROUPS = [
-  { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
-  { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
-  { l: 'Essen',     get: e => e.foodType,  levels: [
-      { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }] }
-];
+function statRows() {
+  return Object.keys(daylog).sort().map(d => {
+    const e = getDay(d), span = restSpan(d, e);
+    return { d, e, span };
+  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60);
+}
 
-// Windows answer "by when?" — binned by distance to bedtime, plus a bar for
-// the nights the thing did not happen at all, which is the real baseline.
+// Timed factors, binned by how long before lights-out they happened
 const WINDOWS = [
   { k: 'coffeeLast', l: 'Letzte Tasse Kaffee', off: e => e.coffee === false,
     edges: [5, 10], labels: ['< 5 Std. vorher', '5–10 Std. vorher', '> 10 Std. vorher'], none: 'kein Kaffee' },
@@ -4082,147 +4023,62 @@ const WINDOWS = [
     edges: [2, 4], labels: ['< 2 Std. vorher', '2–4 Std. vorher', '> 4 Std. vorher'], none: null },
   { k: 'sportEnd', l: 'Sport-Ende', off: e => e.sport === false,
     edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Sport' },
-  { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
-    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' },
   { k: 'saunaEnd', l: 'Letzter Saunagang', off: e => e.sauna === false,
     edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
   { k: 'saunaInfusion', l: 'Letzter Aufguss', off: e => e.sauna === false,
-    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' }
+    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
+  { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
+    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' }
 ];
 
-const OUTCOMES = [
-  { k: 'span', l: 'Einschlafphase', unit: 'min', lowGood: true,
-    get: r => r.span, fmt: v => fmtSpan(v) },
-  { k: 'quality', l: 'Nachtgefühl', unit: 'Punkte', lowGood: false,
-    get: r => r.e.quality ? QUAL_SCORE[r.e.quality] : null,
-    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2) }
+// Factors with no time of their own
+const GROUPS = [
+  { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
+  { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
+  { l: 'Essen',     get: e => e.foodType,  levels: [
+      { v: 'leicht', l: 'Leicht' }, { v: 'fettig', l: 'Fettig' }, { v: 'scharf', l: 'Scharf' }] },
+  { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
 ];
-const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
-function setStatsY(k) { statsY = k; renderStats(); }
 
-// Every night with a usable settling span; the quality field may still be blank
-function statRows() {
-  return Object.keys(daylog).sort().map(d => {
-    const e = getDay(d), span = restSpan(d, e);
-    return { d, e, span };
-  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60);
-}
+// Night shifts push every span up, so a group that happens to hold most of
+// them looks worse for reasons that have nothing to do with the factor. This
+// just counts them per group — no test, no threshold on the numbers
+// themselves, only on how lopsided the split is.
+function shiftSkew(stat, fullSpread, O) {
+  const parts = stat.filter(s => s.n >= 3).map(s => ({
+    l: s.l, n: s.n, nacht: s.rows.filter(r => r.e.shift === 'nacht').length
+  }));
+  if (parts.length < 2 || !parts.some(p => p.nacht > 0)) return null;
+  const share = parts.map(p => p.nacht / p.n);
+  if (Math.max(...share) - Math.min(...share) < 0.3) return null;
 
-function gauss(A, b) {
-  const p = b.length;
-  const M = A.map((r, i) => [...r, b[i]]);
-  for (let c = 0; c < p; c++) {
-    let piv = c;
-    for (let r = c + 1; r < p; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
-    [M[c], M[piv]] = [M[piv], M[c]];
-    if (Math.abs(M[c][c]) < 1e-10) return null;
-    for (let r = 0; r < p; r++) {
-      if (r === c) continue;
-      const f = M[r][c] / M[c][c];
-      for (let k = c; k <= p; k++) M[r][k] -= f * M[c][k];
-    }
+  const worst = parts.reduce((a, b) => (b.nacht / b.n > a.nacht / a.n ? b : a));
+  const best  = parts.reduce((a, b) => (b.nacht / b.n < a.nacht / a.n ? b : a));
+
+  // If enough normal-shift nights remain in at least two groups, say what is
+  // left of the difference once only those are counted.
+  let rest = null;
+  const sub = stat
+    .map(c => ({ v: c.rows.filter(r => r.e.shift === 'normal').map(r => O.get(r)) }))
+    .filter(c => c.v.length >= 3);
+  if (sub.length >= 2 && fullSpread > 0) {
+    const meds = sub.map(c => median(c.v));
+    rest = Math.max(...meds) - Math.min(...meds);
   }
-  return M.map((r, i) => r[p] / M[i][i]);
-}
-function ridgeFit(X, y, lambda) {
-  const n = X.length, p = X[0].length;
-  const A = Array.from({ length: p }, () => new Array(p).fill(0));
-  const b = new Array(p).fill(0);
-  for (let j = 0; j < p; j++) {
-    for (let k = j; k < p; k++) {
-      let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * X[i][k];
-      A[j][k] = s; A[k][j] = s;
-    }
-    let s = 0; for (let i = 0; i < n; i++) s += X[i][j] * y[i];
-    b[j] = s;
-  }
-  for (let j = 0; j < p; j++) A[j][j] += lambda;
-  return gauss(A, b);
-}
-
-function fitModel(rows) {
-  const O = outcome();
-  const use = rows.filter(r => O.get(r) !== null);
-  const n = use.length;
-  if (n < 10) return null;
-
-  let cols = PRED.map(pd => {
-    const raw = use.map(r => pd.get(r.e));
-    const seen = raw.filter(v => v !== null && v !== undefined);
-    const mean = seen.reduce((a, v) => a + v, 0) / (seen.length || 1);
-    const vals = raw.map(v => (v === null || v === undefined) ? mean : v);
-    const sd = Math.sqrt(vals.reduce((a, v) => a + (v - mean) ** 2, 0) / n);
-    const distinct = new Set(vals.map(v => v.toFixed(4))).size;
-    return { pd, vals, mean, sd, distinct, cover: seen.length / n };
-  }).filter(c =>
-    c.cover >= 0.7 &&                                  // imputing more than 30 % fabricates data
-    c.sd > 1e-9 &&
-    c.distinct >= (c.pd.bin ? 2 : 3));                 // a near-constant column cannot be estimated
-
-  cols.sort((a, b) => b.cover - a.cover);
-  while (cols.length > Math.max(2, n - 4)) cols.pop();
-  if (!cols.length) return null;
-
-  const p = cols.length;
-  const y = use.map(r => O.get(r));
-  const ym = y.reduce((a, v) => a + v, 0) / n;
-  const yc = y.map(v => v - ym);
-  const Xs = use.map((_, i) => cols.map(c => (c.vals[i] - c.mean) / c.sd));
-  const lambda = Math.max(0.5, 0.02 * n);
-
-  const beta = ridgeFit(Xs, yc, lambda);
-  if (!beta) return null;
-
-  const boot = Array.from({ length: p }, () => []);
-  for (let b = 0; b < BOOT; b++) {
-    const Xi = [], yi = [];
-    for (let i = 0; i < n; i++) { const r = (Math.random() * n) | 0; Xi.push(Xs[r]); yi.push(yc[r]); }
-    const bb = ridgeFit(Xi, yi, lambda);
-    if (bb) for (let j = 0; j < p; j++) boot[j].push(bb[j] / cols[j].sd);
-  }
-
-  // A coefficient "per unit" is unreadable for a composite index whose unit is
-  // far larger than the range actually observed. Report the effect of moving
-  // across the real spread instead: 10th to 90th percentile, or 0 to 1 binary.
-  const terms = cols.map((c, j) => {
-    const sorted = [...c.vals].sort((a, b) => a - b);
-    const span = c.pd.bin ? 1 : (quantile(sorted, 0.9) - quantile(sorted, 0.1));
-    const scale = (span > 1e-9 ? span : 1) / c.sd;
-    const s = boot[j].map(v => v * (span > 1e-9 ? span : 1)).sort((a, b) => a - b);
-    const est = beta[j] * scale;
-    const lo = quantile(s, CIQ), hi = quantile(s, 1 - CIQ);
-    const sd = Math.sqrt(s.reduce((a, v) => a + (v - est) ** 2, 0) / (s.length || 1));
-    const fmtN = v => Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1);
-    return { ...c.pd, est, lo, hi, cover: c.cover,
-             u: c.pd.bin ? c.pd.u
-                : `${fmtN(quantile(sorted, 0.1))} → ${fmtN(quantile(sorted, 0.9))}`,
-             solid: lo !== null && hi !== null && lo * hi > 0,
-             z: sd > 1e-9 ? Math.abs(est) / sd : 0 };
-  });
-
-  let ssr = 0;
-  for (let i = 0; i < n; i++) {
-    let f = 0; for (let j = 0; j < p; j++) f += Xs[i][j] * beta[j];
-    ssr += (yc[i] - f) ** 2;
-  }
-  const sst = yc.reduce((a, v) => a + v * v, 0);
-  const r2 = sst > 1e-9 ? 1 - ssr / sst : 0;
-  terms.sort((a, b) => (b.solid - a.solid) || (b.z - a.z));
-  return { n, p, terms, adjR2: 1 - (1 - r2) * (n - 1) / Math.max(1, n - p - 1) };
+  return { worst, best, rest };
 }
 
 function renderStats() {
   const host = $("stats");
   const rows = statRows();
   const N = rows.length;
-  const O = outcome();
 
   if (N < 2) {
     host.innerHTML = `<div class="stats-empty">
       <b>Noch zu wenig Daten</b>
       <p>Die Auswertung braucht Nächte mit <i>Schlafen gegangen</i> und <i>Ruhepuls erreicht</i>.
       Bisher: <b>${N}</b>.</p>
-      <p>Große Effekte zeigen sich ab etwa 25 Nächten, feine brauchen deutlich mehr.</p>
+      <p>Große Unterschiede zeigen sich ab etwa 25 Nächten, feine brauchen deutlich mehr.</p>
       <button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
     </div>`;
     return;
@@ -4236,7 +4092,7 @@ function renderStats() {
     ${[['Nächte', String(N), ''],
        ['Median', fmtSpan(med), 'bis zum Ruhepuls'],
        ['Kürzeste', fmtSpan(Math.min(...spans)), ''],
-       ['Bewertet', `${rated}`, 'von ' + N + ' Nächten']].map(([l, v, s]) => `
+       ['Bewertet', String(rated), 'von ' + N + ' Nächten']].map(([l, v, s]) => `
       <div class="kpi"><span class="kpi-lbl">${l}</span><span class="kpi-val">${esc(v)}</span>
       ${s ? `<span class="kpi-sub">${esc(s)}</span>` : ''}</div>`).join('')}
   </div>`;
@@ -4246,10 +4102,9 @@ function renderStats() {
   ).join('')}</div>`;
 
   host.innerHTML = kpi + ySwitch + timelineChart(rows, med)
-    + feelVsBody(rows) + windowSection(rows) + groupSection(rows) + modelSection(rows, N);
+    + feelVsBody(rows) + compareSection(rows);
 }
 
-// ── Does the gut feeling match the body? ──
 function feelVsBody(rows) {
   const have = rows.filter(r => r.e.quality);
   if (have.length < 4) {
@@ -4261,29 +4116,24 @@ function feelVsBody(rows) {
     const v = have.filter(r => r.e.quality === q.v).map(r => r.span);
     return { ...q, n: v.length, med: v.length ? median(v) : null };
   });
-  const xs = have.map(r => QUAL_SCORE[r.e.quality]), ys = have.map(r => r.span);
-  const mx = xs.reduce((a, v) => a + v, 0) / xs.length, my = ys.reduce((a, v) => a + v, 0) / ys.length;
-  let sxy = 0, sxx = 0, syy = 0;
-  for (let i = 0; i < xs.length; i++) {
-    const dx = xs[i] - mx, dy = ys[i] - my;
-    sxy += dx * dy; sxx += dx * dx; syy += dy * dy;
-  }
-  const r = (sxx > 1e-9 && syy > 1e-9) ? sxy / Math.sqrt(sxx * syy) : 0;
-  const max = Math.max(...byQ.filter(q => q.med !== null).map(q => q.med), 1);
+  const filled = byQ.filter(q => q.med !== null);
+  const max = Math.max(...filled.map(q => q.med), 1);
+  const gut = byQ.find(q => q.v === 'gut'), schl = byQ.find(q => q.v === 'schlecht');
 
-  const verdict = Math.abs(r) < 0.25
-    ? `Dein Empfinden und die gemessene Einschlafphase laufen <b>weitgehend unabhängig</b>
-       voneinander (r = ${esc(r.toFixed(2).replace('-', '−'))}). Eine gefühlt gute Nacht heißt bei dir
-       also nicht, dass der Körper schnell heruntergefahren ist — beide Größen lohnen getrennt.`
-    : r < 0
-      ? `Dein Empfinden passt zum Körper: gefühlt gute Nächte haben kürzere Einschlafphasen
-         (r = ${esc(r.toFixed(2).replace('-', '−'))}).`
-      : `Auffällig: gefühlt gute Nächte haben bei dir <b>längere</b> Einschlafphasen
-         (r = +${esc(r.toFixed(2))}). Bei ${have.length} Nächten kann das noch Zufall sein.`;
+  const verdict = (gut.med !== null && schl.med !== null)
+    ? (schl.med - gut.med > 15
+        ? `Dein Gefühl passt zum Körper: nach gefühlt guten Nächten war der Ruhepuls im Mittel
+           <b>${esc(fmtSpan(schl.med - gut.med))}</b> früher erreicht als nach schlechten.`
+        : schl.med - gut.med < -15
+          ? `Auffällig: gefühlt <b>gute</b> Nächte hatten die <b>längere</b> Einschlafphase.
+             Dein Empfinden misst also etwas anderes als der Puls.`
+          : `Gefühl und Körper laufen bei dir <b>auseinander</b> — zwischen guten und schlechten
+             Nächten liegen nur ${esc(fmtSpan(Math.abs(schl.med - gut.med)))}. Beide Größen lohnen getrennt.`)
+    : `Sobald du gute und schlechte Nächte beide bewertet hast, steht hier der Vergleich.`;
 
   return `
     <h3 class="stats-h3">Gefühl gegen Körper</h3>
-    <p class="stats-sub">Mediane Einschlafphase je subjektiver Bewertung.</p>
+    <p class="stats-sub">Mittlere Einschlafphase je Bewertung.</p>
     <div class="qbars">${byQ.map(q => q.med === null
       ? `<div class="qbar empty"><span class="qbar-l">${q.l}</span><span class="qbar-n">noch keine</span></div>`
       : `<div class="qbar">
@@ -4294,180 +4144,97 @@ function feelVsBody(rows) {
     <p class="stats-note">${verdict}</p>`;
 }
 
-// ── The core question: by when? ──
-function windowSection(rows) {
+// One block per factor: the middle night of each group, counted, side by side
+function compareSection(rows) {
   const O = outcome();
   const use = rows.filter(r => O.get(r) !== null);
   if (use.length < 6) {
-    return `<h3 class="stats-h3">Wann ist der richtige Zeitpunkt?</h3>
+    return `<h3 class="stats-h3">Vergleich</h3>
       <p class="stats-sub">Dafür braucht es mindestens sechs auswertbare Nächte.</p>`;
   }
-  const all = use.map(r => O.get(r));
-  const overall = median(all);
+  const overall = median(use.map(r => O.get(r)));
 
-  const blocks = WINDOWS.map(w => {
-    const bins = w.labels.map(l => ({ l, v: [] }));
-    const none = { l: w.none, v: [] };
-    use.forEach(r => {
-      if (w.none && w.off(r.e)) { none.v.push(O.get(r)); return; }
-      const g = gapToBed(r.e, w.k);
-      if (g === null) return;
-      const h = g / 60;
-      const i = h < w.edges[0] ? 0 : h < w.edges[1] ? 1 : 2;
-      bins[i].v.push(O.get(r));
-    });
-    const cells = (w.none ? [...bins, none] : bins).filter(b => b.v.length > 0);
-    if (cells.length < 2) return null;
-
-    const stat = cells.map(c => ({ ...c, n: c.v.length, med: median(c.v), ci: medCI(c.v) }));
+  const build = (title, cells, isShift) => {
+    const stat = cells.filter(c => c.rows.length > 0)
+      .map(c => ({ ...c, n: c.rows.length, med: median(c.rows.map(r => O.get(r))) }));
+    if (stat.length < 2) return null;
     const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
     const spread = hi - lo;
     const minN = Math.min(...stat.map(s => s.n));
     const thin = minN < MIN_BIN;
-    // A rough sense of how much more logging this factor still needs
-    const smallest = stat.reduce((a, b) => a.n < b.n ? a : b);
-    const share = smallest.n / use.length;
-    const need = thin ? Math.ceil((MIN_BIN - minN) / Math.max(share, 0.08)) : 0;
+    const skew = isShift ? null : shiftSkew(stat, spread, O);
 
     const bars = stat.map(s => {
       const good = O.lowGood ? s.med <= overall : s.med >= overall;
       const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
-      const rel = hi - lo < 1e-9 ? 50 : ((s.med - lo) / (hi - lo)) * 78 + 18;
+      const rel = spread < 1e-9 ? 50 : ((s.med - lo) / spread) * 78 + 18;
       return `<div class="wbar">
         <span class="wbar-l">${esc(s.l)}</span>
         <span class="wbar-track"><span class="wbar-fill" style="width:${rel.toFixed(1)}%;background:${c}"></span></span>
-        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">n=${s.n}</span></span>
+        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">${s.n} Nächte</span></span>
       </div>`;
     }).join('');
+
+    const warn = !skew ? '' : `<div class="wwarn">
+      Die Nachtdienste verteilen sich ungleich: <b>${esc(skew.worst.l)}</b> enthält
+      ${skew.worst.nacht} von ${skew.worst.n} Nächten aus dem Nachtdienst,
+      <b>${esc(skew.best.l)}</b> nur ${skew.best.nacht} von ${skew.best.n}.
+      Da Nachtdienste ohnehin länger brauchen, kommt ein Teil des Unterschieds wahrscheinlich
+      daher.${skew.rest !== null
+        ? ` Zählt man nur Normaldienst-Nächte, bleiben <b>${esc(O.fmt(skew.rest))}</b> Unterschied.`
+        : ' Für einen Vergleich unter reinem Normaldienst fehlen noch Nächte.'}</div>`;
 
     return { spread, thin, html: `
       <div class="wblock">
         <div class="wblock-head">
-          <span class="wblock-t">${esc(w.l)}</span>
+          <span class="wblock-t">${esc(title)}</span>
           <span class="wblock-s ${thin ? 'thin' : ''}">${thin
-            ? `noch ca. ${need} Nächte`
+            ? `kleinste Gruppe ${minN} Nächte`
             : `Unterschied ${esc(O.fmt(spread))}`}</span>
         </div>
-        ${bars}
+        ${bars}${warn}
       </div>` };
-  }).filter(Boolean);
+  };
+
+  const blocks = [];
+
+  WINDOWS.forEach(w => {
+    const cells = w.labels.map(l => ({ l, rows: [] }));
+    const none = { l: w.none, rows: [] };
+    use.forEach(r => {
+      if (w.none && w.off(r.e)) { none.rows.push(r); return; }
+      const g = gapToBed(r.e, w.k);
+      if (g === null) return;
+      const h = g / 60;
+      cells[h < w.edges[0] ? 0 : h < w.edges[1] ? 1 : 2].rows.push(r);
+    });
+    const b = build(w.l, w.none ? [...cells, none] : cells);
+    if (b) blocks.push(b);
+  });
+
+  GROUPS.forEach(g => {
+    const b = build(g.l, g.levels.map(lv => ({
+      l: lv.l, rows: use.filter(r => g.get(r.e) === lv.v)
+    })), g.l === 'Dienst');
+    if (b) blocks.push(b);
+  });
 
   if (!blocks.length) {
-    return `<h3 class="stats-h3">Wann ist der richtige Zeitpunkt?</h3>
-      <p class="stats-sub">Noch keine Faktoren mit genug verschiedenen Zeitpunkten.</p>`;
+    return `<h3 class="stats-h3">Vergleich</h3>
+      <p class="stats-sub">Noch keine Faktoren mit genug verschiedenen Ausprägungen.</p>`;
   }
   blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
 
   return `
-    <h3 class="stats-h3">Wann ist der richtige Zeitpunkt?</h3>
-    <p class="stats-sub">${esc(O.l)} je Zeitfenster vor dem Zubettgehen. Balken nach
+    <h3 class="stats-h3">Vergleich</h3>
+    <p class="stats-sub">${esc(O.l)} je Gruppe — die mittlere Nacht, ausgezählt.
       <span class="sw" style="background:${CH_GOOD}"></span> besser und
-      <span class="sw" style="background:${CH_BAD}"></span> schlechter als dein Median.</p>
+      <span class="sw" style="background:${CH_BAD}"></span> schlechter als dein Median.
+      Zeitangaben zählen ab dem Moment, in dem du die Augen zumachst.</p>
     <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
-    <p class="stats-note">Diese Ansicht rechnet <b>ohne Bereinigung</b> — jedes Fenster für sich.
-      Sie zeigt dir den Zeitpunkt; welche Faktoren überhaupt zählen, steht darunter im Modell.
-      Fenster unter ${MIN_BIN} Nächten sind noch nicht belastbar.</p>`;
-}
-
-// Factors that have no time of their own still deserve a plain comparison
-function groupSection(rows) {
-  const O = outcome();
-  const use = rows.filter(r => O.get(r) !== null);
-  const all = use.map(r => O.get(r));
-  if (all.length < 6) return '';
-  const overall = median(all);
-
-  const blocks = GROUPS.map(g => {
-    const cells = g.levels.map(lv => ({
-      l: lv.l, v: use.filter(r => g.get(r.e) === lv.v).map(r => O.get(r))
-    })).filter(c => c.v.length > 0);
-    if (cells.length < 2) return null;
-    const stat = cells.map(c => ({ ...c, n: c.v.length, med: median(c.v) }));
-    const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
-    const minN = Math.min(...stat.map(s => s.n));
-    const bars = stat.map(s => {
-      const good = O.lowGood ? s.med <= overall : s.med >= overall;
-      const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
-      const rel = hi - lo < 1e-9 ? 50 : ((s.med - lo) / (hi - lo)) * 78 + 18;
-      return `<div class="wbar">
-        <span class="wbar-l">${esc(s.l)}</span>
-        <span class="wbar-track"><span class="wbar-fill" style="width:${rel.toFixed(1)}%;background:${c}"></span></span>
-        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">n=${s.n}</span></span>
-      </div>`;
-    }).join('');
-    return { spread: hi - lo, thin: minN < MIN_BIN, html: `
-      <div class="wblock">
-        <div class="wblock-head">
-          <span class="wblock-t">${esc(g.l)}</span>
-          <span class="wblock-s ${minN < MIN_BIN ? 'thin' : ''}">${minN < MIN_BIN
-            ? `kleinste Gruppe n=${minN}` : `Unterschied ${esc(O.fmt(hi - lo))}`}</span>
-        </div>${bars}
-      </div>` };
-  }).filter(Boolean);
-  if (!blocks.length) return '';
-  blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
-
-  return `
-    <h3 class="stats-h3">Umstände ohne Uhrzeit</h3>
-    <p class="stats-sub">${esc(O.l)} je Gruppe, ebenfalls unbereinigt.</p>
-    <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
-    <p class="stats-note">Der Dienst zählt hier wie jeder andere Faktor. Die Zielgröße ist immer
-      dieselbe Zeitspanne — Augen zu bis Ruhepuls — egal, zu welcher Tageszeit sie beginnt.</p>`;
-}
-
-function modelSection(rows, N) {
-  const O = outcome();
-  const m = fitModel(rows);
-  if (!m) {
-    return `<h3 class="stats-h3">Welche Faktoren zählen?</h3>
-      <p class="stats-sub">Für ein Modell braucht es mindestens zehn Nächte mit dieser Zielgröße.</p>`;
-  }
-  const bound = Math.max(...m.terms.map(t => Math.max(Math.abs(t.lo), Math.abs(t.hi))), 1e-6);
-  const pos = v => 50 + (v / bound) * 48;
-  const sg = v => (v > 0 ? '+' : '') + O.fmt(v);
-
-  const bars = m.terms.map(t => {
-    const worse = O.lowGood ? t.est > 0 : t.est < 0;
-    const c = !t.solid ? CH_MUTE : (worse ? CH_BAD : CH_GOOD);
-    const l = Math.min(pos(t.lo), pos(t.hi)), w = Math.abs(pos(t.hi) - pos(t.lo));
-    return `<div class="mrow ${t.solid ? '' : 'weak'}">
-      <div class="mrow-head">
-        <span class="mrow-lbl">${esc(t.l)}<span class="mrow-u">${esc(t.u)}</span></span>
-        <span class="mrow-est" style="color:${c}">${esc(sg(t.est))}</span>
-      </div>
-      <div class="mrow-track">
-        <span class="mrow-zero"></span>
-        <span class="mrow-ci" style="left:${l.toFixed(1)}%;width:${Math.max(w, 0.6).toFixed(1)}%;background:${c}"></span>
-        <span class="mrow-dot" style="left:${pos(t.est).toFixed(1)}%;background:${c}"></span>
-      </div>
-      <div class="mrow-foot"><span>90 % ${esc(sg(t.lo))} … ${esc(sg(t.hi))}</span></div>
-    </div>`;
-  }).join('');
-
-  const solid = m.terms.filter(t => t.solid);
-  return `
-    <h3 class="stats-h3">Welche Faktoren zählen?</h3>
-    <p class="stats-sub">Multiple Regression auf ${esc(O.l.toLowerCase())}: jeder Wert gilt
-      <b>bei sonst gleichen Bedingungen</b>. Balken = 90-%-Intervall aus ${BOOT} Bootstrap-Ziehungen.
-      Kreuzt er die Mitte, ist der Effekt nicht belegt.</p>
-    <div class="mrows">${bars}</div>
-    <div class="model-foot">
-      <div class="model-stat"><span>Nächte</span><b>${m.n}</b></div>
-      <div class="model-stat"><span>Faktoren</span><b>${m.p}</b></div>
-      <div class="model-stat"><span>erklärte Streuung</span><b>${(m.adjR2 * 100).toFixed(0)} %</b></div>
-    </div>
-    <p class="stats-note">${solid.length
-      ? `<b>${solid.length} von ${m.terms.length}</b> Faktoren sind durch deine Daten gedeckt.`
-      : `<b>Kein Faktor</b> ist bisher gedeckt — bei ${m.n} Nächten heißt das „noch nicht
-         unterscheidbar", nicht „kein Effekt".`}
-      Alle Faktoren sind <b>relativ zum Augen-zu-Zeitpunkt</b> gerechnet, nie gegen die Uhrzeit —
-      eine Tasse sechs Stunden vor dem Einschlafen zählt gleich, ob das um 23 Uhr oder um 7 Uhr war.
-      Die Zahl ist der Effekt über deine <b>tatsächlich beobachtete Spanne</b> (unter der
-      Bezeichnung steht sie), nicht je abstrakter Einheit. Koffein zerfällt mit 5 Std.
-      Halbwertszeit, Alkohol linear mit 1 Einheit je Stunde, Verdauungslast und Sauna-Nachwärme
-      mit 3 bzw. 1,5 Std. — die Werte sind Belastung <i>zum Zubettgehen</i>, nicht Menge.
-      „Entspannt ins Bett" fehlt bewusst: es misst denselben Zustand wie der Ruhepuls und würde
-      die echten Ursachen verdecken.</p>`;
+    <p class="stats-note">Jede Zahl ist die mittlere Nacht ihrer Gruppe, nichts gerechnet.
+      Gruppen unter ${MIN_BIN} Nächten stehen ganz unten und sind noch nicht belastbar.
+      Wo ein Unterschied größtenteils vom Dienst kam, steht das direkt im Block.</p>`;
 }
 
 function timelineChart(rows, med) {
@@ -4487,7 +4254,7 @@ function timelineChart(rows, med) {
   const first = data[0], last = data[data.length - 1];
   return `
     <h3 class="stats-h3">Einschlafphase pro Nacht</h3>
-    <p class="stats-sub">Vom Zubettgehen bis zum Ruhepuls.</p>
+    <p class="stats-sub">Vom Augen-zumachen bis zum Ruhepuls.</p>
     <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
          aria-label="Einschlafphase je Nacht">
       <line x1="0" x2="${W}" y1="${y(med).toFixed(2)}" y2="${y(med).toFixed(2)}"
