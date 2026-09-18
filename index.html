@@ -998,18 +998,48 @@
       font-variant-numeric: tabular-nums; text-align: right;
       display: flex; flex-direction: column; align-items: flex-end;
     }
-    .wwarn {
-      margin-top: 9px; padding: 9px 11px;
-      background: var(--bg); border-left: 3px solid var(--danger);
-      border-radius: 0 7px 7px 0;
-      font-size: 11px; line-height: 1.5; color: var(--muted);
-    }
     .wbar-n { font-size: 9px; font-weight: 400; color: var(--faint); }
 
     @media (max-width: 430px) {
       .qbar { grid-template-columns: 80px 1fr 72px; }
       .wbar { grid-template-columns: 88px 1fr 66px; }
     }
+
+    .nfilter {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 12.5px; color: var(--muted);
+      margin: 10px 0 2px; cursor: pointer;
+    }
+    .nfilter input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .nfilter span { color: var(--faint); font-size: 11px; }
+
+    .combo-sel { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+    .combo-sel select {
+      flex: 1; min-width: 150px; font-family: inherit; font-size: 12px; font-weight: 600;
+      color: var(--ink); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px;
+    }
+    .combo-wrap { overflow-x: auto; }
+    table.combo { width: 100%; border-collapse: separate; border-spacing: 5px; }
+    table.combo th {
+      font-size: 10.5px; font-weight: 600; color: var(--muted);
+      text-align: left; line-height: 1.35; padding: 0 4px;
+    }
+    table.combo thead th { text-align: center; }
+    table.combo th i { font-style: normal; font-weight: 700; color: var(--ink); font-size: 11px; }
+    table.combo td {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 11px; padding: 13px 8px; text-align: center;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    table.combo td b {
+      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    table.combo td span { font-size: 9.5px; color: var(--faint); font-weight: 400; }
+    table.combo td.empty { color: var(--faint); display: table-cell; }
+    table.combo tbody tr { display: grid; grid-template-columns: 96px 1fr 1fr; align-items: center; }
+    table.combo thead tr { display: grid; grid-template-columns: 96px 1fr 1fr; }
 
     .xtabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
     .xtab {
@@ -3979,6 +4009,7 @@ const CH_MUTE = "#9aa19e";
 const MIN_BIN = 8;     // nights per group before a comparison is worth reading
 
 let statsY = "span";
+let hideNight = false;   // night shifts out of every view at once
 
 const median = a => {
   if (!a.length) return null;
@@ -4005,12 +4036,14 @@ const OUTCOMES = [
 ];
 const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
 function setStatsY(k) { statsY = k; renderStats(); }
+function toggleNight() { hideNight = !hideNight; renderStats(); }
 
 function statRows() {
   return Object.keys(daylog).sort().map(d => {
     const e = getDay(d), span = restSpan(d, e);
     return { d, e, span };
-  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60);
+  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60)
+    .filter(r => !hideNight || r.e.shift !== 'nacht');
 }
 
 // Timed factors, binned by how long before lights-out they happened
@@ -4040,35 +4073,31 @@ const GROUPS = [
   { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
 ];
 
-// Every value here is already measured against lights-out, so a five-hour gap
-// is a five-hour gap whatever the shift. The point of this check is different:
-// when a group holds nearly all the night shifts, the data contains no night
-// where the two differ, so nothing can tell them apart. It counts, and where
-// there are enough nights outside the night shift, it simply redoes the
-// comparison without them.
-function shiftSkew(stat, fullSpread, O) {
-  const parts = stat.filter(s => s.n >= 3).map(s => ({
-    l: s.l, n: s.n, nacht: s.rows.filter(r => r.e.shift === 'nacht').length
-  }));
-  if (parts.length < 2 || !parts.some(p => p.nacht > 0)) return null;
-  const share = parts.map(p => p.nacht / p.n);
-  if (Math.max(...share) - Math.min(...share) < 0.3) return null;
-
-  const worst = parts.reduce((a, b) => (b.nacht / b.n > a.nacht / a.n ? b : a));
-  const best  = parts.reduce((a, b) => (b.nacht / b.n < a.nacht / a.n ? b : a));
-
-  // If enough normal-shift nights remain in at least two groups, say what is
-  // left of the difference once only those are counted.
-  let rest = null, restN = 0;
-  const sub = stat
-    .map(c => ({ v: c.rows.filter(r => r.e.shift !== 'nacht').map(r => O.get(r)) }))
-    .filter(c => c.v.length >= 3);
-  if (sub.length >= 2 && fullSpread > 0) {
-    const meds = sub.map(c => median(c.v));
-    rest = Math.max(...meds) - Math.min(...meds);
-    restN = sub.reduce((a, c) => a + c.v.length, 0);
-  }
-  return { worst, best, rest, restN };
+// Pairs, for the combination view. Each factor collapses to "critical or not"
+// so two of them make four cells instead of nine — with thirty-odd nights
+// that is the difference between readable and empty.
+const COMBOS = [
+  { k: 'coffee', l: 'Kaffee < 5 Std. vorher',
+    on: e => e.coffee === false ? false : nearBed(e, 'coffeeLast', 300) },
+  { k: 'alc',   l: 'Alkohol getrunken',
+    on: e => e.alcohol === true ? true : e.alcohol === false ? false : null },
+  { k: 'food',  l: 'Essen < 2 Std. vorher',  on: e => nearBed(e, 'foodTime', 120) },
+  { k: 'fat',   l: 'Fettig gegessen',
+    on: e => e.foodType ? e.foodType === 'fettig' : null },
+  { k: 'sport', l: 'Sport < 3 Std. vorher',
+    on: e => e.sport === false ? false : nearBed(e, 'sportEnd', 180) },
+  { k: 'sauna', l: 'Sauna < 2 Std. vorher',
+    on: e => e.sauna === false ? false : nearBed(e, 'saunaEnd', 120) },
+  { k: 'mast',  l: 'Masturbation < 1 Std. vorher',
+    on: e => e.mast === false ? false : nearBed(e, 'mastTime', 60) },
+  { k: 'brain', l: 'Brainwork davor',
+    on: e => e.brainwork === true ? true : e.brainwork === false ? false : null },
+  { k: 'nacht', l: 'Nachtdienst',
+    on: e => e.shift ? e.shift === 'nacht' : null }
+];
+function nearBed(e, field, mins) {
+  const g = gapToBed(e, field);
+  return g === null ? null : g < mins;
 }
 
 function renderStats() {
@@ -4104,8 +4133,14 @@ function renderStats() {
     `<button class="ytab ${o.k === statsY ? 'on' : ''}" onclick="setStatsY('${o.k}')">${o.l}</button>`
   ).join('')}</div>`;
 
-  host.innerHTML = kpi + ySwitch + timelineChart(rows, med)
-    + feelVsBody(rows) + compareSection(rows);
+  const nights = Object.keys(daylog).filter(k => (daylog[k] || {}).shift === 'nacht').length;
+  const filter = nights === 0 ? '' : `<label class="nfilter">
+    <input type="checkbox" ${hideNight ? 'checked' : ''} onchange="toggleNight()">
+    Nachtdienste ausblenden <span>(${nights} erfasst)</span>
+  </label>`;
+
+  host.innerHTML = kpi + ySwitch + filter + timelineChart(rows, med)
+    + feelVsBody(rows) + compareSection(rows) + comboSection(rows);
 }
 
 function feelVsBody(rows) {
@@ -4165,7 +4200,7 @@ function compareSection(rows) {
     const spread = hi - lo;
     const minN = Math.min(...stat.map(s => s.n));
     const thin = minN < MIN_BIN;
-    const skew = isShift ? null : shiftSkew(stat, spread, O);
+
 
     const bars = stat.map(s => {
       const good = O.lowGood ? s.med <= overall : s.med >= overall;
@@ -4178,15 +4213,6 @@ function compareSection(rows) {
       </div>`;
     }).join('');
 
-    const warn = !skew ? '' : `<div class="wwarn">
-      ${skew.rest !== null
-        ? `<b>Ohne Nachtdienste: ${esc(O.fmt(skew.rest))}</b> statt ${esc(O.fmt(spread))}
-           Unterschied (${skew.restN} Nächte). `
-        : ''}Von den ${skew.worst.n} Nächten in <b>${esc(skew.worst.l)}</b> sind
-      ${skew.worst.nacht} aus dem Nachtdienst, in <b>${esc(skew.best.l)}</b> nur
-      ${skew.best.nacht} von ${skew.best.n}.${skew.rest === null
-        ? ' Für einen Vergleich ohne Nachtdienste fehlen noch Nächte.' : ''}</div>`;
-
     return { spread, thin, html: `
       <div class="wblock">
         <div class="wblock-head">
@@ -4195,7 +4221,7 @@ function compareSection(rows) {
             ? `kleinste Gruppe ${minN} Nächte`
             : `Unterschied ${esc(O.fmt(spread))}`}</span>
         </div>
-        ${bars}${warn}
+        ${bars}
       </div>` };
   };
 
@@ -4236,8 +4262,70 @@ function compareSection(rows) {
       Zeitangaben zählen ab dem Moment, in dem du die Augen zumachst.</p>
     <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
     <p class="stats-note">Jede Zahl ist die mittlere Nacht ihrer Gruppe, nichts gerechnet.
-      Gruppen unter ${MIN_BIN} Nächten stehen ganz unten und sind noch nicht belastbar.
-      Wo ein Unterschied größtenteils vom Dienst kam, steht das direkt im Block.</p>`;
+      Jeder Faktor steht für sich. Gruppen unter ${MIN_BIN} Nächten stehen ganz unten und sind
+      noch nicht belastbar. Ob zwei Faktoren bei dir zusammenhängen, siehst du weiter unten
+      unter <b>Kombination</b>.</p>`;
+}
+
+// Two factors at once: the four combinations side by side
+let comboA = 'coffee', comboB = 'brain';
+function setCombo(which, k) { if (which === 'a') comboA = k; else comboB = k; renderStats(); }
+
+function comboSection(rows) {
+  const O = outcome();
+  const use = rows.filter(r => O.get(r) !== null);
+  const list = COMBOS.filter(c => !(hideNight && c.k === 'nacht'));
+  const A = list.find(c => c.k === comboA) || list[0];
+  const B = list.find(c => c.k === comboB) || list[1];
+  if (!A || !B) return '';
+
+  const sel = (which, cur, other) => `<select onchange="setCombo('${which}',this.value)">
+    ${list.map(c => `<option value="${c.k}"${c.k === cur.k ? ' selected' : ''}
+      ${c.k === other.k ? ' disabled' : ''}>${esc(c.l)}</option>`).join('')}
+  </select>`;
+
+  let body;
+  if (A.k === B.k) {
+    body = `<p class="stats-sub">Wähle zwei verschiedene Faktoren.</p>`;
+  } else {
+    const cell = (a, b) => {
+      const v = use.filter(r => A.on(r.e) === a && B.on(r.e) === b).map(r => O.get(r));
+      return { n: v.length, med: v.length ? median(v) : null };
+    };
+    const grid = [[cell(true, true), cell(true, false)], [cell(false, true), cell(false, false)]];
+    const all = grid.flat().filter(c => c.med !== null);
+    if (all.length < 2) {
+      body = `<p class="stats-sub">Für diese Kombination fehlen noch Nächte.</p>`;
+    } else {
+      const lo = Math.min(...all.map(c => c.med)), hi = Math.max(...all.map(c => c.med));
+      const paint = c => {
+        if (c.med === null) return `<td class="empty">–</td>`;
+        const t = hi - lo < 1e-9 ? 0.5 : (c.med - lo) / (hi - lo);
+        const col = c.n < 3 ? CH_MUTE : (O.lowGood ? (t > 0.5 ? CH_BAD : CH_GOOD) : (t > 0.5 ? CH_GOOD : CH_BAD));
+        return `<td style="color:${col}"><b>${esc(O.fmt(c.med))}</b><span>${c.n} Nächte</span></td>`;
+      };
+      body = `
+        <div class="combo-wrap"><table class="combo">
+          <thead><tr><th></th>
+            <th>${esc(B.l)}<br><i>ja</i></th><th>${esc(B.l)}<br><i>nein</i></th></tr></thead>
+          <tbody>
+            <tr><th>${esc(A.l)}<br><i>ja</i></th>${paint(grid[0][0])}${paint(grid[0][1])}</tr>
+            <tr><th>${esc(A.l)}<br><i>nein</i></th>${paint(grid[1][0])}${paint(grid[1][1])}</tr>
+          </tbody>
+        </table></div>
+        <p class="stats-note">Oben links stehen die Nächte, an denen <b>beides</b> zutraf,
+          unten rechts die mit <b>keinem von beidem</b>. Nur wenn oben links deutlich schlechter
+          steht als die beiden Einzelfelder, verstärken sich die zwei gegenseitig.
+          Felder unter drei Nächten sind grau.</p>`;
+    }
+  }
+
+  return `
+    <h3 class="stats-h3">Kombination</h3>
+    <p class="stats-sub">Zwei Faktoren zusammen — hier siehst du auch, ob zwei Dinge
+      bei dir immer gemeinsam auftreten und sich deshalb nicht trennen lassen.</p>
+    <div class="combo-sel">${sel('a', A, B)}${sel('b', B, A)}</div>
+    ${body}`;
 }
 
 function timelineChart(rows, med) {
