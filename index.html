@@ -82,11 +82,11 @@
     }
 
     .brand-mark {
-      width: 34px; height: 22px; display: inline-block;
+      width: 22px; height: 22px; display: inline-block;
       vertical-align: -4px; margin-right: 9px; color: var(--accent);
     }
     .brand {
-      display: flex; align-items: center;
+      display: flex; align-items: center; flex-shrink: 0; margin-right: 16px;
       font-family: inherit;
       font-variant-numeric: tabular-nums;
       font-weight: 500;
@@ -705,6 +705,18 @@
       text-align: left;
       z-index: 2;
       box-shadow: 1px 0 0 var(--line);
+      /* Never more than half the width, so months stay visible while swiping */
+      max-width: 50vw;
+      width: 42vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @media (min-width: 560px) {
+      table.fc th.name, table.fc td.name { max-width: 260px; width: 230px; }
+    }
+    table.fc td.name .namecell span,
+    table.fc td.name .lbl {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
     }
 
     table.fc thead th.name { z-index: 3; color: var(--muted); }
@@ -1712,15 +1724,20 @@
     /* ── Tab navigation ── */
     .tab-nav {
       display: flex;
-      gap: 26px;
+      gap: 24px;
       background: transparent;
       padding: 0;
       border-bottom: 1px solid var(--line);
       margin-bottom: 32px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
+    .tab-nav::-webkit-scrollbar { display: none; }
 
     .tab-btn {
       flex: none;
+      white-space: nowrap;
       font-family: inherit;
       font-size: 14px;
       font-weight: 400;
@@ -2539,12 +2556,13 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="brand"><svg class="brand-mark" viewBox="0 0 34 22" fill="none" aria-hidden="true"><circle cx="12" cy="11" r="8.4" stroke="currentColor" stroke-width="1.7"/><circle cx="22" cy="11" r="8.4" stroke="currentColor" stroke-width="1.7"/></svg>togethr</div>
-      <div class="tagline">Wiederkehrende Kosten, ruhig im Blick</div>
+      <div class="brand"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 12V3M12 12l5.2 7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>togethr</div>
+      <div class="tagline">Gemeinsame Kosten, fair geteilt</div>
     </header>
 
     <div class="tab-nav">
       <button class="tab-btn active" data-tab="turnus">Kosten</button>
+      <button class="tab-btn" data-tab="plan">Rhythmus</button>
       <button class="tab-btn" data-tab="tx">Transaktionen</button>
       <button class="tab-btn" data-tab="sleep">Schlaf</button>
       <button class="tab-btn" data-tab="stats">Auswertung</button>
@@ -2564,7 +2582,7 @@
 
       <div class="list" id="list"></div>
 
-      <section id="forecast"></section>
+
 
       <div class="data-row" id="data-row">
         <button class="btn-data" id="export-btn">
@@ -2589,6 +2607,10 @@
           <span id="sync-btn-lbl">Sync</span>
         </button>
       </div>
+    </div>
+
+    <div id="pane-plan" style="display:none">
+      <section id="forecast"></section>
     </div>
 
     <div id="pane-tx" style="display:none">
@@ -3816,7 +3838,7 @@ function buildPayers() {
   const host = $("f-payer");
   if (!host) return;
   host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
-    `<button type="button" class="chip ${draft.payer === m.id ? 'on' : ''}"
+    `<button type="button" class="${draft.payer === m.id ? 'active' : ''}"
       onclick="pickPayer('${m.id}')">${esc(m.name)}</button>`).join('');
 }
 function pickPayer(id) { draft.payer = id; buildPayers(); }
@@ -3833,7 +3855,7 @@ function buildOnePayers() {
   const host = $("o-payer");
   if (!host) return;
   host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
-    `<button type="button" class="chip ${onePayer === m.id ? 'on' : ''}"
+    `<button type="button" class="${onePayer === m.id ? 'active' : ''}"
       onclick="pickOnePayer('${m.id}')">${esc(m.name)}</button>`).join('');
 }
 function pickOnePayer(id) { onePayer = id; buildOnePayers(); }
@@ -3965,7 +3987,6 @@ function render() {
     $("fab").style.display = "none";
     $("summary").style.display = "none";
     $("data-row").style.display = "none";
-    $("forecast").innerHTML = "";
     if (!wizDraft) wizStart(); else renderWizard();
     return;
   }
@@ -6565,10 +6586,12 @@ document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   const tab = btn.dataset.tab;
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b === btn));
   $("pane-turnus").style.display = tab === "turnus" ? "" : "none";
+  $("pane-plan").style.display   = tab === "plan"   ? "" : "none";
   $("pane-tx").style.display     = tab === "tx"     ? "" : "none";
   $("pane-sleep").style.display  = tab === "sleep"  ? "" : "none";
   $("pane-stats").style.display  = tab === "stats"  ? "" : "none";
   $("fab").style.display         = tab === "turnus" ? "flex" : "none";
+  if (tab === "plan")  renderForecast();
   if (tab === "tx")    renderTransactions();
   if (tab === "sleep") renderSleep();
   if (tab === "stats") renderStats();
