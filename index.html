@@ -12,27 +12,32 @@
   <title>Turnus — Abos & wiederkehrende Kosten</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg:          #eef0ee;
-      --surface:     #ffffff;
-      --ink:         #15191a;
-      --muted:       #6d7572;
-      --faint:       #9aa19e;
-      --line:        #e7e9e6;
-      --line-soft:   #eef0ed;
-      --accent:      #0f6e54;
-      --accent-tint: #e2efe9;
-      --danger:      #b0556a;
-      --shadow:      0 1px 2px rgba(20,30,25,.04), 0 8px 24px rgba(20,30,25,.05);
-      --radius:      18px;
-      --c0: #0f6e54;
+      /* Warm off-white ground; cards sit a shade lighter, inputs a shade deeper,
+         so surfaces separate by tone rather than by shadow. */
+      --bg:          #F2EFE9;
+      --surface:     #FBFAF7;
+      --sunken:      #EAE6DE;
+      --bg-2:        #EDE9E2;
+      --ink:         #16130F;
+      --muted:       #6E675C;
+      --faint:       #A29A8D;
+      --line:        #E2DCD1;
+      --line-soft:   #EBE6DC;
+      --accent:      #33574A;
+      --accent-tint: #E6EBE6;
+      --danger:      #9C4A3C;
+      --shadow:      none;
+      --radius:      14px;
+      /* Category hues, muted to sit with the warm ground */
+      --c0: #1F7A55;
       --c1: #3b6fb0;
       --c2: #c2783f;
-      --c3: #8a5bb8;
-      --c4: #b0556a;
-      --c5: #7e8783;
+      --c3: #8E52B0;
+      --c4: #B0483A;
+      --c5: #8A857C;
     }
 
     * {
@@ -45,7 +50,9 @@
     html, body {
       background: var(--bg);
       color: var(--ink);
-      font-family: "Hanken Grotesk", system-ui, sans-serif;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      font-feature-settings: "cv11", "ss01";
+      -webkit-font-smoothing: antialiased;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -55,14 +62,15 @@
     }
 
     .num {
-      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      letter-spacing: -.022em;
       font-variant-numeric: tabular-nums lining-nums;
     }
 
     .wrap {
       max-width: 560px;
       margin: 0 auto;
-      padding: 22px 18px 120px;
+      padding: 34px 22px 140px;
     }
 
     /* ── Header ── */
@@ -70,12 +78,13 @@
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      margin: 6px 2px 20px;
+      margin: 0 0 34px;
     }
 
     .brand {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 21px;
       letter-spacing: -.02em;
     }
@@ -90,18 +99,20 @@
 
     /* ── Summary ── */
     .summary {
-      background: var(--surface);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 22px 20px 18px;
-      margin-bottom: 14px;
+      background: transparent;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0 2px 30px;
+      margin-bottom: 8px;
     }
 
     .sum-label {
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--muted);
-      letter-spacing: .01em;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--faint);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
     }
 
     .sum-figure {
@@ -112,40 +123,41 @@
     }
 
     .sum-figure .amt {
-      font-family: "Space Grotesk";
-      font-weight: 700;
-      font-size: 46px;
-      letter-spacing: -.025em;
-      line-height: 1;
+      font-family: inherit;
       font-variant-numeric: tabular-nums;
+      font-weight: 300;
+      font-size: 52px;
+      letter-spacing: -.035em;
+      line-height: 1;
     }
 
     .sum-figure .per {
       font-size: 15px;
       color: var(--muted);
-      font-weight: 600;
+      font-weight: 500;
       margin-left: 6px;
     }
 
     .sum-meta {
       display: flex;
-      gap: 14px;
-      margin-top: 9px;
+      gap: 18px;
+      margin-top: 14px;
       font-size: 13px;
+      font-weight: 400;
       color: var(--muted);
     }
 
-    .sum-meta b        { font-weight: 600; color: var(--ink); }
-    .sum-meta .num     { font-weight: 600; }
+    .sum-meta b        { font-weight: 500; color: var(--ink); }
+    .sum-meta .num     { font-weight: 500; }
 
     /* ── Composition bar ── */
     .bar {
       display: flex;
-      height: 9px;
-      border-radius: 6px;
+      height: 3px;
+      border-radius: 2px;
       overflow: hidden;
-      margin-top: 18px;
-      background: var(--line-soft);
+      margin-top: 26px;
+      background: var(--line);
     }
 
     .bar span {
@@ -176,7 +188,7 @@
       flex: none;
     }
 
-    .legend b { color: var(--ink); font-weight: 600; }
+    .legend b { color: var(--ink); font-weight: 500; }
 
     /* ── Next payment ── */
     .next {
@@ -192,15 +204,15 @@
 
     .next .pill {
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       padding: 3px 9px;
       border-radius: 20px;
       white-space: nowrap;
     }
 
-    .next b { color: var(--ink); font-weight: 600; }
+    .next b { color: var(--ink); font-weight: 500; }
 
     /* ── Toolbar ── */
     .toolbar {
@@ -214,20 +226,20 @@
     .toolbar .count {
       font-size: 13px;
       color: var(--muted);
-      font-weight: 600;
+      font-weight: 500;
     }
 
     .sort {
       appearance: none;
       -webkit-appearance: none;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--ink);
+      border: none;
+      background: transparent;
+      color: var(--muted);
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
-      padding: 8px 30px 8px 12px;
-      border-radius: 11px;
+      font-weight: 400;
+      padding: 8px 24px 8px 0;
+      border-radius: 0;
       cursor: pointer;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236d7572' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
@@ -244,37 +256,36 @@
     .row {
       display: flex;
       align-items: center;
-      gap: 13px;
-      background: var(--surface);
-      border-radius: 14px;
-      padding: 14px 15px;
-      box-shadow: var(--shadow);
+      gap: 15px;
+      background: transparent;
+      border-radius: 0;
+      padding: 18px 2px;
+      box-shadow: none;
       cursor: pointer;
-      transition: transform .12s ease, box-shadow .12s ease;
-      border: 1px solid transparent;
+      transition: opacity .18s ease;
+      border: none;
+      border-bottom: 1px solid var(--line-soft);
     }
 
-    .row:hover  { transform: translateY(-1px); }
-    .row:active { transform: scale(.992); }
+    .row:hover  { opacity: .62; }
+    .row:active { opacity: .45; }
 
     .swatch {
-      width: 38px;
-      height: 38px;
-      border-radius: 11px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
       flex: none;
-      display: grid;
-      place-items: center;
-      font-family: "Space Grotesk";
-      font-weight: 600;
-      font-size: 15px;
-      color: #fff;
+      display: block;
+      overflow: hidden;
+      text-indent: -99em;
+      margin: 0 4px;
     }
 
     .row-main   { flex: 1; min-width: 0; }
     .row-amt    { text-align: right; flex: none; }
 
     .row-name {
-      font-weight: 600;
+      font-weight: 500;
       font-size: 15px;
       letter-spacing: -.01em;
       white-space: nowrap;
@@ -285,8 +296,9 @@
     .row-sub { font-size: 12.5px; color: var(--faint); margin-top: 2px; }
 
     .row-amt .v {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 15.5px;
       font-variant-numeric: tabular-nums;
     }
@@ -305,8 +317,9 @@
     .empty svg { margin-bottom: 14px; }
 
     .empty h2 {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 18px;
       letter-spacing: -.01em;
       margin-bottom: 6px;
@@ -323,20 +336,21 @@
     /* ── Buttons ── */
     .btn {
       font-family: inherit;
-      font-weight: 600;
+      font-weight: 500;
       font-size: 14.5px;
+      letter-spacing: -.01em;
       border: none;
-      border-radius: 12px;
-      padding: 12px 18px;
+      border-radius: 10px;
+      padding: 15px 22px;
       cursor: pointer;
-      transition: opacity .15s ease, transform .1s ease;
+      transition: opacity .18s ease;
     }
 
     .btn:active       { transform: scale(.985); }
     .btn-primary      { background: var(--accent); color: #fff; }
     .btn-primary:hover{ opacity: .92; }
     .btn-ghost        { background: transparent; color: var(--muted); }
-    .btn-danger       { background: transparent; color: var(--danger); font-weight: 600; }
+    .btn-danger       { background: transparent; color: var(--danger); font-weight: 500; }
 
     /* ── FAB ── */
     .fab {
@@ -348,16 +362,17 @@
       background: var(--ink);
       color: #fff;
       border: none;
-      border-radius: 30px;
-      padding: 14px 24px;
+      border-radius: 11px;
+      padding: 16px 26px;
       font-family: inherit;
-      font-weight: 600;
+      font-weight: 500;
       font-size: 15px;
+      letter-spacing: -.01em;
       display: flex;
       align-items: center;
       gap: 9px;
       cursor: pointer;
-      box-shadow: 0 6px 22px rgba(20,30,25,.22);
+      box-shadow: 0 2px 14px rgba(22,19,15,.13);
       transition: transform .12s ease;
     }
 
@@ -385,15 +400,15 @@
       bottom: 0;
       z-index: 50;
       background: var(--surface);
-      border-radius: 24px 24px 0 0;
-      padding: 8px 20px calc(24px + env(safe-area-inset-bottom));
+      border-radius: 20px 20px 0 0;
+      padding: 8px 24px calc(30px + env(safe-area-inset-bottom));
       transform: translateY(102%);
       transition: transform .32s cubic-bezier(.32,.72,0,1);
       max-width: 560px;
       margin: 0 auto;
       max-height: 92dvh;
       overflow-y: auto;
-      box-shadow: 0 -8px 40px rgba(20,30,25,.16);
+      box-shadow: 0 -2px 30px rgba(22,19,15,.10);
     }
 
     .sheet.on { transform: translateY(0); }
@@ -407,8 +422,9 @@
     }
 
     .sheet h2 {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 19px;
       letter-spacing: -.01em;
       margin-bottom: 18px;
@@ -419,22 +435,23 @@
     .field label {
       display: block;
       font-size: 12.5px;
-      font-weight: 600;
+      font-weight: 500;
+      letter-spacing: .01em;
       color: var(--muted);
-      margin-bottom: 7px;
+      margin-bottom: 9px;
     }
 
     .field input,
     .field textarea {
       width: 100%;
       font-family: inherit;
-      font-size: 15px;
+      font-size: 16px;
       color: var(--ink);
-      background: var(--bg);
-      border: 1.5px solid transparent;
-      border-radius: 12px;
-      padding: 13px 14px;
-      transition: border-color .15s ease, background .15s ease;
+      background: var(--sunken);
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 16px 15px;
+      transition: border-color .18s ease, background .18s ease;
     }
 
     .field input:focus,
@@ -451,17 +468,17 @@
 
     .seg {
       display: flex;
-      gap: 6px;
-      background: var(--bg);
+      gap: 4px;
+      background: var(--sunken);
       padding: 4px;
-      border-radius: 13px;
+      border-radius: 11px;
     }
 
     .seg button {
       flex: 1;
       font-family: inherit;
       font-size: 13.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: transparent;
       border: none;
@@ -498,7 +515,7 @@
 
     .chips button.active {
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       border-color: var(--accent);
     }
 
@@ -526,7 +543,7 @@
       font-size: 14px;
       color: var(--ink);
       background: var(--bg);
-      border: 1.5px solid var(--accent);
+      border: 1px solid var(--line);
       border-radius: 20px;
       padding: 9px 14px;
     }
@@ -569,8 +586,9 @@
     }
 
     .forecast-head h2 {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 16px;
       letter-spacing: -.01em;
     }
@@ -588,12 +606,13 @@
       display: block;
       font-size: 11px;
       color: var(--faint);
-      font-weight: 600;
+      font-weight: 500;
     }
 
     .forecast-head .avg-val {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 19px;
       color: var(--accent);
       font-variant-numeric: tabular-nums;
@@ -625,8 +644,9 @@
     }
 
     table.fc thead th {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 12px;
       color: var(--muted);
       border-bottom: 1px solid var(--line);
@@ -683,7 +703,7 @@
     }
 
     table.fc th.cur,
-    table.fc tbody td.cur { background: var(--accent-tint); }
+    table.fc tbody td.cur { background: var(--bg-2); }
 
     /* Past month columns */
     table.fc th.past-col { color: var(--faint); }
@@ -692,12 +712,12 @@
 
     /* Payment states in forecast cells */
     table.fc tbody td.fc-paid {
-      font-weight: 600;
+      font-weight: 500;
       border-radius: 6px;
     }
     table.fc tbody td.fc-ok {
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
     }
     table.fc tbody td.fc-diff {
       color: #a06020;
@@ -712,8 +732,9 @@
     table.fc tbody td.fc-unconfirmed:hover { background: var(--bg); }
 
     table.fc tr.totals td {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 13px;
       border-top: 1.5px solid var(--line);
       border-bottom: none;
@@ -721,23 +742,24 @@
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.totals td.cur       { background: var(--accent-tint); color: var(--accent); }
-    table.fc tr.totals td.name .lbl { font-weight: 600; color: var(--ink); }
+    table.fc tr.totals td.cur       { background: var(--bg-2); color: var(--accent); }
+    table.fc tr.totals td.name .lbl { font-weight: 500; color: var(--ink); }
 
     .reserve-note {
       font-size: 12.5px;
       color: var(--muted);
       line-height: 1.55;
-      margin: 0 2px 12px;
-      padding: 12px 15px;
-      background: var(--accent-tint);
-      border-radius: 13px;
+      margin: 0 0 16px;
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
     }
 
     .reserve-note b {
       color: var(--accent);
-      font-weight: 600;
-      font-family: "Space Grotesk";
+      font-weight: 500;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-variant-numeric: tabular-nums;
     }
 
@@ -749,8 +771,9 @@
     }
 
     table.fc tr.rot-sep td .lbl {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 10.5px;
       letter-spacing: .06em;
       text-transform: uppercase;
@@ -758,7 +781,8 @@
     }
 
     table.fc tr.rot-ein td {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12.5px;
       font-weight: 500;
       color: var(--danger);
@@ -766,32 +790,34 @@
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.rot-ein td.name .lbl { color: var(--danger); font-weight: 600; }
+    table.fc tr.rot-ein td.name .lbl { color: var(--danger); font-weight: 500; }
     table.fc tr.rot-ein td.cur       { background: rgba(176,85,106,.07); }
     table.fc tr.rot-ein td.past-col  { color: rgba(176,85,106,.45); }
 
     table.fc tr.rot-aus td {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
       border-bottom: 1px solid var(--line-soft);
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.rot-aus td.name .lbl { color: var(--accent); font-weight: 600; }
-    table.fc tr.rot-aus td.cur        { background: var(--accent-tint); }
+    table.fc tr.rot-aus td.name .lbl { color: var(--accent); font-weight: 500; }
+    table.fc tr.rot-aus td.cur        { background: var(--bg-2); }
     table.fc tr.rot-aus td.past-col   { color: rgba(15,110,84,.45); }
 
     table.fc tr.fc-avg td {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--text-2);
       font-variant-numeric: tabular-nums;
       border-bottom: 1px solid var(--line-soft);
     }
-    table.fc tr.fc-avg td.name .lbl { color: var(--text-2); font-weight: 600; font-size: 11px; }
+    table.fc tr.fc-avg td.name .lbl { color: var(--text-2); font-weight: 500; font-size: 11px; }
     table.fc tr.fc-avg td.cur      { background: var(--bg-2); }
     table.fc tr.fc-avg td.past-col { opacity: .45; }
 
@@ -802,21 +828,22 @@
       flex-wrap: wrap;
       margin: 0 0 10px;
       padding: 12px 14px;
-      border: 1.5px solid var(--accent);
+      border: 1px solid var(--line);
       border-radius: 12px;
-      background: var(--accent-tint);
+      background: var(--surface);
     }
     .rot-action-lbl {
       font-size: 10.5px;
-      font-weight: 700;
+      font-weight: 500;
       letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--text-2);
     }
     .rot-action-val {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 22px;
-      font-weight: 700;
+      font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
     .rot-action-val.pos { color: var(--accent); }
@@ -836,7 +863,8 @@
       margin: 0 0 14px;
     }
     .gh-popup .gh-note code {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12px;
       background: var(--bg-2);
       padding: 1px 5px;
@@ -866,7 +894,7 @@
       margin: 28px 0 4px; padding-top: 18px; border-top: 1px solid var(--line);
     }
     .demo-btn {
-      font-family: inherit; font-size: 12.5px; font-weight: 600;
+      font-family: inherit; font-size: 12.5px; font-weight: 500;
       color: var(--muted); background: var(--surface);
       border: 1px solid var(--line); border-radius: 9px;
       padding: 9px 14px; cursor: pointer; margin-top: 10px;
@@ -876,7 +904,7 @@
     .demo-note { font-size: 11px; color: var(--faint); }
 
     .stats-h3 {
-      font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+      font-size: 10.5px; font-weight: 500; letter-spacing: .07em;
       text-transform: uppercase; color: var(--muted);
       margin: 26px 0 6px;
     }
@@ -892,18 +920,25 @@
       border-radius: 2px; margin: 0 1px 0 4px;
     }
 
-    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
-    .kpi {
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: 12px; padding: 11px 9px;
-      display: flex; flex-direction: column; gap: 3px;
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 0; margin-bottom: 8px;
+      border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
     }
+    .kpi {
+      background: transparent; border: none;
+      border-left: 1px solid var(--line-soft);
+      border-radius: 0; padding: 16px 12px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .kpi:first-child { border-left: none; }
     .kpi-lbl {
-      font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+      font-size: 9.5px; font-weight: 500; letter-spacing: .05em;
       text-transform: uppercase; color: var(--muted);
     }
     .kpi-val {
-      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600;
       font-variant-numeric: tabular-nums; letter-spacing: -.02em;
     }
     .kpi-sub { font-size: 9.5px; color: var(--faint); }
@@ -914,19 +949,20 @@
       display: flex; justify-content: space-between; align-items: center;
       font-size: 10.5px; color: var(--muted); margin-top: 5px;
     }
-    .med-tag { font-weight: 600; }
+    .med-tag { font-weight: 500; }
     .stats-axis-y {
-      font-size: 10.5px; font-weight: 600; color: var(--muted);
+      font-size: 10.5px; font-weight: 500; color: var(--muted);
       margin: 0 0 2px;
     }
 
     .mrows { display: flex; flex-direction: column; gap: 13px; }
     .mrow { display: flex; flex-direction: column; gap: 4px; }
     .mrow-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-    .mrow-lbl { font-size: 13px; font-weight: 600; display: flex; flex-direction: column; gap: 1px; }
+    .mrow-lbl { font-size: 13px; font-weight: 500; display: flex; flex-direction: column; gap: 1px; }
     .mrow-u { font-size: 10px; font-weight: 400; color: var(--faint); }
     .mrow-est {
-      font-family: "Space Grotesk"; font-size: 14px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600;
       font-variant-numeric: tabular-nums; white-space: nowrap;
     }
     .mrow-track {
@@ -947,7 +983,7 @@
       display: flex; justify-content: space-between; gap: 10px;
       font-size: 10px; color: var(--faint); font-variant-numeric: tabular-nums;
     }
-    .mrow-raw.drift { color: var(--danger); font-weight: 600; }
+    .mrow-raw.drift { color: var(--danger); font-weight: 500; }
     .mrow.weak .mrow-lbl { color: var(--muted); font-weight: 500; }
 
     .model-foot {
@@ -958,27 +994,29 @@
       padding: 8px 10px; display: flex; flex-direction: column; gap: 2px;
     }
     .model-stat span {
-      font-size: 9px; font-weight: 700; letter-spacing: .05em;
+      font-size: 9px; font-weight: 500; letter-spacing: .05em;
       text-transform: uppercase; color: var(--muted);
     }
-    .model-stat b { font-family: "Space Grotesk"; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .model-stat b { font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 14px; font-variant-numeric: tabular-nums; }
 
     .ytabs { display: flex; gap: 5px; margin: 16px 0 4px; }
     .ytab {
-      flex: 1; font-family: inherit; font-size: 12.5px; font-weight: 600;
+      flex: 1; font-family: inherit; font-size: 12.5px; font-weight: 500;
       color: var(--muted); background: var(--bg);
       border: 1px solid var(--line); border-radius: 9px;
       padding: 9px 8px; cursor: pointer;
     }
-    .ytab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .ytab.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 
     .qbars { display: flex; flex-direction: column; gap: 8px; }
     .qbar { display: grid; grid-template-columns: 96px 1fr 84px; align-items: center; gap: 9px; }
-    .qbar-l { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .qbar-l { font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
     .qbar-track { height: 16px; background: var(--bg); border-radius: 4px; overflow: hidden; }
     .qbar-fill { display: block; height: 100%; border-radius: 4px; }
     .qbar-v {
-      font-family: "Space Grotesk"; font-size: 12.5px; font-weight: 700;
+      font-family: inherit; white-space: nowrap;
+      font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 500;
       font-variant-numeric: tabular-nums; text-align: right;
       display: flex; flex-direction: column; align-items: flex-end;
     }
@@ -992,8 +1030,8 @@
       display: flex; flex-direction: column; gap: 7px;
     }
     .wblock-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 2px; }
-    .wblock-t { font-size: 13px; font-weight: 700; }
-    .wblock-s { font-size: 10.5px; font-weight: 600; color: var(--accent); }
+    .wblock-t { font-size: 13px; font-weight: 500; }
+    .wblock-s { font-size: 10.5px; font-weight: 500; color: var(--accent); }
     .wblock-s.thin { color: var(--faint); font-weight: 400; }
     .wbar { display: grid; grid-template-columns: 96px 1fr 74px; align-items: center; gap: 8px; }
     .dstrip { width: 100%; height: auto; display: block; overflow: visible; }
@@ -1021,7 +1059,8 @@
       font-size: 10px; color: var(--muted); line-height: 1.35;
     }
     .sbins b {
-      display: block; font-family: "Space Grotesk"; font-size: 12px;
+      display: block; font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 12px;
       color: var(--ink); font-variant-numeric: tabular-nums;
     }
     .sbins i { font-style: normal; color: var(--faint); }
@@ -1033,7 +1072,8 @@
     }
     .wbar-l { font-size: 11.5px; color: var(--muted); }
     .wbar-v {
-      font-family: "Space Grotesk"; font-size: 12px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600;
       font-variant-numeric: tabular-nums; text-align: right;
       display: flex; flex-direction: column; align-items: flex-end;
     }
@@ -1055,25 +1095,26 @@
 
     .combo-sel { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
     .combo-sel select {
-      flex: 1; min-width: 150px; font-family: inherit; font-size: 12px; font-weight: 600;
+      flex: 1; min-width: 150px; font-family: inherit; font-size: 12px; font-weight: 500;
       color: var(--ink); background: var(--surface);
       border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px;
     }
     .combo-wrap { overflow-x: auto; }
     table.combo { width: 100%; border-collapse: separate; border-spacing: 5px; }
     table.combo th {
-      font-size: 10.5px; font-weight: 600; color: var(--muted);
+      font-size: 10.5px; font-weight: 500; color: var(--muted);
       text-align: left; line-height: 1.35; padding: 0 4px;
     }
     table.combo thead th { text-align: center; }
-    table.combo th i { font-style: normal; font-weight: 700; color: var(--ink); font-size: 11px; }
+    table.combo th i { font-style: normal; font-weight: 500; color: var(--ink); font-size: 11px; }
     table.combo td {
       background: var(--surface); border: 1px solid var(--line);
       border-radius: 11px; padding: 13px 8px; text-align: center;
       display: flex; flex-direction: column; gap: 2px;
     }
     table.combo td b {
-      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
     table.combo td span { font-size: 9.5px; color: var(--faint); font-weight: 400; }
@@ -1083,12 +1124,12 @@
 
     .xtabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
     .xtab {
-      font-family: inherit; font-size: 11.5px; font-weight: 600;
+      font-family: inherit; font-size: 11.5px; font-weight: 500;
       color: var(--muted); background: var(--bg);
       border: 1px solid var(--line); border-radius: 8px;
       padding: 6px 10px; cursor: pointer;
     }
-    .xtab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .xtab.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
 
     @media (max-width: 430px) {
       .tab-btn { font-size: 12.5px; padding: 10px 2px; }
@@ -1103,12 +1144,13 @@
     .night-nav > button {
       flex-shrink: 0; background: var(--surface); border: 1px solid var(--line);
       border-radius: 10px; padding: 10px 15px;
-      font-family: inherit; font-size: 15px; font-weight: 600;
+      font-family: inherit; font-size: 15px; font-weight: 500;
       color: var(--muted); cursor: pointer;
     }
     .night-title { text-align: center; display: flex; flex-direction: column; gap: 2px; }
     .night-t {
-      font-family: "Space Grotesk"; font-weight: 700; font-size: 15px;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px;
       letter-spacing: -.01em; line-height: 1.25;
     }
     .night-s { font-size: 10.5px; color: var(--faint); }
@@ -1116,11 +1158,12 @@
     .nresult {
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       padding: 15px; margin-bottom: 16px;
-      background: var(--accent-tint); border: 1.5px solid var(--accent);
+      background: var(--bg-2); border: 1px solid var(--line);
       border-radius: 13px;
     }
     .nresult-v {
-      font-family: "Space Grotesk"; font-size: 24px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 600;
       color: var(--accent); font-variant-numeric: tabular-nums;
     }
     .nresult-l { font-size: 11px; color: var(--muted); }
@@ -1132,13 +1175,13 @@
       border-radius: 13px; padding: 13px 13px 11px; margin-bottom: 8px;
     }
     .nrow-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-    .nrow-t { font-size: 14px; font-weight: 600; }
+    .nrow-t { font-size: 14px; font-weight: 500; }
     .nrow-n { font-size: 10.5px; color: var(--faint); }
     .nrow-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
     .tapb {
       flex: 1; min-width: 92px; font-family: inherit;
-      font-size: 12px; font-weight: 600; color: var(--accent);
-      background: var(--accent-tint); border: 1px solid transparent;
+      font-size: 12px; font-weight: 500; color: var(--accent);
+      background: var(--bg-2); border: 1px solid transparent;
       border-radius: 9px; padding: 9px 8px; cursor: pointer;
       transition: transform .09s ease;
     }
@@ -1153,15 +1196,16 @@
     }
     .nrow-lbl { font-size: 10.5px; color: var(--faint); }
     .nrow-val input[type="time"], .nrow-val input[type="date"] {
-      font-family: "Space Grotesk"; font-size: 14px; font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 500;
       font-variant-numeric: tabular-nums; color: var(--ink);
       background: var(--bg); border: 1px solid var(--line);
       border-radius: 8px; padding: 6px 9px;
     }
     .nrow-val input:focus { outline: none; border-color: var(--accent); }
     .tag {
-      font-size: 10.5px; font-weight: 600; color: var(--accent);
-      background: var(--accent-tint); border-radius: 6px; padding: 3px 7px;
+      font-size: 10.5px; font-weight: 500; color: var(--accent);
+      background: var(--bg-2); border-radius: 6px; padding: 3px 7px;
     }
     .row-x {
       margin-left: auto; width: 26px; height: 26px; border-radius: 7px;
@@ -1180,7 +1224,8 @@
       transition: transform .09s ease;
     }
     .bigbtn:active { transform: scale(.985); }
-    .bigbtn-l { font-family: "Space Grotesk"; font-size: 16px; font-weight: 700; }
+    .bigbtn-l { font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 600; }
     .bigbtn-v { font-size: 11px; opacity: .82; }
     .bigbtn.set { background: var(--ink); }
 
@@ -1197,7 +1242,7 @@
     /* ── Day log ── */    /* ── Day log ── */
     .sleep-h3 {
       font-size: 10.5px;
-      font-weight: 700;
+      font-weight: 500;
       letter-spacing: .07em;
       text-transform: uppercase;
       color: var(--muted);
@@ -1219,9 +1264,10 @@
 
     .sleep-row input[type="date"],
     .sleep-row input[type="time"] {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 500;
       font-variant-numeric: tabular-nums;
       color: var(--ink);
       background: var(--bg);
@@ -1237,7 +1283,7 @@
     .seg-btn {
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--bg);
       border: 1px solid var(--line);
@@ -1257,7 +1303,7 @@
     .cups { display: flex; align-items: center; gap: 2px; }
     .cups button {
       width: 34px; height: 34px;
-      font-size: 17px; font-weight: 600;
+      font-size: 17px; font-weight: 500;
       color: var(--muted);
       background: var(--bg);
       border: 1px solid var(--line);
@@ -1266,8 +1312,9 @@
     .cups button:first-child { border-radius: 9px 0 0 9px; }
     .cups button:last-child  { border-radius: 0 9px 9px 0; margin-left: -1px; }
     .cups span {
-      font-family: "Space Grotesk";
-      font-size: 15px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-size: 15px; font-weight: 500;
       min-width: 40px; text-align: center;
       font-variant-numeric: tabular-nums;
     }
@@ -1275,7 +1322,7 @@
     .sleep-today {
       font-family: inherit;
       font-size: 12.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
       background: transparent;
       border: none;
@@ -1291,16 +1338,17 @@
       flex-wrap: wrap;
       padding: 13px 15px;
       margin-bottom: 14px;
-      border: 1.5px solid var(--accent);
+      border: 1px solid var(--line);
       border-radius: 12px;
-      background: var(--accent-tint);
+      background: var(--bg-2);
     }
     .sleep-nudge-txt { display: flex; flex-direction: column; gap: 2px; }
     .sleep-nudge-txt b { font-size: 13.5px; }
     .sleep-nudge-txt span { font-size: 11.5px; color: var(--muted); }
     .sleep-nudge input {
-      font-family: "Space Grotesk";
-      font-size: 15px; font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-size: 15px; font-weight: 500;
       font-variant-numeric: tabular-nums;
       padding: 7px 10px;
       border: 1px solid var(--line);
@@ -1311,7 +1359,7 @@
 
     .sleep-span {
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
       padding: 8px 0 0;
       text-align: right;
@@ -1320,7 +1368,7 @@
     .sleep-hist-wrap { overflow-x: auto; }
     table.sleep-hist td.hr .sub {
       display: block;
-      font-weight: 600;
+      font-weight: 500;
       font-size: 10px;
       color: var(--muted);
       margin-top: 1px;
@@ -1333,7 +1381,7 @@
     }
     table.sleep-hist th {
       font-size: 9.5px;
-      font-weight: 700;
+      font-weight: 500;
       letter-spacing: .05em;
       text-transform: uppercase;
       color: var(--muted);
@@ -1348,12 +1396,13 @@
     }
     table.sleep-hist tr { cursor: pointer; }
     table.sleep-hist tr:hover td { background: var(--bg); }
-    table.sleep-hist tr.sel td { background: var(--accent-tint); }
-    table.sleep-hist td.d  { font-weight: 600; }
-    table.sleep-hist td.hr { font-family: "Space Grotesk"; font-weight: 700; color: var(--accent); }
+    table.sleep-hist tr.sel td { background: var(--bg-2); }
+    table.sleep-hist td.d  { font-weight: 500; }
+    table.sleep-hist td.hr { font-family: inherit;
+      font-variant-numeric: tabular-nums; font-weight: 500; color: var(--accent); }
     table.sleep-hist .sub  { color: var(--muted); font-size: 11px; }
     table.sleep-hist i     { font-style: normal; }
-    table.sleep-hist .m-yes { color: var(--accent); font-weight: 700; }
+    table.sleep-hist .m-yes { color: var(--accent); font-weight: 500; }
     table.sleep-hist .m-no  { color: var(--muted); }
     table.sleep-hist .m-un  { color: var(--line); }
     .ft {
@@ -1362,13 +1411,13 @@
       width: 16px; height: 16px;
       line-height: 16px; text-align: center;
       border-radius: 5px;
-      font-size: 9.5px; font-weight: 700;
+      font-size: 9.5px; font-weight: 500;
       color: #fff;
     }
     .q {
       display: inline-block; width: 17px; height: 17px;
       line-height: 17px; text-align: center; border-radius: 5px;
-      font-size: 10px; font-weight: 700; color: #fff;
+      font-size: 10px; font-weight: 500; color: #fff;
     }
     .q-gut      { background: #3b6fb0; }
     .q-mittel   { background: #9aa19e; }
@@ -1381,7 +1430,7 @@
     .ft-scharf { background: #c8763a; }
 
     .one-head {
-      font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+      font-size: 10.5px; font-weight: 500; letter-spacing: .06em;
       text-transform: uppercase; color: var(--muted);
       margin: 26px 0 8px;
     }
@@ -1392,20 +1441,23 @@
       border-radius: 12px; padding: 13px 15px; margin-bottom: 7px;
     }
     .one-item:hover { border-color: var(--muted); }
-    .one-l { font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+    .one-l { font-size: 14px; font-weight: 500; display: flex; flex-direction: column; gap: 2px; }
     .one-sub { font-size: 11px; font-weight: 400; color: var(--muted); }
     .one-amt {
-      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600;
       font-variant-numeric: tabular-nums; flex-shrink: 0;
     }
     table.fc tr.oneoff-row td {
-      font-family: "Space Grotesk"; font-size: 12px; font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 500;
       color: var(--c2); font-variant-numeric: tabular-nums;
       border-bottom: 1px solid var(--line-soft);
     }
     table.fc tr.oneoff-row td.name .lbl { color: var(--c2); }
     table.fc tr.inc-balance td {
-      font-family: "Space Grotesk"; font-size: 12.5px; font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 500;
       font-variant-numeric: tabular-nums;
       border-bottom: 1px solid var(--line-soft);
     }
@@ -1417,14 +1469,15 @@
     }
     .wiz-steps { display: flex; gap: 6px; margin-bottom: 20px; }
     .wiz-dot {
-      flex: 1; font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+      flex: 1; font-size: 9.5px; font-weight: 500; letter-spacing: .05em;
       text-transform: uppercase; color: var(--faint); text-align: center;
       padding-bottom: 7px; border-bottom: 2px solid var(--line);
     }
     .wiz-dot.done { color: var(--muted); border-color: var(--muted); }
     .wiz-dot.on { color: var(--accent); border-color: var(--accent); }
     .wiz-h {
-      font-family: "Space Grotesk"; font-size: 20px; font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 500;
       letter-spacing: -.02em; margin: 0 0 8px;
     }
     .wiz-p { font-size: 13px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
@@ -1439,30 +1492,31 @@
       margin-bottom: 16px;
     }
     .wiz-count button {
-      width: 44px; height: 44px; font-size: 21px; font-weight: 600;
+      width: 44px; height: 44px; font-size: 21px; font-weight: 500;
       color: var(--muted); background: var(--bg);
       border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
     }
     .wiz-count button:disabled { opacity: .35; cursor: default; }
     .wiz-count span {
-      font-family: "Space Grotesk"; font-size: 17px; font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500;
       min-width: 120px; text-align: center;
     }
     .wiz-names { display: flex; flex-direction: column; }
     .wiz-modes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
     .wiz-mode {
       width: 100%; text-align: left; font-family: inherit; cursor: pointer;
-      background: var(--bg); border: 1.5px solid var(--line);
+      background: var(--bg); border: 1px solid var(--line);
       border-radius: 12px; padding: 13px 14px;
       display: flex; flex-direction: column; gap: 3px;
     }
-    .wiz-mode.on { border-color: var(--accent); background: var(--accent-tint); }
-    .wiz-mode-l { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .wiz-mode.on { border-color: var(--accent); background: var(--bg-2); }
+    .wiz-mode-l { font-size: 14px; font-weight: 600; color: var(--ink); }
     .wiz-mode-d { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
     .wiz-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
     .wiz-nav button { padding: 12px 22px; border-radius: 11px; font-size: 14px; }
     .hh-lbl {
-      display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+      display: block; font-size: 10.5px; font-weight: 500; letter-spacing: .06em;
       text-transform: uppercase; color: var(--muted); margin: 16px 0 8px;
     }
 
@@ -1487,16 +1541,17 @@
       flex-direction: column;
       gap: 4px;
       font-size: 10.5px;
-      font-weight: 700;
+      font-weight: 500;
       letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--text-2);
     }
     .rot-cfg input {
       font: inherit;
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       font-variant-numeric: tabular-nums;
       text-transform: none;
       letter-spacing: 0;
@@ -1513,19 +1568,21 @@
     }
 
     table.fc tr.rot-net td {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       font-variant-numeric: tabular-nums;
       border-bottom: 1.5px solid var(--line);
     }
-    table.fc tr.rot-net td.name .lbl { color: var(--text-2); font-weight: 600; font-size: 11px; }
+    table.fc tr.rot-net td.name .lbl { color: var(--text-2); font-weight: 500; font-size: 11px; }
     table.fc tr.rot-net td.rot-net-pos { color: var(--accent); }
     table.fc tr.rot-net td.rot-net-neg { color: var(--danger); }
     table.fc tr.rot-net td.cur        { background: var(--bg-2); }
 
     table.fc tr.reserve td {
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-weight: 500;
       font-size: 12.5px;
       color: var(--muted);
@@ -1534,8 +1591,8 @@
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.reserve td.name .lbl { color: var(--muted); font-weight: 600; }
-    table.fc tr.reserve td.cur        { background: var(--accent-tint); color: var(--accent); }
+    table.fc tr.reserve td.name .lbl { color: var(--muted); font-weight: 500; }
+    table.fc tr.reserve td.cur        { background: var(--bg-2); color: var(--accent); }
 
     /* ── Income rows ── */
     table.fc tr.inc-sep td {
@@ -1547,8 +1604,9 @@
     }
 
     table.fc tr.inc-sep td .lbl {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 10.5px;
       letter-spacing: .06em;
       text-transform: uppercase;
@@ -1563,33 +1621,35 @@
     table.fc tr.inc-input td.name .lbl { color: var(--muted); font-weight: 500; }
 
     table.fc tr.inc-calc td {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 13px;
       color: var(--ink);
       border-bottom: 1px solid var(--line-soft);
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.inc-calc td.name .lbl            { font-weight: 600; color: var(--ink); }
+    table.fc tr.inc-calc td.name .lbl            { font-weight: 500; color: var(--ink); }
     table.fc tr.inc-calc.muted td                { color: var(--muted); }
     table.fc tr.inc-calc.muted td.name .lbl      { color: var(--muted); }
-    table.fc tr.inc-calc.remain td               { background: var(--accent-tint); color: var(--accent); }
+    table.fc tr.inc-calc.remain td               { background: var(--bg-2); color: var(--accent); }
     table.fc tr.inc-calc.remain td.name .lbl     { color: var(--accent); }
 
     table.fc tr.inc-payout td {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 13.5px;
       color: var(--ink);
       border-bottom: 1px solid var(--line-soft);
       font-variant-numeric: tabular-nums;
     }
 
-    table.fc tr.inc-payout td.name .lbl { font-weight: 700; color: var(--ink); }
+    table.fc tr.inc-payout td.name .lbl { font-weight: 500; color: var(--ink); }
 
     table.fc .ic {
-      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-family: "Inter", system-ui, sans-serif;
       font-size: 13px;
       font-variant-numeric: tabular-nums;
       font-weight: 500;
@@ -1610,37 +1670,41 @@
       outline: 2px solid var(--accent);
       outline-offset: 2px;
       border-radius: 4px;
-      background: var(--accent-tint);
+      background: var(--bg-2);
     }
 
     /* ── Tab navigation ── */
     .tab-nav {
       display: flex;
-      gap: 4px;
-      background: var(--bg);
-      padding: 4px;
-      border-radius: 14px;
-      margin-bottom: 18px;
+      gap: 26px;
+      background: transparent;
+      padding: 0;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 32px;
     }
 
     .tab-btn {
-      flex: 1;
+      flex: none;
       font-family: inherit;
       font-size: 14px;
-      font-weight: 600;
-      color: var(--muted);
+      font-weight: 400;
+      letter-spacing: -.01em;
+      color: var(--faint);
       background: transparent;
       border: none;
-      border-radius: 11px;
-      padding: 10px 4px;
+      border-radius: 0;
+      padding: 0 0 13px;
+      margin-bottom: -1px;
+      border-bottom: 1.5px solid transparent;
       cursor: pointer;
-      transition: all .15s ease;
+      transition: color .18s ease, border-color .18s ease;
     }
 
     .tab-btn.active {
-      background: var(--surface);
+      background: transparent;
       color: var(--ink);
-      box-shadow: 0 1px 3px rgba(20,30,25,.1);
+      border-bottom-color: var(--ink);
+      box-shadow: none;
     }
 
     /* ── Transactions ── */
@@ -1653,8 +1717,9 @@
     }
 
     .tx-head h2 {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 16px;
       letter-spacing: -.01em;
     }
@@ -1669,9 +1734,9 @@
     .tx-import-btn {
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       border: none;
       border-radius: 20px;
       padding: 8px 14px;
@@ -1690,11 +1755,12 @@
 
     .tx-paste-wrap textarea {
       width: 100%;
-      font-family: "Space Grotesk", monospace;
+      font-family: "Inter", monospace;
+      font-variant-numeric: tabular-nums;
       font-size: 11px;
       color: var(--ink);
       background: var(--bg);
-      border: 1.5px solid var(--line);
+      border: 1px solid var(--line);
       border-radius: 10px;
       padding: 10px 12px;
       min-height: 110px;
@@ -1726,7 +1792,7 @@
       padding: 8px 14px;
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       cursor: pointer;
     }
@@ -1734,8 +1800,9 @@
     .tx-month-nav button:hover { color: var(--ink); }
 
     .tx-month-label {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 16px;
       letter-spacing: -.01em;
     }
@@ -1756,7 +1823,7 @@
 
     .tx-sum-card .lbl {
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: .04em;
@@ -1765,8 +1832,9 @@
     }
 
     .tx-sum-card .val {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 18px;
       font-variant-numeric: tabular-nums;
       letter-spacing: -.015em;
@@ -1785,7 +1853,7 @@
 
     .tx-cat-bar-title {
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 500;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: .05em;
@@ -1829,9 +1897,10 @@
     .tx-cat-amt {
       width: 72px;
       text-align: right;
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       font-variant-numeric: tabular-nums;
       flex: none;
@@ -1846,7 +1915,7 @@
     .tx-filter-btn {
       font-family: inherit;
       font-size: 12.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--surface);
       border: 1.5px solid transparent;
@@ -1858,13 +1927,13 @@
 
     .tx-filter-btn.active {
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       border-color: var(--accent);
     }
 
     .tx-day-sep {
       font-size: 11.5px;
-      font-weight: 700;
+      font-weight: 500;
       color: var(--faint);
       text-transform: uppercase;
       letter-spacing: .05em;
@@ -1897,7 +1966,7 @@
 
     .tx-payee {
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1912,8 +1981,9 @@
     .tx-right { text-align: right; flex: none; }
 
     .tx-amt {
-      font-family: "Space Grotesk";
-      font-weight: 600;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 14px;
       font-variant-numeric: tabular-nums;
     }
@@ -1924,7 +1994,7 @@
     .tx-cat-chip {
       display: inline-block;
       font-size: 10.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--bg);
       border-radius: 20px;
@@ -1968,7 +2038,7 @@
     .sub-deact-tag {
       display: inline-block;
       font-size: 10.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--danger);
       background: rgba(176,85,106,.1);
       border-radius: 20px;
@@ -1984,7 +2054,7 @@
       padding: 11px 14px;
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--bg);
       border: none;
@@ -2025,9 +2095,9 @@
     .tx-link-btn {
       display: inline-block;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       border: 1.5px dashed var(--accent);
       border-radius: 20px;
       padding: 3px 9px;
@@ -2042,10 +2112,10 @@
       align-items: center;
       gap: 4px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--accent);
-      background: var(--accent-tint);
-      border: 1.5px solid var(--accent);
+      background: var(--bg-2);
+      border: 1px solid var(--line);
       border-radius: 20px;
       padding: 3px 9px;
       cursor: pointer;
@@ -2058,7 +2128,7 @@
       align-items: center;
       gap: 4px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: #7050b8;
       background: rgba(112, 80, 184, .1);
       border: 1.5px solid rgba(112, 80, 184, .35);
@@ -2074,19 +2144,19 @@
       align-items: center;
       gap: 4px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       border-radius: 20px;
       padding: 3px 9px;
       cursor: pointer;
       user-select: none;
     }
     .tx-iou-badge.open   { color: #a06020; background: #fef0db; border: 1.5px solid #e0a840; }
-    .tx-iou-badge.settled { color: var(--muted); background: var(--bg); border: 1.5px solid var(--line); }
+    .tx-iou-badge.settled { color: var(--muted); background: var(--bg); border: 1px solid var(--line); }
 
     .tx-iou-btn {
       display: inline-block;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       color: #a06020;
       background: #fef0db;
       border: 1.5px dashed #e0a840;
@@ -2134,7 +2204,7 @@
       margin-bottom: 5px;
       background: var(--bg);
     }
-    .settle-pick-row.selected { border-color: var(--accent); background: var(--accent-tint); }
+    .settle-pick-row.selected { border-color: var(--accent); background: var(--bg-2); }
     .settle-check { font-size: 16px; color: var(--muted); flex-shrink: 0; }
     .settle-pick-row.selected .settle-check { color: var(--accent); }
 
@@ -2149,7 +2219,7 @@
       padding: 10px 14px;
       margin-bottom: 12px;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: #a06020;
     }
     .iou-outstanding-amt { font-size: 14px; }
@@ -2184,15 +2254,16 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-family: "Space Grotesk";
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
       font-size: 11.5px;
-      font-weight: 600;
+      font-weight: 500;
       border-radius: 20px;
       padding: 3px 9px;
       cursor: pointer;
       margin-bottom: 4px;
     }
-    .sub-pay-badge.ok   { color: var(--accent);  background: var(--accent-tint); }
+    .sub-pay-badge.ok   { color: var(--accent);  background: var(--bg-2); }
     .sub-pay-badge.diff { color: #a06020;         background: #fef0db; }
 
     /* sub picker bottom sheet */
@@ -2232,7 +2303,7 @@
       border: 1.5px solid transparent;
       transition: border-color .15s;
     }
-    .tx-sub-row:hover, .tx-sub-row.active { border-color: var(--accent); background: var(--accent-tint); }
+    .tx-sub-row:hover, .tx-sub-row.active { border-color: var(--accent); background: var(--bg-2); }
 
     .tx-sub-swatch {
       width: 36px;
@@ -2241,15 +2312,16 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 12px;
       color: #fff;
       flex-shrink: 0;
     }
 
     .tx-sub-name {
-      font-weight: 600;
+      font-weight: 500;
       font-size: 14px;
     }
     .tx-sub-meta {
@@ -2287,8 +2359,9 @@
     }
 
     .price-modal-title {
-      font-family: "Space Grotesk";
-      font-weight: 700;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
       font-size: 18px;
       margin-bottom: 12px;
     }
@@ -2326,10 +2399,10 @@
       flex: 1;
       font-family: inherit;
       font-size: 13.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--surface);
-      border: 1.5px solid var(--line);
+      border: 1px solid var(--line);
       border-radius: 20px;
       padding: 9px 14px;
       cursor: pointer;
@@ -2338,7 +2411,7 @@
 
     .tx-acc-tab.active {
       color: var(--accent);
-      background: var(--accent-tint);
+      background: var(--bg-2);
       border-color: var(--accent);
     }
 
@@ -2350,7 +2423,7 @@
       align-items: center;
       justify-content: center;
       background: var(--surface);
-      border: 1.5px solid var(--line);
+      border: 1px solid var(--line);
       border-radius: 50%;
       cursor: pointer;
       font-size: 15px;
@@ -2374,7 +2447,7 @@
     .btn-data {
       font-family: inherit;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
       background: var(--surface);
       border: 1px solid var(--line);
@@ -3429,7 +3502,7 @@ function txLinkToSub(txId) {
   const popup = document.createElement("div");
   popup.className = "tx-sub-picker";
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
-    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:6px">Abo zuordnen</div>
+    <div style="font-weight:600;font-size:15px;margin-bottom:6px">Abo zuordnen</div>
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Transaktion: <b>${esc(payee)}</b> · ${eur.format(t.amount)}</div>
     <div class="tx-sub-list">${rows || '<div style="color:var(--muted);font-size:13px;padding:8px 0">Noch keine Abos angelegt.</div>'}</div>
     ${existingLink ? `<button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="txUnlinkSub('${txId}')">Zuordnung entfernen</button>` : ""}`;
@@ -4833,6 +4906,453 @@ function renderSleep() {
     </div>`;
 }
 
+// ── Analysis ───────────────────────────────────────────────────────────────
+// Everything here is a counted median over real nights. No models, no
+// estimates: each number is "the middle night of this group", nothing more.
+// Diverging poles validated for colour-vision deficiency (protan ΔE 20.0);
+// the app's green/red pair fails that check and is deliberately not used.
+const CH_GOOD = "#3b6fb0";
+const CH_BAD  = "#c2783f";
+const CH_MUTE = "#9aa19e";
+
+const MIN_BIN = 8;     // nights per group before a comparison is worth reading
+
+let statsY = "span";
+let hideNight = false;   // night shifts out of every view at once
+
+const median = a => {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y), h = s.length >> 1;
+  return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+};
+
+// Minutes between something earlier in the day and closing your eyes.
+// Everything is measured against that moment, never against the wall clock,
+// so a cup six hours before counts the same at 23:00 and at 07:00.
+function gapToBed(e, field) {
+  if (!e.sleepAt || !e[field]) return null;
+  let d = minsOf(e.sleepAt) - minsOf(e[field]);
+  if (d < 0) d += 1440;
+  return d > 20 * 60 ? null : d;
+}
+
+const OUTCOMES = [
+  { k: 'span', l: 'Einschlafphase', lowGood: true,
+    get: r => r.span, fmt: v => fmtSpan(v),
+    // Axis ticks need to fit in a narrow margin, so 2:35 rather than 2 h 35 min
+    tick: v => { const m = Math.round(v); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; } },
+  { k: 'quality', l: 'Nachtgefühl', lowGood: false,
+    get: r => r.e.quality ? QUAL_SCORE[r.e.quality] : null,
+    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2),
+    tick: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) }
+];
+const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
+function setStatsY(k) { statsY = k; renderStats(); }
+function toggleNight() { hideNight = !hideNight; renderStats(); }
+
+function statRows() {
+  return Object.keys(daylog).sort().map(d => {
+    const e = getDay(d), span = restSpan(d, e);
+    return { d, e, span };
+  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60)
+    .filter(r => !hideNight || r.e.shift !== 'nacht');
+}
+
+// Timed factors, binned by how long before lights-out they happened
+const WINDOWS = [
+  { k: 'coffeeLast', l: 'Letzte Tasse Kaffee', off: e => e.coffee === false,
+    edges: [5, 10], labels: ['< 5 Std. vorher', '5–10 Std. vorher', '> 10 Std. vorher'], none: 'kein Kaffee' },
+  { k: 'alcLast', l: 'Letzter Alkohol', off: e => e.alcohol === false,
+    edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Alkohol' },
+  { k: 'foodTime', l: 'Letztes Essen', off: () => false,
+    edges: [2, 4], labels: ['< 2 Std. vorher', '2–4 Std. vorher', '> 4 Std. vorher'], none: null },
+  { k: 'sportEnd', l: 'Sport-Ende', off: e => e.sport === false,
+    edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Sport' },
+  { k: 'saunaEnd', l: 'Letzter Saunagang', off: e => e.sauna === false,
+    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
+  { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
+    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' }
+];
+
+// Factors with no time of their own
+const GROUPS = [
+  { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
+  { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
+  { l: 'Art des Essens', get: e => e.foodType,   levels: FOOD_TYPES },
+  { l: 'Art des Kaffees', get: e => e.coffeeType, levels: COFFEE_TYPES },
+  { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
+];
+
+// Pairs, for the combination view. Each factor collapses to "critical or not"
+// so two of them make four cells instead of nine — with thirty-odd nights
+// that is the difference between readable and empty.
+const COMBOS = [
+  { k: 'coffee', l: 'Kaffee < 5 Std. vorher',
+    on: e => e.coffee === false ? false : nearBed(e, 'coffeeLast', 300) },
+  { k: 'alc',   l: 'Alkohol getrunken',
+    on: e => e.alcohol === true ? true : e.alcohol === false ? false : null },
+  { k: 'food',  l: 'Essen < 2 Std. vorher',  on: e => nearBed(e, 'foodTime', 120) },
+  { k: 'fat',   l: 'Fettig gegessen',
+    on: e => e.foodType ? e.foodType === 'fettig' : null },
+  { k: 'sport', l: 'Sport < 3 Std. vorher',
+    on: e => e.sport === false ? false : nearBed(e, 'sportEnd', 180) },
+  { k: 'sauna', l: 'Sauna < 2 Std. vorher',
+    on: e => e.sauna === false ? false : nearBed(e, 'saunaEnd', 120) },
+  { k: 'mast',  l: 'Masturbation < 1 Std. vorher',
+    on: e => e.mast === false ? false : nearBed(e, 'mastTime', 60) },
+  { k: 'brain', l: 'Brainwork davor',
+    on: e => e.brainwork === true ? true : e.brainwork === false ? false : null },
+  { k: 'nacht', l: 'Nachtdienst',
+    on: e => e.shift ? e.shift === 'nacht' : null },
+  { k: 'spaet', l: 'Spätdienst',
+    on: e => e.shift ? e.shift === 'spaet' : null }
+];
+function nearBed(e, field, mins) {
+  const g = gapToBed(e, field);
+  return g === null ? null : g < mins;
+}
+
+function renderStats() {
+  const host = $("stats");
+  const rows = statRows();
+  const N = rows.length;
+
+  if (N < 2) {
+    host.innerHTML = `<div class="stats-empty">
+      <b>Noch zu wenig Daten</b>
+      <p>Die Auswertung braucht Nächte mit <i>Schlafen gegangen</i> und <i>Ruhepuls erreicht</i>.
+      Bisher: <b>${N}</b>.</p>
+      <p>Große Unterschiede zeigen sich ab etwa 25 Nächten, feine brauchen deutlich mehr.</p>
+      <button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
+    </div>`;
+    return;
+  }
+
+  const spans = rows.map(r => r.span);
+  const med = median(spans);
+  const rated = rows.filter(r => r.e.quality).length;
+
+  const kpi = `<div class="kpi-row">
+    ${[['Nächte', String(N), ''],
+       ['Median', fmtSpan(med), 'bis zum Ruhepuls'],
+       ['Kürzeste', fmtSpan(Math.min(...spans)), ''],
+       ['Bewertet', String(rated), 'von ' + N + ' Nächten']].map(([l, v, s]) => `
+      <div class="kpi"><span class="kpi-lbl">${l}</span><span class="kpi-val">${esc(v)}</span>
+      ${s ? `<span class="kpi-sub">${esc(s)}</span>` : ''}</div>`).join('')}
+  </div>`;
+
+  const ySwitch = `<div class="ytabs">${OUTCOMES.map(o =>
+    `<button class="ytab ${o.k === statsY ? 'on' : ''}" onclick="setStatsY('${o.k}')">${o.l}</button>`
+  ).join('')}</div>`;
+
+  const nights = Object.keys(daylog).filter(k => (daylog[k] || {}).shift === 'nacht').length;
+  const filter = nights === 0 ? '' : `<label class="nfilter">
+    <input type="checkbox" ${hideNight ? 'checked' : ''} onchange="toggleNight()">
+    Nachtdienste ausblenden <span>(${nights} erfasst)</span>
+  </label>`;
+
+  host.innerHTML = kpi + ySwitch + filter + timelineChart(rows, med)
+    + feelVsBody(rows) + compareSection(rows) + comboSection(rows);
+}
+
+function feelVsBody(rows) {
+  const have = rows.filter(r => r.e.quality);
+  if (have.length < 4) {
+    return `<h3 class="stats-h3">Gefühl gegen Körper</h3>
+      <p class="stats-sub">Bewerte die Nächte am Morgen, dann steht hier, ob dein Empfinden
+      mit der gemessenen Einschlafphase zusammenpasst. Bisher ${have.length} bewertet.</p>`;
+  }
+  const byQ = QUALS.map(q => {
+    const v = have.filter(r => r.e.quality === q.v).map(r => r.span);
+    return { ...q, n: v.length, med: v.length ? median(v) : null };
+  });
+  const filled = byQ.filter(q => q.med !== null);
+  const max = Math.max(...filled.map(q => q.med), 1);
+  const gut = byQ.find(q => q.v === 'gut'), schl = byQ.find(q => q.v === 'schlecht');
+
+  const verdict = (gut.med !== null && schl.med !== null)
+    ? (schl.med - gut.med > 15
+        ? `Dein Gefühl passt zum Körper: nach gefühlt guten Nächten war der Ruhepuls im Mittel
+           <b>${esc(fmtSpan(schl.med - gut.med))}</b> früher erreicht als nach schlechten.`
+        : schl.med - gut.med < -15
+          ? `Auffällig: gefühlt <b>gute</b> Nächte hatten die <b>längere</b> Einschlafphase.
+             Dein Empfinden misst also etwas anderes als der Puls.`
+          : `Gefühl und Körper laufen bei dir <b>auseinander</b> — zwischen guten und schlechten
+             Nächten liegen nur ${esc(fmtSpan(Math.abs(schl.med - gut.med)))}. Beide Größen lohnen getrennt.`)
+    : `Sobald du gute und schlechte Nächte beide bewertet hast, steht hier der Vergleich.`;
+
+  return `
+    <h3 class="stats-h3">Gefühl gegen Körper</h3>
+    <p class="stats-sub">Mittlere Einschlafphase je Bewertung.</p>
+    <div class="qbars">${byQ.map(q => q.med === null
+      ? `<div class="qbar empty"><span class="qbar-l">${q.l}</span><span class="qbar-n">noch keine</span></div>`
+      : `<div class="qbar">
+           <span class="qbar-l"><span class="q q-${q.v}">${q.l[0]}</span>${q.l}</span>
+           <span class="qbar-track"><span class="qbar-fill" style="width:${(q.med / max * 100).toFixed(1)}%;background:${q.v === 'gut' ? CH_GOOD : q.v === 'schlecht' ? CH_BAD : CH_MUTE}"></span></span>
+           <span class="qbar-v">${esc(fmtSpan(q.med))}<span class="qbar-n">n=${q.n}</span></span>
+         </div>`).join('')}</div>
+    <p class="stats-note">${verdict}</p>`;
+}
+
+// One dot per night, stacked where they land close together. At enough nights
+// the pile takes on a bell shape by itself; at few nights it stays a handful
+// of dots, which is honest — a smooth curve drawn through eight values would
+// show a shape the data does not contain.
+function dotStrip(vals, xMax, colour) {
+  const W = 100, H = 26, pad = 2.5;
+  const B = 44;                                  // buckets across the strip
+  const seen = {};
+  const pts = vals.map(v => {
+    const b = Math.max(0, Math.min(B - 1, Math.round(v / xMax * (B - 1))));
+    const tier = (seen[b] = (seen[b] || 0) + 1) - 1;
+    return { x: pad + (b / (B - 1)) * (W - 2 * pad), tier };
+  });
+  const maxTier = Math.max(0, ...pts.map(p => p.tier));
+  const step = Math.min(3.6, (H / 2 - 3.2) / Math.max(1, Math.ceil(maxTier / 2)));
+  const cy = H / 2;
+  const med = median(vals);
+  const mx = pad + (Math.max(0, Math.min(1, med / xMax))) * (W - 2 * pad);
+
+  return `<svg class="dstrip" viewBox="0 0 ${W} ${H}" role="img">
+    <line x1="${mx.toFixed(2)}" x2="${mx.toFixed(2)}" y1="1" y2="${H - 1}"
+          stroke="${colour}" stroke-width="0.7" opacity=".85"/>
+    ${pts.map(p => {
+      const dir = p.tier % 2 ? 1 : -1, lvl = Math.ceil(p.tier / 2);
+      return `<circle cx="${p.x.toFixed(2)}" cy="${(cy + dir * lvl * step).toFixed(2)}"
+        r="1.7" fill="${colour}" fill-opacity=".75"/>`;
+    }).join('')}
+  </svg>`;
+}
+
+// One block per factor: the middle night of each group, counted, side by side
+function compareSection(rows) {
+  const O = outcome();
+  const use = rows.filter(r => O.get(r) !== null);
+  if (use.length < 6) {
+    return `<h3 class="stats-h3">Vergleich</h3>
+      <p class="stats-sub">Dafür braucht es mindestens sechs auswertbare Nächte.</p>`;
+  }
+  const overall = median(use.map(r => O.get(r)));
+  const yDom = Math.max(...use.map(r => O.get(r))) * 1.06 || 1;
+
+  const blocks = [];
+
+  // Timed factors: the whole night plotted against how long before it happened
+  WINDOWS.forEach(w => {
+    const pts = [], skipped = [];
+    use.forEach(r => {
+      if (w.none && w.off(r.e)) { skipped.push(O.get(r)); return; }
+      const g = gapToBed(r.e, w.k);
+      if (g !== null) pts.push({ x: g / 60, y: O.get(r), d: r.d, e: r.e });
+    });
+    if (pts.length < 4) return;
+
+    // Bin medians still go underneath as plain numbers
+    const bins = w.labels.map((l, i) => ({ l, v: pts.filter(p => {
+      const h = p.x;
+      return i === 0 ? h < w.edges[0] : i === 1 ? (h >= w.edges[0] && h < w.edges[1]) : h >= w.edges[1];
+    }).map(p => p.y) })).filter(b => b.v.length);
+    const spread = bins.length > 1
+      ? Math.max(...bins.map(b => median(b.v))) - Math.min(...bins.map(b => median(b.v))) : 0;
+
+    blocks.push({
+      spread, thin: pts.length < MIN_BIN,
+      html: scatterBlock(w, pts, skipped, yDom, overall, O, bins)
+    });
+  });
+
+  // Factors without a time of their own keep the stacked dots
+  GROUPS.forEach(g => {
+    const cells = g.levels.map(lv => ({ l: lv.l, rows: use.filter(r => g.get(r.e) === lv.v) }))
+      .filter(c => c.rows.length > 0);
+    if (cells.length < 2) return;
+    const stat = cells.map(c => ({ ...c, n: c.rows.length, med: median(c.rows.map(r => O.get(r))) }));
+    const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
+    const bars = stat.map(s => {
+      const good = O.lowGood ? s.med <= overall : s.med >= overall;
+      const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
+      return `<div class="wbar">
+        <span class="wbar-l">${esc(s.l)}</span>
+        ${dotStrip(s.rows.map(r => O.get(r)), yDom, c)}
+        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">${s.n} Nächte</span></span>
+      </div>`;
+    }).join('');
+    blocks.push({
+      spread: hi - lo, thin: Math.min(...stat.map(s => s.n)) < MIN_BIN,
+      html: `<div class="wblock">
+        <div class="wblock-head"><span class="wblock-t">${esc(g.l)}</span>
+          <span class="wblock-s">Unterschied ${esc(O.fmt(hi - lo))}</span></div>
+        ${bars}
+        <div class="wscale"><span>0</span><span>${esc(O.fmt(yDom / 2))}</span><span>${esc(O.fmt(yDom))}</span></div>
+      </div>` }); 
+  });
+
+  if (!blocks.length) {
+    return `<h3 class="stats-h3">Vergleich</h3>
+      <p class="stats-sub">Noch keine Faktoren mit genug Nächten.</p>`;
+  }
+  blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
+
+  return `
+    <h3 class="stats-h3">Vergleich</h3>
+    <p class="stats-sub">Ein Punkt ist eine Nacht. Waagerecht, wie lange vor dem Augen-zumachen
+      es passiert ist, senkrecht die Einschlafphase dieser Nacht. Die Linie ist der gleitende
+      Mittelwert — wo sie steigt, wird es teuer.</p>
+    <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
+    <p class="stats-note">Jeder Faktor steht für sich. Ob zwei davon bei dir zusammenhängen,
+      siehst du weiter unten unter <b>Kombination</b>.</p>`;
+}
+
+// Scatter of one timed factor, with a running median through the cloud
+function scatterBlock(w, pts, skipped, yDom, overall, O, bins) {
+  const W = 100, H = 60, L = 17, B = 8, T = 3;
+  const xMax = Math.max(...pts.map(p => p.x), 1) * 1.05;
+  const sx = v => L + (v / xMax) * (W - L - 3);
+  const sy = v => (H - B) - (v / yDom) * (H - B - T);
+
+  // Running median over the nearest neighbours — no curve is invented where
+  // there are no nights, and one outlier cannot drag the line
+  const sorted = [...pts].sort((a, b) => a.x - b.x);
+  const k = Math.max(3, Math.round(sorted.length / 4));
+  const line = sorted.map((_, i) => {
+    const from = Math.max(0, i - (k >> 1)), win = sorted.slice(from, from + k);
+    return { x: sorted[i].x, y: median(win.map(p => p.y)) };
+  });
+  const path = line.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`).join(' ');
+
+  const ticks = [0, yDom / 2, yDom].map(v => `
+    <line x1="${L}" x2="${W}" y1="${sy(v).toFixed(2)}" y2="${sy(v).toFixed(2)}"
+          stroke="var(--line)" stroke-width="0.2"/>
+    <text x="${L - 1.5}" y="${(sy(v) + 1.1).toFixed(2)}" text-anchor="end"
+          font-size="3" fill="var(--muted)">${esc((O.tick || O.fmt)(v))}</text>`).join('');
+
+  const none = skipped.length >= 3 ? median(skipped) : null;
+  const noneLine = none === null ? '' : `
+    <line x1="${L}" x2="${W}" y1="${sy(none).toFixed(2)}" y2="${sy(none).toFixed(2)}"
+          stroke="${CH_MUTE}" stroke-width="0.45" stroke-dasharray="1.6 1.4"/>`;
+
+  const dots = pts.map(p => {
+    const good = O.lowGood ? p.y <= overall : p.y >= overall;
+    return `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.6"
+      fill="${good ? CH_GOOD : CH_BAD}" fill-opacity=".8" stroke="#fff" stroke-width="0.4"
+      ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${p.x.toFixed(1)} Std. vorher · ${esc(O.fmt(p.y))}</title></circle>`;
+  }).join('');
+
+  const xt = [0, xMax / 2, xMax].map(v =>
+    `<span>${v.toFixed(v < 10 ? 1 : 0)}</span>`).join('');
+
+  return `<div class="wblock">
+    <div class="wblock-head">
+      <span class="wblock-t">${esc(w.l)}</span>
+      <span class="wblock-s">${pts.length} Nächte${none !== null ? ` · ${skipped.length} ohne` : ''}</span>
+    </div>
+    <svg class="sblock" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(w.l)}">
+      ${ticks}${noneLine}
+      <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="0.7"
+            stroke-linejoin="round" opacity=".7"/>
+      ${dots}
+    </svg>
+    <div class="sxaxis">${xt}</div>
+    <div class="sxlbl">Stunden vor dem Augen-zumachen${none === null ? ''
+      : ` · <span class="dash"></span> ${esc(w.none)}: ${esc(O.fmt(none))}`}</div>
+    <div class="sbins">${bins.map(b =>
+      `<span><b>${esc(O.fmt(median(b.v)))}</b> ${esc(b.l.replace(' vorher', ''))} <i>${b.v.length}</i></span>`
+    ).join('')}</div>
+  </div>`;
+}
+
+// Two factors at once: the four combinations side by side
+let comboA = 'coffee', comboB = 'brain';
+function setCombo(which, k) { if (which === 'a') comboA = k; else comboB = k; renderStats(); }
+
+function comboSection(rows) {
+  const O = outcome();
+  const use = rows.filter(r => O.get(r) !== null);
+  const list = COMBOS.filter(c => !(hideNight && c.k === 'nacht'));
+  const A = list.find(c => c.k === comboA) || list[0];
+  const B = list.find(c => c.k === comboB) || list[1];
+  if (!A || !B) return '';
+
+  const sel = (which, cur, other) => `<select onchange="setCombo('${which}',this.value)">
+    ${list.map(c => `<option value="${c.k}"${c.k === cur.k ? ' selected' : ''}
+      ${c.k === other.k ? ' disabled' : ''}>${esc(c.l)}</option>`).join('')}
+  </select>`;
+
+  let body;
+  if (A.k === B.k) {
+    body = `<p class="stats-sub">Wähle zwei verschiedene Faktoren.</p>`;
+  } else {
+    const cell = (a, b) => {
+      const v = use.filter(r => A.on(r.e) === a && B.on(r.e) === b).map(r => O.get(r));
+      return { n: v.length, med: v.length ? median(v) : null };
+    };
+    const grid = [[cell(true, true), cell(true, false)], [cell(false, true), cell(false, false)]];
+    const all = grid.flat().filter(c => c.med !== null);
+    if (all.length < 2) {
+      body = `<p class="stats-sub">Für diese Kombination fehlen noch Nächte.</p>`;
+    } else {
+      const lo = Math.min(...all.map(c => c.med)), hi = Math.max(...all.map(c => c.med));
+      const paint = c => {
+        if (c.med === null) return `<td class="empty">–</td>`;
+        const t = hi - lo < 1e-9 ? 0.5 : (c.med - lo) / (hi - lo);
+        const col = c.n < 3 ? CH_MUTE : (O.lowGood ? (t > 0.5 ? CH_BAD : CH_GOOD) : (t > 0.5 ? CH_GOOD : CH_BAD));
+        return `<td style="color:${col}"><b>${esc(O.fmt(c.med))}</b><span>${c.n} Nächte</span></td>`;
+      };
+      body = `
+        <div class="combo-wrap"><table class="combo">
+          <thead><tr><th></th>
+            <th>${esc(B.l)}<br><i>ja</i></th><th>${esc(B.l)}<br><i>nein</i></th></tr></thead>
+          <tbody>
+            <tr><th>${esc(A.l)}<br><i>ja</i></th>${paint(grid[0][0])}${paint(grid[0][1])}</tr>
+            <tr><th>${esc(A.l)}<br><i>nein</i></th>${paint(grid[1][0])}${paint(grid[1][1])}</tr>
+          </tbody>
+        </table></div>
+        <p class="stats-note">Oben links stehen die Nächte, an denen <b>beides</b> zutraf,
+          unten rechts die mit <b>keinem von beidem</b>. Nur wenn oben links deutlich schlechter
+          steht als die beiden Einzelfelder, verstärken sich die zwei gegenseitig.
+          Felder unter drei Nächten sind grau.</p>`;
+    }
+  }
+
+  return `
+    <h3 class="stats-h3">Kombination</h3>
+    <p class="stats-sub">Zwei Faktoren zusammen — hier siehst du auch, ob zwei Dinge
+      bei dir immer gemeinsam auftreten und sich deshalb nicht trennen lassen.</p>
+    <div class="combo-sel">${sel('a', A, B)}${sel('b', B, A)}</div>
+    ${body}`;
+}
+
+function timelineChart(rows, med) {
+  const data = rows.slice(-30);
+  const W = 100, H = 46, pad = 2;
+  const hi = Math.max(...data.map(r => r.span), med) * 1.08;
+  const bw = (W - pad * 2) / data.length;
+  const y = v => H - (v / hi) * (H - 8);
+  const bars = data.map((r, i) => {
+    const x = pad + i * bw, h = Math.max(0.6, H - y(r.span));
+    return `<rect x="${(x + bw * .14).toFixed(2)}" y="${y(r.span).toFixed(2)}"
+      width="${(bw * .72).toFixed(2)}" height="${h.toFixed(2)}" rx="0.7"
+      fill="${r.span > med ? CH_BAD : CH_GOOD}"
+      ><title>${esc(dayLabel(r.d, { weekday: 'short', day: 'numeric', month: 'short' }))} · ${esc(fmtSpan(r.span))}${
+        r.e.quality ? ' · ' + esc(QUALS.find(q => q.v === r.e.quality).l) : ''}</title></rect>`;
+  }).join('');
+  const first = data[0], last = data[data.length - 1];
+  return `
+    <h3 class="stats-h3">Einschlafphase pro Nacht</h3>
+    <p class="stats-sub">Vom Augen-zumachen bis zum Ruhepuls.</p>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+         aria-label="Einschlafphase je Nacht">
+      <line x1="0" x2="${W}" y1="${y(med).toFixed(2)}" y2="${y(med).toFixed(2)}"
+            stroke="${CH_MUTE}" stroke-width="0.3" stroke-dasharray="1.2 1.2"/>
+      ${bars}
+    </svg>
+    <div class="chart-axis">
+      <span>${esc(dayLabel(first.d, { day: 'numeric', month: 'short' }))}</span>
+      <span class="med-tag">Median ${esc(fmtSpan(med))}</span>
+      <span>${esc(dayLabel(last.d, { day: 'numeric', month: 'short' }))}</span>
+    </div>`;
+}
+
 function fcCellClick(subId, yymm) {
   const pay = getPayment(subId, yymm);
   if (pay) {
@@ -4873,7 +5393,7 @@ function openAccConfig() {
   popup.className = "acc-cfg-popup";
   popup.style.cssText = "position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,560px);background:var(--surface);border-radius:20px 20px 0 0;padding:20px 18px 36px;z-index:61;max-height:80dvh;overflow-y:auto";
   popup.innerHTML = `
-    <div style="font-family:'Space Grotesk';font-weight:700;font-size:17px;margin-bottom:14px">Konten konfigurieren</div>
+    <div style="font-weight:600;font-size:17px;margin-bottom:14px">Konten konfigurieren</div>
     <div style="font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.01em;margin-bottom:6px">GEHALTSKONTO (Tab 1)</div>
     <input id="acc-a1-inp" type="text" value="${esc(txAccCfg.a1.number)}" placeholder="Kontonummer eingeben…" autocomplete="off"
       style="width:100%;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink);margin-bottom:12px">
@@ -5020,7 +5540,7 @@ function openTxCatManager() {
   popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:75vh;overflow-y:auto";
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <span style="font-family:'Space Grotesk';font-weight:600;font-size:15px">Kategorien bearbeiten</span>
+      <span style="font-weight:600;font-size:15px">Kategorien bearbeiten</span>
       <button class="btn btn-ghost" style="padding:6px 12px" onclick="closeTxCatMgr()">Fertig</button>
     </div>
     <div id="catmgr-list">${buildCatmgrList()}</div>
@@ -5122,12 +5642,12 @@ function txOpenSettlementPicker(txId) {
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.payee||"Unbekannt")}</div>
           <div style="font-size:11px;color:var(--muted)">${t.date||""}</div>
         </div>
-        <div style="font-weight:700;color:var(--accent);white-space:nowrap">${eur.format(t.amount)}</div>
+        <div style="font-weight:600;color:var(--accent);white-space:nowrap">${eur.format(t.amount)}</div>
       </div>`).join("")
     : `<div style="color:var(--muted);font-size:13px;padding:12px 0">Keine verfügbaren Einnahmen.</div>`;
 
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
-    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:4px">Ausgleich verknüpfen</div>
+    <div style="font-weight:600;font-size:15px;margin-bottom:4px">Ausgleich verknüpfen</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Ausgabe: ${esc(expTx.payee||"Unbekannt")} · ${eur.format(expTx.amount)}</div>
     <div style="max-height:45vh;overflow-y:auto;margin-bottom:10px">${cHtml}</div>
     <div id="settle-net" style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:12px">Nettobetrag: ${eur.format(expTx.amount)}</div>
@@ -5181,23 +5701,23 @@ function txShowSettlementDetail(settlementId) {
   popup.className = "tx-settle-detail";
   popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:80vh;overflow-y:auto";
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
-    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:14px">Ausgleich-Details</div>
+    <div style="font-weight:600;font-size:15px;margin-bottom:14px">Ausgleich-Details</div>
     <div style="padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:10px">
       <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Ausgabe</div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:14px;font-weight:600">${esc(expTx?.payee||"Unbekannt")}</div>
-        <div style="font-weight:700;color:var(--danger)">${eur.format(expTx?.amount||0)}</div>
+        <div style="font-weight:600;color:var(--danger)">${eur.format(expTx?.amount||0)}</div>
       </div>
       <div style="font-size:11px;color:var(--muted)">${expTx?.date||""}</div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Erstattungen (${reimbs.length})</div>
     ${reimbs.map(t => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--bg)">
       <div><div style="font-size:13px">${esc(t.payee||"Unbekannt")}</div><div style="font-size:11px;color:var(--muted)">${t.date||""}</div></div>
-      <div style="font-weight:700;color:var(--accent)">${eur.format(t.amount)}</div>
+      <div style="font-weight:600;color:var(--accent)">${eur.format(t.amount)}</div>
     </div>`).join("")}
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:8px;border-top:2px solid var(--line)">
       <div style="font-weight:700">Nettobetrag</div>
-      <div style="font-weight:700;font-size:16px;color:${netPos?"var(--accent)":"var(--danger)"}">${eur.format(net)}</div>
+      <div style="font-weight:600;font-size:16px;color:${netPos?"var(--accent)":"var(--danger)"}">${eur.format(net)}</div>
     </div>
     ${net !== 0 ? `<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:2px;margin-bottom:12px">Differenz: ${eur.format(Math.abs(net))} ${netPos?"Guthaben":"offen"}</div>` : `<div style="margin-bottom:12px"></div>`}
     <div style="display:flex;gap:8px">
@@ -5232,7 +5752,7 @@ function txMarkIOU(txId) {
   popup.className = "tx-iou-popup";
   popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60";
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
-    <div style="font-family:'Space Grotesk';font-weight:600;font-size:15px;margin-bottom:14px">Für andere bezahlt</div>
+    <div style="font-weight:600;font-size:15px;margin-bottom:14px">Für andere bezahlt</div>
     <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Person</label>
     <input id="iou-person" type="text" value="${esc(existing.person||"")}" placeholder="Name der Person" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:14px;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:10px 13px;color:var(--ink);margin-bottom:12px" autocomplete="off">
     <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:4px">Notiz (optional)</label>
@@ -5330,7 +5850,7 @@ function txShowDetail(txId) {
   popup.style.cssText = "position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:min(480px,100vw);background:var(--surface);border-radius:20px 20px 0 0;padding:12px 16px 32px;box-shadow:0 -8px 40px rgba(20,30,25,.18);z-index:60;max-height:80vh;overflow-y:auto";
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
     <div style="text-align:center;margin-bottom:16px">
-      <div style="font-size:24px;font-weight:700;font-family:'Space Grotesk';color:${amtCls}">${t.amount > 0 ? "+" : ""}${eur.format(t.amount)}</div>
+      <div style="font-size:24px;font-weight:600;color:${amtCls}">${t.amount > 0 ? "+" : ""}${eur.format(t.amount)}</div>
       <div style="font-size:16px;font-weight:600;margin-top:4px">${esc(t.payee||"Unbekannt")}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:2px">${dateStr}</div>
     </div>
@@ -5660,7 +6180,7 @@ function txEditCat(id) {
 
   popup.innerHTML = `<div style="width:38px;height:4px;background:var(--line);border-radius:4px;margin:0 auto 14px"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="font-family:'Space Grotesk';font-weight:600;font-size:15px">Kategorie wählen</span>
+      <span style="font-weight:600;font-size:15px">Kategorie wählen</span>
       <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="openTxCatManager()">Bearbeiten</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px">${chips}</div>
