@@ -1089,92 +1089,106 @@
       .kpi-row { grid-template-columns: repeat(2, 1fr); }
     }
 
-    /* ── Live logging ── */
-    .mode-bar {
-      display: flex; gap: 4px; background: var(--bg);
-      padding: 4px; border-radius: 12px; margin-bottom: 16px;
-    }
-    .mode-bar button {
-      flex: 1; font-family: inherit; font-size: 13px; font-weight: 600;
-      color: var(--muted); background: transparent; border: none;
-      border-radius: 9px; padding: 9px 4px; cursor: pointer;
-      transition: all .15s ease;
-    }
-    .mode-bar button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
-    .mode-hint {
-      font-size: 11.5px; color: var(--faint);
-      margin: -10px 0 14px; padding: 0 4px;
-    }
-    .day-scope {
-      font-size: 11.5px; color: var(--muted);
-      background: var(--bg); border-radius: 9px;
-      padding: 8px 11px; margin: 0 0 14px;
-    }
-    .day-scope b { color: var(--ink); font-weight: 600; }
-
-    .live-day {
+    /* ── Night screen ── */
+    .night-nav {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 10px; margin-bottom: 12px;
+      gap: 10px; margin-bottom: 14px;
     }
-    .live-day-t {
-      font-family: "Space Grotesk"; font-weight: 600; font-size: 16px;
-      letter-spacing: -.01em;
-    }
-    .live-day button {
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: 10px; padding: 8px 14px;
-      font-family: inherit; font-size: 13px; font-weight: 600;
+    .night-nav > button {
+      flex-shrink: 0; background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 15px;
+      font-family: inherit; font-size: 15px; font-weight: 600;
       color: var(--muted); cursor: pointer;
     }
+    .night-title { text-align: center; display: flex; flex-direction: column; gap: 2px; }
+    .night-t {
+      font-family: "Space Grotesk"; font-weight: 700; font-size: 15px;
+      letter-spacing: -.01em; line-height: 1.25;
+    }
+    .night-s { font-size: 10.5px; color: var(--faint); }
 
-    .lv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .lv.wide { grid-column: 1 / -1; }
-    .lv-pick { display: flex; gap: 5px; padding: 0 9px 9px; flex-wrap: wrap; }
-    .lv-pick button {
-      flex: 1; min-width: 88px; font-family: inherit;
-      font-size: 11.5px; font-weight: 600; color: var(--muted);
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: 8px; padding: 7px 6px; cursor: pointer;
+    .nresult {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 15px; margin-bottom: 16px;
+      background: var(--accent-tint); border: 1.5px solid var(--accent);
+      border-radius: 13px;
     }
-    .lv-pick button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .lv.wide .lv-hit { border-radius: 13px 13px 0 0; border-bottom: none; padding-bottom: 11px; }
-    .lv.wide.set { background: var(--accent-tint); border: 1px solid var(--accent); border-radius: 13px; }
-    .lv.wide.set .lv-hit { border: none; background: transparent; }
-    .lv { position: relative; }
-    .lv-hit {
-      width: 100%; text-align: left; cursor: pointer;
-      font-family: inherit;
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: 13px; padding: 14px 13px;
-      display: flex; flex-direction: column; gap: 3px;
-      transition: transform .09s ease, border-color .15s ease;
+    .nresult-v {
+      font-family: "Space Grotesk"; font-size: 24px; font-weight: 700;
+      color: var(--accent); font-variant-numeric: tabular-nums;
     }
-    .lv-hit:active { transform: scale(.97); }
-    .lv-l { font-size: 14px; font-weight: 600; color: var(--ink); }
-    .lv-v { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
-    .lv.set .lv-hit { border-color: var(--accent); background: var(--accent-tint); }
-    .lv.set .lv-v { color: var(--accent); font-weight: 600; }
-    .lv-x {
-      position: absolute; top: 6px; right: 6px;
-      width: 24px; height: 24px; border-radius: 7px;
-      border: none; background: transparent; cursor: pointer;
-      color: var(--faint); font-size: 12px; line-height: 1;
-    }
-    .lv-x:hover { color: var(--danger); background: var(--surface); }
+    .nresult-l { font-size: 11px; color: var(--muted); }
+    .nresult.pending { background: var(--bg); border-color: var(--line); border-style: dashed; }
+    .nresult.pending .nresult-v { color: var(--faint); }
 
-    .lv-sleep {
-      width: 100%; margin-top: 22px; cursor: pointer; font-family: inherit;
-      background: var(--accent); border: none; border-radius: 15px;
-      padding: 19px 16px; color: #fff;
-      display: flex; flex-direction: column; gap: 4px;
+    .nrow {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 13px; padding: 13px 13px 11px; margin-bottom: 8px;
+    }
+    .nrow-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .nrow-t { font-size: 14px; font-weight: 600; }
+    .nrow-n { font-size: 10.5px; color: var(--faint); }
+    .nrow-btns { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 9px; }
+    .tapb {
+      flex: 1; min-width: 92px; font-family: inherit;
+      font-size: 12px; font-weight: 600; color: var(--accent);
+      background: var(--accent-tint); border: 1px solid transparent;
+      border-radius: 9px; padding: 9px 8px; cursor: pointer;
       transition: transform .09s ease;
     }
-    .lv-sleep:active { transform: scale(.985); }
-    .lv-sleep-l { font-family: "Space Grotesk"; font-size: 17px; font-weight: 700; }
-    .lv-sleep-v { font-size: 11.5px; opacity: .8; font-variant-numeric: tabular-nums; }
-    .lv-sleep.set { background: var(--ink); }
+    .tapb:active { transform: scale(.96); }
+    .nrow-val {
+      display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+      margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line-soft);
+    }
+    .nrow-val.solo {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 13px; padding: 12px 13px; margin-top: 8px;
+    }
+    .nrow-lbl { font-size: 10.5px; color: var(--faint); }
+    .nrow-val input[type="time"], .nrow-val input[type="date"] {
+      font-family: "Space Grotesk"; font-size: 14px; font-weight: 600;
+      font-variant-numeric: tabular-nums; color: var(--ink);
+      background: var(--bg); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 9px;
+    }
+    .nrow-val input:focus { outline: none; border-color: var(--accent); }
+    .tag {
+      font-size: 10.5px; font-weight: 600; color: var(--accent);
+      background: var(--accent-tint); border-radius: 6px; padding: 3px 7px;
+    }
+    .row-x {
+      margin-left: auto; width: 26px; height: 26px; border-radius: 7px;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--faint); font-size: 12px;
+    }
+    .row-x:hover { color: var(--danger); background: var(--bg); }
+    .segs { display: flex; margin-top: 9px; }
+    .segs .seg-btn { flex: 1; }
 
-    /* ── Day log ── */
+    .bigbtn {
+      width: 100%; margin-top: 14px; cursor: pointer; font-family: inherit;
+      background: var(--accent); border: none; border-radius: 14px;
+      padding: 17px 16px; color: #fff;
+      display: flex; flex-direction: column; gap: 3px;
+      transition: transform .09s ease;
+    }
+    .bigbtn:active { transform: scale(.985); }
+    .bigbtn-l { font-family: "Space Grotesk"; font-size: 16px; font-weight: 700; }
+    .bigbtn-v { font-size: 11px; opacity: .82; }
+    .bigbtn.set { background: var(--ink); }
+
+    .openlist { display: flex; flex-direction: column; gap: 7px; }
+    .openrow {
+      width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--danger);
+      border-radius: 11px; padding: 12px 13px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .openrow-t { font-size: 13px; font-weight: 600; color: var(--ink); }
+    .openrow-m { font-size: 11px; color: var(--danger); }
+
+    /* ── Day log ── */    /* ── Day log ── */
     .sleep-h3 {
       font-size: 10.5px;
       font-weight: 700;
@@ -2521,7 +2535,6 @@ let rotCfg        = { start: "", balance: null };
 // Day log, keyed YYYY-MM-DD. restingHr belongs to the day whose behaviour
 // caused it, but gets filled in the next morning.
 let daylog        = {};
-let sleepDay      = null;   // YYYY-MM-DD currently shown, null = today
 
 const $ = id => document.getElementById(id);
 
@@ -3814,18 +3827,15 @@ async function setDayTime(key, field, value) {
 
 // Refresh only what depends on the values, never the inputs themselves.
 function refreshDerived() {
-  const key  = sleepDay || todayKey();
-  const e    = getDay(key);
-  const span = $("sleep-span-slot");
-  if (span) {
-    const m = restSpan(key, e);
-    span.innerHTML = m === null ? ''
-      : `<div class="sleep-span">${esc(fmtSpan(m))} nach dem Zubettgehen</div>`;
+  const key = curKey(), e = getDay(key);
+  const span = restSpan(key, e);
+  const box = $("nresult");
+  if (box) {
+    box.classList.toggle('pending', span === null);
+    box.innerHTML = nresultInner(span, e);
   }
   const hist = $("sleep-hist-slot");
   if (hist) hist.innerHTML = sleepHistHtml(key);
-  const date = $("sleep-hr-date");
-  if (date && date.value !== (e.restingHrDate || '')) date.value = e.restingHrDate || '';
 }
 
 // Tri-state: clicking the active button clears the field again
@@ -4027,746 +4037,202 @@ async function clearDemo() {
   showToast('Beispieltage entfernt');
 }
 
-// ── Live logging ───────────────────────────────────────────────────────────
-// Tapping records the current clock time, so nothing has to be reconstructed
-// in bed later. The logbook day rolls over at 05:00, not at midnight: a tap
-// at 00:30 belongs to the day whose evening it still is.
-let sleepMode = 'live';     // 'live' | 'form'
-let liveDay   = null;       // null = whichever day the clock says
+// ── The night screen ───────────────────────────────────────────────────────
+// One screen shows exactly one night and nothing else. Every field is always
+// present, whether filled or not, so the layout never moves while in use.
+// Each section names the weekday it happens on, because the entry spans two.
+let sleepDay = null;          // null = the night the clock is currently in
 
+// The logbook night rolls over at 05:00: a tap at 00:30 still belongs to the
+// evening it is, not to the morning that just started.
 function logDayKey() {
   const d = new Date();
   if (d.getHours() < 5) d.setDate(d.getDate() - 1);
   return dayKey(d);
 }
-const liveKey = () => liveDay || logDayKey();
+const curKey = () => sleepDay || logDayKey();
 const nowHHMM = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-const LIVE = [
-  { k: 'coffeeLast', l: 'Kaffee', hint: 'Tasse getrunken', wide: true,
-    clear: ['coffee', 'coffeeCups', 'coffeeLast', 'coffeeType'],
-    set: (e, t) => ({ coffee: true, coffeeCups: (e.coffeeCups || 0) + 1, coffeeLast: t }),
-    show: e => e.coffeeLast ? `${e.coffeeCups || 1}× · zuletzt ${e.coffeeLast}` : null,
-    pick: { field: 'coffeeType', opts: COFFEE_TYPES } },
-  { k: 'foodTime', l: 'Gegessen', hint: 'letzte Mahlzeit', wide: true,
-    clear: ['foodTime', 'foodType'],
-    set: () => ({}), setTime: 'foodTime',
-    show: e => e.foodTime || null,
-    pick: { field: 'foodType', opts: FOOD_TYPES } },
-  { k: 'alcLast', l: 'Alkohol', hint: 'eine Einheit',
-    clear: ['alcohol', 'alcUnits', 'alcLast'],
-    set: (e, t) => ({ alcohol: true, alcUnits: (e.alcUnits || 0) + 1, alcLast: t }),
-    show: e => e.alcLast ? `${e.alcUnits || 1}× · zuletzt ${e.alcLast}` : null },
-  { k: 'sportEnd', l: 'Sport beendet', hint: 'gerade aufgehört',
-    clear: ['sport', 'sportEnd'],
-    set: (e, t) => ({ sport: true, sportEnd: t }),
-    show: e => e.sportEnd || null },
-  { k: 'saunaEnd', l: 'Sauna beendet', hint: 'letzter Gang',
-    clear: ['sauna', 'saunaEnd'],
-    set: (e, t) => ({ sauna: true, saunaEnd: t }),
-    show: e => e.saunaEnd || null },
-  { k: 'mastTime', l: 'Masturbiert', hint: 'gerade eben',
-    clear: ['mast', 'mastTime'],
-    set: (e, t) => ({ mast: true, mastTime: t }),
-    show: e => e.mastTime || null }
-];
+function sleepGo(n)  { sleepDay = shiftDay(curKey(), n); renderSleep(); }
+function sleepNow()  { sleepDay = null; renderSleep(); }
+function sleepOpen(k){ sleepDay = k; renderSleep(); }
 
-async function liveTap(k) {
-  const act = LIVE.find(a => a.k === k);
-  if (!act) return;
-  const key = liveKey(), t = nowHHMM();
-  const patch = act.setTime ? { [act.setTime]: t } : act.set(getDay(key), t);
-  Object.entries(patch).forEach(([f, v]) => writeDay(key, f, v));
+// Stamp the clock into a field, optionally setting a kind and bumping a count
+async function stamp(key, field, opts = {}) {
+  const e = getDay(key), t = nowHHMM();
+  writeDay(key, field, t);
+  if (opts.flag) writeDay(key, opts.flag, true);
+  if (opts.count) writeDay(key, opts.count, (e[opts.count] || 0) + 1);
+  if (opts.kind && opts.kindVal) writeDay(key, opts.kind, opts.kindVal);
   await persistDaylog();
   renderSleep();
-  showToast(`${act.l} · ${t}`);
+  showToast(`${opts.label || field} · ${t}`);
 }
 
-async function liveClear(k) {
-  const act = LIVE.find(a => a.k === k);
-  if (!act) return;
-  const key = liveKey();
-  act.clear.forEach(f => writeDay(key, f, null));
+async function wipe(key, fields) {
+  fields.forEach(f => writeDay(key, f, null));
   await persistDaylog();
   renderSleep();
 }
 
-async function liveSleep() {
-  const key = liveKey(), t = nowHHMM();
-  writeDay(key, 'sleepAt', t);
-  await persistDaylog();
-  renderSleep();
-  showToast(`Augen zu · ${t}`);
-}
-
-async function liveToggle(field, value) {
-  const key = liveKey();
-  writeDay(key, field, getDay(key)[field] === value ? null : value);
-  await persistDaylog();
-  renderSleep();
-}
-
-function setSleepMode(m) { sleepMode = m; renderSleep(); }
-function liveGo(n) { liveDay = shiftDay(liveKey(), n); renderSleep(); }
-function liveNow() { liveDay = null; renderSleep(); }
-
-function renderSleepLive() {
-  const key = liveKey();
-  const e = getDay(key);
-  const auto = key === logDayKey();
-
-  const cards = LIVE.map(a => {
-    const v = a.show(e);
-    // The tap stamps the time first; the choice can follow at leisure
-    const picker = (v && a.pick) ? `<div class="lv-pick">${a.pick.opts.map(op =>
-      `<button class="${e[a.pick.field] === op.v ? 'on' : ''}"
-         onclick="liveToggle('${a.pick.field}','${op.v}')">${esc(op.l)}</button>`).join('')}</div>` : '';
-    return `<div class="lv ${v ? 'set' : ''} ${a.wide ? 'wide' : ''}">
-      <button class="lv-hit" onclick="liveTap('${a.k}')">
-        <span class="lv-l">${esc(a.l)}</span>
-        <span class="lv-v">${v ? esc(v) : esc(a.hint)}</span>
-      </button>
-      ${v ? `<button class="lv-x" onclick="liveClear('${a.k}')" title="Zurücksetzen">✕</button>` : ''}
-      ${picker}
-    </div>`;
-  }).join('');
-
-  const seg = (field, opts) => opts.map(o =>
-    `<button class="seg-btn ${e[field] === o.v ? 'on' : ''}"
-       onclick="liveToggle('${field}',${typeof o.v === 'string' ? `'${o.v}'` : o.v})">${o.l}</button>`
-  ).join('');
-
-  // What is still missing from yesterday, asked where it is easy to answer
-  const prevKey = shiftDay(key, -1), prev = getDay(prevKey);
-  const prevUsed = Object.keys(prev).length > 0;
-  const nudges = [];
-  if (prevUsed && !prev.restingHr) nudges.push(`
-    <div class="sleep-nudge">
-      <div class="sleep-nudge-txt"><b>Ruhepuls nachtragen</b>
-        <span>Nacht ${esc(nightLabel(prevKey))} · heute früh erreicht</span></div>
-      <input type="time" onchange="setDayTime('${prevKey}','restingHr',this.value)">
-    </div>`);
-  if (prevUsed && !prev.quality) nudges.push(`
-    <div class="sleep-nudge">
-      <div class="sleep-nudge-txt"><b>Wie war die Nacht?</b>
-        <span>Nacht ${esc(nightLabel(prevKey))}</span></div>
-      <span class="nudge-seg">${QUALS.map(q =>
-        `<button class="seg-btn" onclick="setDay('${prevKey}','quality','${q.v}')">${q.l}</button>`).join('')}</span>
-    </div>`);
-
-  return `
-    <div class="live-day">
-      <button onclick="liveGo(-1)">‹</button>
-      <span class="live-day-t">${esc(dayLabel(key))}${auto ? '' : ' · nicht heute'}</span>
-      <button onclick="liveGo(1)">›</button>
-    </div>
-    <div class="day-scope">Dieser Tag und die <b>Nacht ${esc(nightLabel(key))}</b></div>
-    ${auto ? '' : `<button class="sleep-today" onclick="liveNow()">Zurück zu heute</button>`}
-    ${nudges.join('')}
-
-    <h3 class="sleep-h3">Tagsüber</h3>
-    <div class="lv-grid">${cards}</div>
-
-    <h3 class="sleep-h3">Einordnen</h3>
-    <div class="sleep-row">
-      <div class="sleep-lbl">Dienst</div>
-      <div class="sleep-ctl">${seg('shift', SHIFTS)}</div>
-    </div>
-    <div class="sleep-row">
-      <div class="sleep-lbl">Brainwork<span class="sleep-hint">in der Stunde vor dem Bett</span></div>
-      <div class="sleep-ctl">${seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }])}</div>
-    </div>
-    <div class="sleep-row">
-      <div class="sleep-lbl">Entspannt ins Bett</div>
-      <div class="sleep-ctl">${seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }])}</div>
-    </div>
-
-    <button class="lv-sleep ${e.sleepAt ? 'set' : ''}" onclick="liveSleep()">
-      <span class="lv-sleep-l">Augen zu · Handy weg</span>
-      <span class="lv-sleep-v">${e.sleepAt
-        ? `${esc(e.sleepAt)} — Start der Nacht ${esc(nightLabel(key))}`
-        : `Jetzt tippen — startet die Nacht ${esc(nightLabel(key))}`}</span>
-    </button>`;
+function nresultInner(span, e) {
+  if (span !== null) return `<span class="nresult-v">${esc(fmtSpan(span))}</span>
+    <span class="nresult-l">vom Augen-zumachen bis zum Ruhepuls</span>`;
+  const miss = !e.sleepAt && !e.restingHr ? 'Augen zu und Ruhepuls fehlen'
+    : !e.sleepAt ? 'Augen-zu-Zeit fehlt' : 'Ruhepuls fehlt';
+  return `<span class="nresult-v">–:–</span>
+    <span class="nresult-l">${esc(miss)}</span>`;
 }
 
 function renderSleep() {
   const host = $("sleep");
-  const modeBar = `<div class="mode-bar">
-    <button class="${sleepMode === 'live' ? 'on' : ''}" onclick="setSleepMode('live')">Jetzt tippen</button>
-    <button class="${sleepMode === 'form' ? 'on' : ''}" onclick="setSleepMode('form')">Zeiten tippen</button>
-  </div>
-  <p class="mode-hint">${sleepMode === 'live'
-    ? 'Ein Tipp stempelt die aktuelle Uhrzeit.'
-    : 'Uhrzeiten von Hand eintragen oder korrigieren.'}</p>`;
-  if (sleepMode === 'live') { host.innerHTML = modeBar + renderSleepLive(); return; }
+  const key = curKey();
+  const e = getDay(key);
+  const isNow = key === logDayKey();
+  const nextKey = shiftDay(key, 1);
 
-  const key  = sleepDay || todayKey();
-  const e    = getDay(key);
-  const isToday  = key === todayKey();
-  const isFuture = key > todayKey();
-  const nextKey  = shiftDay(key, 1);
-  const prevKey  = shiftDay(key, -1);
+  const dayName = k => dayLabel(k, { weekday: 'long', day: 'numeric', month: 'short' });
+  const esc2 = v => esc(String(v ?? ''));
 
-  // Strings need single quotes here — double ones would close the onclick attribute
-  const lit = v => typeof v === 'string' ? `'${v}'` : String(v);
-  const seg = (field, opts) => opts.map(o =>
-    `<button class="seg-btn ${e[field] === o.v ? 'on' : ''}" onclick="dayToggle('${key}','${field}',${lit(o.v)})">${o.l}</button>`
-  ).join('');
+  // ── building blocks, all of them always rendered ──
+  const time = (field, extra = '') =>
+    `<input type="time" value="${e[field] || ''}" ${extra}
+      onchange="setDayTime('${key}','${field}',this.value)">`;
 
-  const timeField = (field, val) =>
-    `<input type="time" value="${val || ''}" onchange="setDayTime('${key}','${field}',this.value)">`;
+  const clr = fields => `<button class="row-x" title="Löschen"
+      onclick="wipe('${key}',${JSON.stringify(fields).replace(/"/g, '&quot;')})">✕</button>`;
 
-  // Yesterday's resting heart rate is the thing most easily forgotten
-  const prev = getDay(prevKey);
-  const prevUsed = Object.keys(prev).length > 0;
-  const nudges = [];
-  if (isToday && prevUsed && !prev.restingHr) nudges.push(`
-    <div class="sleep-nudge">
-      <div class="sleep-nudge-txt">
-        <b>Ruhepuls nachtragen</b>
-        <span>Nacht ${esc(nightLabel(prevKey))} · heute früh erreicht</span>
+  const seg = (field, opts) => `<div class="segs">${opts.map(o =>
+    `<button class="seg-btn ${e[field] === o.v ? 'on' : ''}"
+      onclick="dayToggle('${key}','${field}',${typeof o.v === 'string' ? `'${o.v}'` : o.v})"
+      >${esc(o.l)}</button>`).join('')}</div>`;
+
+  // A row: title, the now-buttons, then the recorded value as an editable time
+  const row = (title, note, buttons, value) => `
+    <div class="nrow">
+      <div class="nrow-head">
+        <span class="nrow-t">${esc(title)}</span>
+        ${note ? `<span class="nrow-n">${note}</span>` : ''}
       </div>
-      <input type="time" onchange="setDayTime('${prevKey}','restingHr',this.value)">
-    </div>`);
-  if (isToday && prevUsed && !prev.quality) nudges.push(`
-    <div class="sleep-nudge">
-      <div class="sleep-nudge-txt">
-        <b>Wie war die Nacht?</b>
-        <span>Nacht ${esc(nightLabel(prevKey))}</span>
-      </div>
-      <span class="nudge-seg">${QUALS.map(q =>
-        `<button class="seg-btn" onclick="setDay('${prevKey}','quality','${q.v}')">${q.l}</button>`).join('')}</span>
-    </div>`);
-  const nudge = nudges.join('');
-
-  const row = (label, body, hint) => `<div class="sleep-row">
-      <div class="sleep-lbl">${label}${hint ? `<span class="sleep-hint">${hint}</span>` : ''}</div>
-      <div class="sleep-ctl">${body}</div>
+      ${buttons ? `<div class="nrow-btns">${buttons}</div>` : ''}
+      ${value ? `<div class="nrow-val">${value}</div>` : ''}
     </div>`;
 
-  const hist = sleepHistHtml(key);
+  const tapBtn = (label, field, opts) =>
+    `<button class="tapb" onclick='stamp("${key}","${field}",${JSON.stringify(opts)})'>${esc(label)}</button>`;
 
-  host.innerHTML = modeBar + `
-    <div class="tx-month-nav">
+  // ── Tagsüber ──
+  const coffee = row('Kaffee',
+    e.coffeeCups ? `${e.coffeeCups}× heute` : 'noch keiner',
+    COFFEE_TYPES.map(c => tapBtn('+ ' + c.l, 'coffeeLast',
+      { flag: 'coffee', count: 'coffeeCups', kind: 'coffeeType', kindVal: c.v, label: 'Kaffee' })).join(''),
+    `<span class="nrow-lbl">letzte Tasse</span>${time('coffeeLast')}
+     ${e.coffeeType ? `<span class="tag">${esc((COFFEE_TYPES.find(c => c.v === e.coffeeType) || {}).l || '')}</span>` : ''}
+     ${clr(['coffee', 'coffeeCups', 'coffeeLast', 'coffeeType'])}`);
+
+  const food = row('Gegessen', e.foodTime ? '' : 'noch nichts',
+    FOOD_TYPES.map(f => tapBtn('+ ' + f.l, 'foodTime',
+      { kind: 'foodType', kindVal: f.v, label: 'Gegessen' })).join(''),
+    `<span class="nrow-lbl">letzte Mahlzeit</span>${time('foodTime')}
+     ${e.foodType ? `<span class="tag">${esc((FOOD_TYPES.find(f => f.v === e.foodType) || {}).l || '')}</span>` : ''}
+     ${clr(['foodTime', 'foodType'])}`);
+
+  const alc = row('Alkohol', e.alcUnits ? `${e.alcUnits} Einheiten` : 'nichts getrunken',
+    tapBtn('+ eine Einheit', 'alcLast', { flag: 'alcohol', count: 'alcUnits', label: 'Alkohol' }),
+    `<span class="nrow-lbl">letzte Einheit</span>${time('alcLast')}${clr(['alcohol', 'alcUnits', 'alcLast'])}`);
+
+  const sport = row('Sport', e.sportEnd ? '' : 'kein Sport',
+    tapBtn('Gerade beendet', 'sportEnd', { flag: 'sport', label: 'Sport beendet' }),
+    `<span class="nrow-lbl">beendet um</span>${time('sportEnd')}${clr(['sport', 'sportEnd'])}`);
+
+  const sauna = row('Sauna', e.saunaEnd ? '' : 'keine Sauna',
+    tapBtn('Gerade beendet', 'saunaEnd', { flag: 'sauna', label: 'Sauna beendet' }),
+    `<span class="nrow-lbl">letzter Gang</span>${time('saunaEnd')}${clr(['sauna', 'saunaEnd'])}`);
+
+  const mast = row('Masturbiert', e.mastTime ? '' : 'nicht',
+    tapBtn('Gerade eben', 'mastTime', { flag: 'mast', label: 'Masturbiert' }),
+    `<span class="nrow-lbl">um</span>${time('mastTime')}${clr(['mast', 'mastTime'])}`);
+
+  const shift = row('Dienst', '', seg('shift', SHIFTS), '');
+
+  // ── Abends ──
+  const brain = row('Brainwork', 'in der letzten Stunde vor dem Einschlafen',
+    seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]), '');
+  const relax = row('Entspannt ins Bett', '',
+    seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]), '');
+
+  const sleepRow = `
+    <button class="bigbtn ${e.sleepAt ? 'set' : ''}"
+      onclick='stamp("${key}","sleepAt",{"label":"Augen zu"})'>
+      <span class="bigbtn-l">Augen zu · Handy weg</span>
+      <span class="bigbtn-v">${e.sleepAt ? 'Jetzt neu stempeln' : 'Jetzt stempeln'}</span>
+    </button>
+    <div class="nrow-val solo"><span class="nrow-lbl">Augen zu um</span>${time('sleepAt')}${clr(['sleepAt'])}</div>`;
+
+  // ── Morgens danach ──
+  const span = restSpan(key, e);
+  const hr = row('Ruhepuls erreicht', `abgelesen am ${esc(dayName(nextKey))}`, '',
+    `<span class="nrow-lbl">um</span>${time('restingHr')}
+     <span class="nrow-lbl">am</span>
+     <input type="date" value="${e.restingHrDate || ''}"
+       onchange="setDayTime('${key}','restingHrDate',this.value)">
+     ${clr(['restingHr', 'restingHrDate'])}`);
+  const quality = row('Wie war die Nacht?', '', seg('quality', QUALS), '');
+
+  // Always present, so entering a time never shifts the page around
+  const result = `<div class="nresult${span === null ? ' pending' : ''}" id="nresult">
+    ${nresultInner(span, e)}</div>`;
+
+  // ── Nights elsewhere that are still missing something ──
+  const open = [];
+  for (let i = 1; i <= 14; i++) {
+    const k = shiftDay(logDayKey(), -i), x = getDay(k);
+    if (!x.sleepAt || k === key) continue;
+    const miss = [];
+    if (!x.restingHr) miss.push('Ruhepuls');
+    if (!x.quality)   miss.push('Bewertung');
+    if (miss.length) open.push({ k, miss });
+  }
+  const openHtml = !open.length ? '' : `
+    <h3 class="sleep-h3">Offene Nächte</h3>
+    <div class="openlist">${open.map(o => `
+      <button class="openrow" onclick="sleepOpen('${o.k}')">
+        <span class="openrow-t">Nacht ${esc(nightLabel(o.k))}</span>
+        <span class="openrow-m">${esc(o.miss.join(' und '))} ${o.miss.length > 1 ? 'fehlen' : 'fehlt'}</span>
+      </button>`).join('')}</div>`;
+
+  host.innerHTML = `
+    <div class="night-nav">
       <button onclick="sleepGo(-1)">‹</button>
-      <span class="tx-month-label">${esc(dayLabel(key))}${isToday ? ' · heute' : ''}</span>
-      <button onclick="sleepGo(1)" ${isFuture ? 'disabled' : ''}>›</button>
+      <div class="night-title">
+        <span class="night-t">Nacht ${esc(nightLabel(key))}</span>
+        <span class="night-s">${isNow ? 'die laufende Nacht' : 'zurückliegend'}</span>
+      </div>
+      <button onclick="sleepGo(1)">›</button>
     </div>
-    <div class="day-scope">Dieser Tag und die <b>Nacht ${esc(nightLabel(key))}</b></div>
-    ${!isToday ? `<button class="sleep-today" onclick="sleepToday()">Zurück zu heute</button>` : ''}
-    ${nudge}
+    ${isNow ? '' : `<button class="sleep-today" onclick="sleepNow()">Zur laufenden Nacht</button>`}
+    ${result}
 
-    <h3 class="sleep-h3">Ergebnis der Nacht</h3>
-    ${row('Ruhepuls erreicht', timeField('restingHr', e.restingHr),
-          `Nacht ${esc(nightLabel(key))} · trägst du am ${esc(morningLabel(key))} früh ein`)}
-    ${row('Datum', `<input type="date" id="sleep-hr-date" value="${e.restingHrDate || ''}" onchange="setDayTime('${key}','restingHrDate',this.value)">`,
-          `meist ${esc(dayLabel(nextKey, { weekday: 'long', day: 'numeric', month: 'short' }))}, nach Mitternacht`)}
-    <div id="sleep-span-slot">${restSpan(key, e) === null ? ''
-      : `<div class="sleep-span">${esc(fmtSpan(restSpan(key, e)))} nach dem Zubettgehen</div>`}</div>
-    ${row('Nacht bewertet', seg('quality', QUALS),
-          `Nacht ${esc(nightLabel(key))} · am ${esc(morningLabel(key))} früh`)}
+    <h3 class="sleep-h3">Tagsüber · ${esc(dayName(key))}</h3>
+    ${coffee}${food}${alc}${sport}${sauna}${mast}${shift}
 
-    <h3 class="sleep-h3">Tag</h3>
-    ${row('Dienst', seg('shift', SHIFTS))}
+    <h3 class="sleep-h3">Abends · ${esc(dayName(key))}</h3>
+    ${brain}${relax}${sleepRow}
 
-    <h3 class="sleep-h3">Essen</h3>
-    ${row('Zuletzt gegessen', timeField('foodTime', e.foodTime))}
-    ${row('Art', seg('foodType', FOOD_TYPES))}
+    <h3 class="sleep-h3">Am Morgen danach · ${esc(dayName(nextKey))}</h3>
+    ${hr}${quality}
 
-    <h3 class="sleep-h3">Kaffee</h3>
-    ${row('Getrunken', seg('coffee', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.coffee === false ? '' : `
-      ${row('Tassen', `<div class="cups">
-          <button onclick="dayCups('${key}','coffeeCups',-1)">−</button>
-          <span>${e.coffeeCups || 0}</span>
-          <button onclick="dayCups('${key}','coffeeCups',1)">+</button>
-        </div>`)}
-      ${row('Letzte Tasse', timeField('coffeeLast', e.coffeeLast))}
-      ${row('Art', seg('coffeeType', COFFEE_TYPES))}`}
-
-    <h3 class="sleep-h3">Alkohol</h3>
-    ${row('Getrunken', seg('alcohol', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.alcohol !== true ? '' : `
-      ${row('Einheiten', `<div class="cups">
-          <button onclick="dayCups('${key}','alcUnits',-1)">−</button>
-          <span>${e.alcUnits || 0}</span>
-          <button onclick="dayCups('${key}','alcUnits',1)">+</button>
-        </div>`, '1 Einheit = 0,3 l Bier / 0,15 l Wein')}
-      ${row('Letzte Einheit', timeField('alcLast', e.alcLast))}`}
-
-    <h3 class="sleep-h3">Körper</h3>
-    ${row('Sport gemacht', seg('sport', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.sport !== true ? '' : row('Sport beendet', timeField('sportEnd', e.sportEnd))}
-    ${row('Masturbiert', seg('mast', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.mast === true ? row('Uhrzeit', timeField('mastTime', e.mastTime)) : ''}
-
-    <h3 class="sleep-h3">Sauna</h3>
-    ${row('In der Sauna', seg('sauna', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${e.sauna !== true ? '' : row('Letzter Gang beendet', timeField('saunaEnd', e.saunaEnd))}
-
-    <h3 class="sleep-h3">Vor dem Schlafen</h3>
-    ${row('Brainwork', seg('brainwork', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]),
-          'in der Stunde vor dem Zubettgehen')}
-    ${row('Entspannt ins Bett', seg('relaxed', [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }]))}
-    ${row('Schlafen gegangen', timeField('sleepAt', e.sleepAt), 'Handy weg, Augen zu')}
-
-    <div id="sleep-hist-slot">${hist}</div>
+    ${openHtml}
+    <div id="sleep-hist-slot">${sleepHistHtml(key)}</div>
     <div class="demo-row">
       ${hasDemo()
         ? `<button class="demo-btn warn" onclick="clearDemo()">Beispieltage entfernen</button>
            <span class="demo-note">Die Auswertung enthält gerade Beispieldaten.</span>`
         : `<button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
            <span class="demo-note">Zum Ausprobieren der Auswertung, jederzeit entfernbar.</span>`}
-    </div>`;
-}
-
-// ── Analysis ───────────────────────────────────────────────────────────────
-// Everything here is a counted median over real nights. No models, no
-// estimates: each number is "the middle night of this group", nothing more.
-// Diverging poles validated for colour-vision deficiency (protan ΔE 20.0);
-// the app's green/red pair fails that check and is deliberately not used.
-const CH_GOOD = "#3b6fb0";
-const CH_BAD  = "#c2783f";
-const CH_MUTE = "#9aa19e";
-
-const MIN_BIN = 8;     // nights per group before a comparison is worth reading
-
-let statsY = "span";
-let hideNight = false;   // night shifts out of every view at once
-
-const median = a => {
-  if (!a.length) return null;
-  const s = [...a].sort((x, y) => x - y), h = s.length >> 1;
-  return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
-};
-
-// Minutes between something earlier in the day and closing your eyes.
-// Everything is measured against that moment, never against the wall clock,
-// so a cup six hours before counts the same at 23:00 and at 07:00.
-function gapToBed(e, field) {
-  if (!e.sleepAt || !e[field]) return null;
-  let d = minsOf(e.sleepAt) - minsOf(e[field]);
-  if (d < 0) d += 1440;
-  return d > 20 * 60 ? null : d;
-}
-
-const OUTCOMES = [
-  { k: 'span', l: 'Einschlafphase', lowGood: true,
-    get: r => r.span, fmt: v => fmtSpan(v),
-    // Axis ticks need to fit in a narrow margin, so 2:35 rather than 2 h 35 min
-    tick: v => { const m = Math.round(v); return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; } },
-  { k: 'quality', l: 'Nachtgefühl', lowGood: false,
-    get: r => r.e.quality ? QUAL_SCORE[r.e.quality] : null,
-    fmt: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2),
-    tick: v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(1) }
-];
-const outcome = () => OUTCOMES.find(o => o.k === statsY) || OUTCOMES[0];
-function setStatsY(k) { statsY = k; renderStats(); }
-function toggleNight() { hideNight = !hideNight; renderStats(); }
-
-function statRows() {
-  return Object.keys(daylog).sort().map(d => {
-    const e = getDay(d), span = restSpan(d, e);
-    return { d, e, span };
-  }).filter(r => r.span !== null && r.span >= 0 && r.span <= 15 * 60)
-    .filter(r => !hideNight || r.e.shift !== 'nacht');
-}
-
-// Timed factors, binned by how long before lights-out they happened
-const WINDOWS = [
-  { k: 'coffeeLast', l: 'Letzte Tasse Kaffee', off: e => e.coffee === false,
-    edges: [5, 10], labels: ['< 5 Std. vorher', '5–10 Std. vorher', '> 10 Std. vorher'], none: 'kein Kaffee' },
-  { k: 'alcLast', l: 'Letzter Alkohol', off: e => e.alcohol === false,
-    edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Alkohol' },
-  { k: 'foodTime', l: 'Letztes Essen', off: () => false,
-    edges: [2, 4], labels: ['< 2 Std. vorher', '2–4 Std. vorher', '> 4 Std. vorher'], none: null },
-  { k: 'sportEnd', l: 'Sport-Ende', off: e => e.sport === false,
-    edges: [3, 6], labels: ['< 3 Std. vorher', '3–6 Std. vorher', '> 6 Std. vorher'], none: 'kein Sport' },
-  { k: 'saunaEnd', l: 'Letzter Saunagang', off: e => e.sauna === false,
-    edges: [2, 5], labels: ['< 2 Std. vorher', '2–5 Std. vorher', '> 5 Std. vorher'], none: 'keine Sauna' },
-  { k: 'mastTime', l: 'Masturbation', off: e => e.mast === false,
-    edges: [1, 3], labels: ['< 1 Std. vorher', '1–3 Std. vorher', '> 3 Std. vorher'], none: 'gar nicht' }
-];
-
-// Factors with no time of their own
-const GROUPS = [
-  { l: 'Dienst',    get: e => e.shift,     levels: SHIFTS },
-  { l: 'Brainwork', get: e => e.brainwork, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] },
-  { l: 'Art des Essens', get: e => e.foodType,   levels: FOOD_TYPES },
-  { l: 'Art des Kaffees', get: e => e.coffeeType, levels: COFFEE_TYPES },
-  { l: 'Entspannt ins Bett', get: e => e.relaxed, levels: [{ v: true, l: 'Ja' }, { v: false, l: 'Nein' }] }
-];
-
-// Pairs, for the combination view. Each factor collapses to "critical or not"
-// so two of them make four cells instead of nine — with thirty-odd nights
-// that is the difference between readable and empty.
-const COMBOS = [
-  { k: 'coffee', l: 'Kaffee < 5 Std. vorher',
-    on: e => e.coffee === false ? false : nearBed(e, 'coffeeLast', 300) },
-  { k: 'alc',   l: 'Alkohol getrunken',
-    on: e => e.alcohol === true ? true : e.alcohol === false ? false : null },
-  { k: 'food',  l: 'Essen < 2 Std. vorher',  on: e => nearBed(e, 'foodTime', 120) },
-  { k: 'fat',   l: 'Fettig gegessen',
-    on: e => e.foodType ? e.foodType === 'fettig' : null },
-  { k: 'sport', l: 'Sport < 3 Std. vorher',
-    on: e => e.sport === false ? false : nearBed(e, 'sportEnd', 180) },
-  { k: 'sauna', l: 'Sauna < 2 Std. vorher',
-    on: e => e.sauna === false ? false : nearBed(e, 'saunaEnd', 120) },
-  { k: 'mast',  l: 'Masturbation < 1 Std. vorher',
-    on: e => e.mast === false ? false : nearBed(e, 'mastTime', 60) },
-  { k: 'brain', l: 'Brainwork davor',
-    on: e => e.brainwork === true ? true : e.brainwork === false ? false : null },
-  { k: 'nacht', l: 'Nachtdienst',
-    on: e => e.shift ? e.shift === 'nacht' : null },
-  { k: 'spaet', l: 'Spätdienst',
-    on: e => e.shift ? e.shift === 'spaet' : null }
-];
-function nearBed(e, field, mins) {
-  const g = gapToBed(e, field);
-  return g === null ? null : g < mins;
-}
-
-function renderStats() {
-  const host = $("stats");
-  const rows = statRows();
-  const N = rows.length;
-
-  if (N < 2) {
-    host.innerHTML = `<div class="stats-empty">
-      <b>Noch zu wenig Daten</b>
-      <p>Die Auswertung braucht Nächte mit <i>Schlafen gegangen</i> und <i>Ruhepuls erreicht</i>.
-      Bisher: <b>${N}</b>.</p>
-      <p>Große Unterschiede zeigen sich ab etwa 25 Nächten, feine brauchen deutlich mehr.</p>
-      <button class="demo-btn" onclick="loadDemo()">30 Beispieltage laden</button>
-    </div>`;
-    return;
-  }
-
-  const spans = rows.map(r => r.span);
-  const med = median(spans);
-  const rated = rows.filter(r => r.e.quality).length;
-
-  const kpi = `<div class="kpi-row">
-    ${[['Nächte', String(N), ''],
-       ['Median', fmtSpan(med), 'bis zum Ruhepuls'],
-       ['Kürzeste', fmtSpan(Math.min(...spans)), ''],
-       ['Bewertet', String(rated), 'von ' + N + ' Nächten']].map(([l, v, s]) => `
-      <div class="kpi"><span class="kpi-lbl">${l}</span><span class="kpi-val">${esc(v)}</span>
-      ${s ? `<span class="kpi-sub">${esc(s)}</span>` : ''}</div>`).join('')}
-  </div>`;
-
-  const ySwitch = `<div class="ytabs">${OUTCOMES.map(o =>
-    `<button class="ytab ${o.k === statsY ? 'on' : ''}" onclick="setStatsY('${o.k}')">${o.l}</button>`
-  ).join('')}</div>`;
-
-  const nights = Object.keys(daylog).filter(k => (daylog[k] || {}).shift === 'nacht').length;
-  const filter = nights === 0 ? '' : `<label class="nfilter">
-    <input type="checkbox" ${hideNight ? 'checked' : ''} onchange="toggleNight()">
-    Nachtdienste ausblenden <span>(${nights} erfasst)</span>
-  </label>`;
-
-  host.innerHTML = kpi + ySwitch + filter + timelineChart(rows, med)
-    + feelVsBody(rows) + compareSection(rows) + comboSection(rows);
-}
-
-function feelVsBody(rows) {
-  const have = rows.filter(r => r.e.quality);
-  if (have.length < 4) {
-    return `<h3 class="stats-h3">Gefühl gegen Körper</h3>
-      <p class="stats-sub">Bewerte die Nächte am Morgen, dann steht hier, ob dein Empfinden
-      mit der gemessenen Einschlafphase zusammenpasst. Bisher ${have.length} bewertet.</p>`;
-  }
-  const byQ = QUALS.map(q => {
-    const v = have.filter(r => r.e.quality === q.v).map(r => r.span);
-    return { ...q, n: v.length, med: v.length ? median(v) : null };
-  });
-  const filled = byQ.filter(q => q.med !== null);
-  const max = Math.max(...filled.map(q => q.med), 1);
-  const gut = byQ.find(q => q.v === 'gut'), schl = byQ.find(q => q.v === 'schlecht');
-
-  const verdict = (gut.med !== null && schl.med !== null)
-    ? (schl.med - gut.med > 15
-        ? `Dein Gefühl passt zum Körper: nach gefühlt guten Nächten war der Ruhepuls im Mittel
-           <b>${esc(fmtSpan(schl.med - gut.med))}</b> früher erreicht als nach schlechten.`
-        : schl.med - gut.med < -15
-          ? `Auffällig: gefühlt <b>gute</b> Nächte hatten die <b>längere</b> Einschlafphase.
-             Dein Empfinden misst also etwas anderes als der Puls.`
-          : `Gefühl und Körper laufen bei dir <b>auseinander</b> — zwischen guten und schlechten
-             Nächten liegen nur ${esc(fmtSpan(Math.abs(schl.med - gut.med)))}. Beide Größen lohnen getrennt.`)
-    : `Sobald du gute und schlechte Nächte beide bewertet hast, steht hier der Vergleich.`;
-
-  return `
-    <h3 class="stats-h3">Gefühl gegen Körper</h3>
-    <p class="stats-sub">Mittlere Einschlafphase je Bewertung.</p>
-    <div class="qbars">${byQ.map(q => q.med === null
-      ? `<div class="qbar empty"><span class="qbar-l">${q.l}</span><span class="qbar-n">noch keine</span></div>`
-      : `<div class="qbar">
-           <span class="qbar-l"><span class="q q-${q.v}">${q.l[0]}</span>${q.l}</span>
-           <span class="qbar-track"><span class="qbar-fill" style="width:${(q.med / max * 100).toFixed(1)}%;background:${q.v === 'gut' ? CH_GOOD : q.v === 'schlecht' ? CH_BAD : CH_MUTE}"></span></span>
-           <span class="qbar-v">${esc(fmtSpan(q.med))}<span class="qbar-n">n=${q.n}</span></span>
-         </div>`).join('')}</div>
-    <p class="stats-note">${verdict}</p>`;
-}
-
-// One dot per night, stacked where they land close together. At enough nights
-// the pile takes on a bell shape by itself; at few nights it stays a handful
-// of dots, which is honest — a smooth curve drawn through eight values would
-// show a shape the data does not contain.
-function dotStrip(vals, xMax, colour) {
-  const W = 100, H = 26, pad = 2.5;
-  const B = 44;                                  // buckets across the strip
-  const seen = {};
-  const pts = vals.map(v => {
-    const b = Math.max(0, Math.min(B - 1, Math.round(v / xMax * (B - 1))));
-    const tier = (seen[b] = (seen[b] || 0) + 1) - 1;
-    return { x: pad + (b / (B - 1)) * (W - 2 * pad), tier };
-  });
-  const maxTier = Math.max(0, ...pts.map(p => p.tier));
-  const step = Math.min(3.6, (H / 2 - 3.2) / Math.max(1, Math.ceil(maxTier / 2)));
-  const cy = H / 2;
-  const med = median(vals);
-  const mx = pad + (Math.max(0, Math.min(1, med / xMax))) * (W - 2 * pad);
-
-  return `<svg class="dstrip" viewBox="0 0 ${W} ${H}" role="img">
-    <line x1="${mx.toFixed(2)}" x2="${mx.toFixed(2)}" y1="1" y2="${H - 1}"
-          stroke="${colour}" stroke-width="0.7" opacity=".85"/>
-    ${pts.map(p => {
-      const dir = p.tier % 2 ? 1 : -1, lvl = Math.ceil(p.tier / 2);
-      return `<circle cx="${p.x.toFixed(2)}" cy="${(cy + dir * lvl * step).toFixed(2)}"
-        r="1.7" fill="${colour}" fill-opacity=".75"/>`;
-    }).join('')}
-  </svg>`;
-}
-
-// One block per factor: the middle night of each group, counted, side by side
-function compareSection(rows) {
-  const O = outcome();
-  const use = rows.filter(r => O.get(r) !== null);
-  if (use.length < 6) {
-    return `<h3 class="stats-h3">Vergleich</h3>
-      <p class="stats-sub">Dafür braucht es mindestens sechs auswertbare Nächte.</p>`;
-  }
-  const overall = median(use.map(r => O.get(r)));
-  const yDom = Math.max(...use.map(r => O.get(r))) * 1.06 || 1;
-
-  const blocks = [];
-
-  // Timed factors: the whole night plotted against how long before it happened
-  WINDOWS.forEach(w => {
-    const pts = [], skipped = [];
-    use.forEach(r => {
-      if (w.none && w.off(r.e)) { skipped.push(O.get(r)); return; }
-      const g = gapToBed(r.e, w.k);
-      if (g !== null) pts.push({ x: g / 60, y: O.get(r), d: r.d, e: r.e });
-    });
-    if (pts.length < 4) return;
-
-    // Bin medians still go underneath as plain numbers
-    const bins = w.labels.map((l, i) => ({ l, v: pts.filter(p => {
-      const h = p.x;
-      return i === 0 ? h < w.edges[0] : i === 1 ? (h >= w.edges[0] && h < w.edges[1]) : h >= w.edges[1];
-    }).map(p => p.y) })).filter(b => b.v.length);
-    const spread = bins.length > 1
-      ? Math.max(...bins.map(b => median(b.v))) - Math.min(...bins.map(b => median(b.v))) : 0;
-
-    blocks.push({
-      spread, thin: pts.length < MIN_BIN,
-      html: scatterBlock(w, pts, skipped, yDom, overall, O, bins)
-    });
-  });
-
-  // Factors without a time of their own keep the stacked dots
-  GROUPS.forEach(g => {
-    const cells = g.levels.map(lv => ({ l: lv.l, rows: use.filter(r => g.get(r.e) === lv.v) }))
-      .filter(c => c.rows.length > 0);
-    if (cells.length < 2) return;
-    const stat = cells.map(c => ({ ...c, n: c.rows.length, med: median(c.rows.map(r => O.get(r))) }));
-    const lo = Math.min(...stat.map(s => s.med)), hi = Math.max(...stat.map(s => s.med));
-    const bars = stat.map(s => {
-      const good = O.lowGood ? s.med <= overall : s.med >= overall;
-      const c = s.n < 3 ? CH_MUTE : (good ? CH_GOOD : CH_BAD);
-      return `<div class="wbar">
-        <span class="wbar-l">${esc(s.l)}</span>
-        ${dotStrip(s.rows.map(r => O.get(r)), yDom, c)}
-        <span class="wbar-v" style="color:${c}">${esc(O.fmt(s.med))}<span class="wbar-n">${s.n} Nächte</span></span>
-      </div>`;
-    }).join('');
-    blocks.push({
-      spread: hi - lo, thin: Math.min(...stat.map(s => s.n)) < MIN_BIN,
-      html: `<div class="wblock">
-        <div class="wblock-head"><span class="wblock-t">${esc(g.l)}</span>
-          <span class="wblock-s">Unterschied ${esc(O.fmt(hi - lo))}</span></div>
-        ${bars}
-        <div class="wscale"><span>0</span><span>${esc(O.fmt(yDom / 2))}</span><span>${esc(O.fmt(yDom))}</span></div>
-      </div>` }); 
-  });
-
-  if (!blocks.length) {
-    return `<h3 class="stats-h3">Vergleich</h3>
-      <p class="stats-sub">Noch keine Faktoren mit genug Nächten.</p>`;
-  }
-  blocks.sort((a, b) => (a.thin - b.thin) || (b.spread - a.spread));
-
-  return `
-    <h3 class="stats-h3">Vergleich</h3>
-    <p class="stats-sub">Ein Punkt ist eine Nacht. Waagerecht, wie lange vor dem Augen-zumachen
-      es passiert ist, senkrecht die Einschlafphase dieser Nacht. Die Linie ist der gleitende
-      Mittelwert — wo sie steigt, wird es teuer.</p>
-    <div class="wblocks">${blocks.map(b => b.html).join('')}</div>
-    <p class="stats-note">Jeder Faktor steht für sich. Ob zwei davon bei dir zusammenhängen,
-      siehst du weiter unten unter <b>Kombination</b>.</p>`;
-}
-
-// Scatter of one timed factor, with a running median through the cloud
-function scatterBlock(w, pts, skipped, yDom, overall, O, bins) {
-  const W = 100, H = 60, L = 17, B = 8, T = 3;
-  const xMax = Math.max(...pts.map(p => p.x), 1) * 1.05;
-  const sx = v => L + (v / xMax) * (W - L - 3);
-  const sy = v => (H - B) - (v / yDom) * (H - B - T);
-
-  // Running median over the nearest neighbours — no curve is invented where
-  // there are no nights, and one outlier cannot drag the line
-  const sorted = [...pts].sort((a, b) => a.x - b.x);
-  const k = Math.max(3, Math.round(sorted.length / 4));
-  const line = sorted.map((_, i) => {
-    const from = Math.max(0, i - (k >> 1)), win = sorted.slice(from, from + k);
-    return { x: sorted[i].x, y: median(win.map(p => p.y)) };
-  });
-  const path = line.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`).join(' ');
-
-  const ticks = [0, yDom / 2, yDom].map(v => `
-    <line x1="${L}" x2="${W}" y1="${sy(v).toFixed(2)}" y2="${sy(v).toFixed(2)}"
-          stroke="var(--line)" stroke-width="0.2"/>
-    <text x="${L - 1.5}" y="${(sy(v) + 1.1).toFixed(2)}" text-anchor="end"
-          font-size="3" fill="var(--muted)">${esc((O.tick || O.fmt)(v))}</text>`).join('');
-
-  const none = skipped.length >= 3 ? median(skipped) : null;
-  const noneLine = none === null ? '' : `
-    <line x1="${L}" x2="${W}" y1="${sy(none).toFixed(2)}" y2="${sy(none).toFixed(2)}"
-          stroke="${CH_MUTE}" stroke-width="0.45" stroke-dasharray="1.6 1.4"/>`;
-
-  const dots = pts.map(p => {
-    const good = O.lowGood ? p.y <= overall : p.y >= overall;
-    return `<circle cx="${sx(p.x).toFixed(2)}" cy="${sy(p.y).toFixed(2)}" r="1.6"
-      fill="${good ? CH_GOOD : CH_BAD}" fill-opacity=".8" stroke="#fff" stroke-width="0.4"
-      ><title>${esc(dayLabel(p.d, { day: 'numeric', month: 'short' }))} · ${p.x.toFixed(1)} Std. vorher · ${esc(O.fmt(p.y))}</title></circle>`;
-  }).join('');
-
-  const xt = [0, xMax / 2, xMax].map(v =>
-    `<span>${v.toFixed(v < 10 ? 1 : 0)}</span>`).join('');
-
-  return `<div class="wblock">
-    <div class="wblock-head">
-      <span class="wblock-t">${esc(w.l)}</span>
-      <span class="wblock-s">${pts.length} Nächte${none !== null ? ` · ${skipped.length} ohne` : ''}</span>
-    </div>
-    <svg class="sblock" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(w.l)}">
-      ${ticks}${noneLine}
-      <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="0.7"
-            stroke-linejoin="round" opacity=".7"/>
-      ${dots}
-    </svg>
-    <div class="sxaxis">${xt}</div>
-    <div class="sxlbl">Stunden vor dem Augen-zumachen${none === null ? ''
-      : ` · <span class="dash"></span> ${esc(w.none)}: ${esc(O.fmt(none))}`}</div>
-    <div class="sbins">${bins.map(b =>
-      `<span><b>${esc(O.fmt(median(b.v)))}</b> ${esc(b.l.replace(' vorher', ''))} <i>${b.v.length}</i></span>`
-    ).join('')}</div>
-  </div>`;
-}
-
-// Two factors at once: the four combinations side by side
-let comboA = 'coffee', comboB = 'brain';
-function setCombo(which, k) { if (which === 'a') comboA = k; else comboB = k; renderStats(); }
-
-function comboSection(rows) {
-  const O = outcome();
-  const use = rows.filter(r => O.get(r) !== null);
-  const list = COMBOS.filter(c => !(hideNight && c.k === 'nacht'));
-  const A = list.find(c => c.k === comboA) || list[0];
-  const B = list.find(c => c.k === comboB) || list[1];
-  if (!A || !B) return '';
-
-  const sel = (which, cur, other) => `<select onchange="setCombo('${which}',this.value)">
-    ${list.map(c => `<option value="${c.k}"${c.k === cur.k ? ' selected' : ''}
-      ${c.k === other.k ? ' disabled' : ''}>${esc(c.l)}</option>`).join('')}
-  </select>`;
-
-  let body;
-  if (A.k === B.k) {
-    body = `<p class="stats-sub">Wähle zwei verschiedene Faktoren.</p>`;
-  } else {
-    const cell = (a, b) => {
-      const v = use.filter(r => A.on(r.e) === a && B.on(r.e) === b).map(r => O.get(r));
-      return { n: v.length, med: v.length ? median(v) : null };
-    };
-    const grid = [[cell(true, true), cell(true, false)], [cell(false, true), cell(false, false)]];
-    const all = grid.flat().filter(c => c.med !== null);
-    if (all.length < 2) {
-      body = `<p class="stats-sub">Für diese Kombination fehlen noch Nächte.</p>`;
-    } else {
-      const lo = Math.min(...all.map(c => c.med)), hi = Math.max(...all.map(c => c.med));
-      const paint = c => {
-        if (c.med === null) return `<td class="empty">–</td>`;
-        const t = hi - lo < 1e-9 ? 0.5 : (c.med - lo) / (hi - lo);
-        const col = c.n < 3 ? CH_MUTE : (O.lowGood ? (t > 0.5 ? CH_BAD : CH_GOOD) : (t > 0.5 ? CH_GOOD : CH_BAD));
-        return `<td style="color:${col}"><b>${esc(O.fmt(c.med))}</b><span>${c.n} Nächte</span></td>`;
-      };
-      body = `
-        <div class="combo-wrap"><table class="combo">
-          <thead><tr><th></th>
-            <th>${esc(B.l)}<br><i>ja</i></th><th>${esc(B.l)}<br><i>nein</i></th></tr></thead>
-          <tbody>
-            <tr><th>${esc(A.l)}<br><i>ja</i></th>${paint(grid[0][0])}${paint(grid[0][1])}</tr>
-            <tr><th>${esc(A.l)}<br><i>nein</i></th>${paint(grid[1][0])}${paint(grid[1][1])}</tr>
-          </tbody>
-        </table></div>
-        <p class="stats-note">Oben links stehen die Nächte, an denen <b>beides</b> zutraf,
-          unten rechts die mit <b>keinem von beidem</b>. Nur wenn oben links deutlich schlechter
-          steht als die beiden Einzelfelder, verstärken sich die zwei gegenseitig.
-          Felder unter drei Nächten sind grau.</p>`;
-    }
-  }
-
-  return `
-    <h3 class="stats-h3">Kombination</h3>
-    <p class="stats-sub">Zwei Faktoren zusammen — hier siehst du auch, ob zwei Dinge
-      bei dir immer gemeinsam auftreten und sich deshalb nicht trennen lassen.</p>
-    <div class="combo-sel">${sel('a', A, B)}${sel('b', B, A)}</div>
-    ${body}`;
-}
-
-function timelineChart(rows, med) {
-  const data = rows.slice(-30);
-  const W = 100, H = 46, pad = 2;
-  const hi = Math.max(...data.map(r => r.span), med) * 1.08;
-  const bw = (W - pad * 2) / data.length;
-  const y = v => H - (v / hi) * (H - 8);
-  const bars = data.map((r, i) => {
-    const x = pad + i * bw, h = Math.max(0.6, H - y(r.span));
-    return `<rect x="${(x + bw * .14).toFixed(2)}" y="${y(r.span).toFixed(2)}"
-      width="${(bw * .72).toFixed(2)}" height="${h.toFixed(2)}" rx="0.7"
-      fill="${r.span > med ? CH_BAD : CH_GOOD}"
-      ><title>${esc(dayLabel(r.d, { weekday: 'short', day: 'numeric', month: 'short' }))} · ${esc(fmtSpan(r.span))}${
-        r.e.quality ? ' · ' + esc(QUALS.find(q => q.v === r.e.quality).l) : ''}</title></rect>`;
-  }).join('');
-  const first = data[0], last = data[data.length - 1];
-  return `
-    <h3 class="stats-h3">Einschlafphase pro Nacht</h3>
-    <p class="stats-sub">Vom Augen-zumachen bis zum Ruhepuls.</p>
-    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
-         aria-label="Einschlafphase je Nacht">
-      <line x1="0" x2="${W}" y1="${y(med).toFixed(2)}" y2="${y(med).toFixed(2)}"
-            stroke="${CH_MUTE}" stroke-width="0.3" stroke-dasharray="1.2 1.2"/>
-      ${bars}
-    </svg>
-    <div class="chart-axis">
-      <span>${esc(dayLabel(first.d, { day: 'numeric', month: 'short' }))}</span>
-      <span class="med-tag">Median ${esc(fmtSpan(med))}</span>
-      <span>${esc(dayLabel(last.d, { day: 'numeric', month: 'short' }))}</span>
     </div>`;
 }
 
