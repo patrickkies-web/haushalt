@@ -2,6 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#eef0ee">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Turnus">
+  <link rel="apple-touch-icon" href="icon-180.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Turnus — Abos & wiederkehrende Kosten</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1374,6 +1380,16 @@
     .ft-fettig { background: #b0556a; }
     .ft-scharf { background: #c8763a; }
 
+    .hh-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .hh-row { display: flex; align-items: center; gap: 6px; }
+    .hh-row input {
+      flex: 1; font-family: inherit; font-size: 14px; color: var(--ink);
+      background: var(--bg); border: 1px solid var(--line);
+      border-radius: 9px; padding: 10px 12px;
+    }
+    .hh-row input:focus { outline: none; border-color: var(--accent); }
+    .hh-add { width: 100%; padding: 10px; border: 1px dashed var(--line); border-radius: 9px; }
+
     .rot-cfg {
       display: flex;
       gap: 14px;
@@ -2364,6 +2380,10 @@
           Importieren
         </button>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+        <button class="btn-data" id="hh-btn">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17.5" cy="9.5" r="2.4" stroke="currentColor" stroke-width="1.8"/><path d="M16 15.2a4.4 4.4 0 0 1 4.5 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Haushalt
+        </button>
         <button class="btn-data" id="sync-btn">
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 3v4h-4M4.5 21v-4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span id="sync-btn-lbl">Sync</span>
@@ -2457,6 +2477,7 @@ const SKEY = "turnus:settlements";
 const AKEY = "turnus:accounts";
 const RKEY = "turnus:rotierkonto";
 const DKEY = "turnus:daylog";
+const HKEY = "turnus:household";
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // Backed by localStorage, with an in-memory fallback for private windows or
@@ -2535,6 +2556,11 @@ let rotCfg        = { start: "", balance: null };
 // Day log, keyed YYYY-MM-DD. restingHr belongs to the day whose behaviour
 // caused it, but gets filled in the next morning.
 let daylog        = {};
+// Income keys stay the member id, so the two original people keep their data
+let household     = { members: [
+  { id: 'patrick', name: 'Patrick' },
+  { id: 'sara',    name: 'Sara' }
+] };
 
 const $ = id => document.getElementById(id);
 
@@ -2621,6 +2647,19 @@ async function load() {
     }
   } catch (e) {}
   try {
+    const rh = await window.storage.get(HKEY);
+    if (rh && rh.value) {
+      const d = JSON.parse(rh.value);
+      if (d && Array.isArray(d.members) && d.members.length) household = d;
+    }
+  } catch (e) {}
+  // 'prevSara' / 'prevPatrick' predate per-member keys
+  Object.values(income).forEach(m => {
+    if (!m || typeof m !== 'object') return;
+    if (m.prevSara    !== undefined) { m.prev_sara    = m.prevSara;    delete m.prevSara; }
+    if (m.prevPatrick !== undefined) { m.prev_patrick = m.prevPatrick; delete m.prevPatrick; }
+  });
+  try {
     const rg = await window.storage.get(GKEY);
     if (rg && rg.value) {
       const d = JSON.parse(rg.value);
@@ -2633,6 +2672,11 @@ async function load() {
 
 async function persistRotCfg() {
   try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
+  syncSoon();
+}
+
+async function persistHousehold() {
+  try { await window.storage.set(HKEY, JSON.stringify(household)); } catch (e) {}
   syncSoon();
 }
 
@@ -2670,7 +2714,7 @@ function ghSnapshot() {
   return {
     v: 2, subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, daylog
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household
   };
 }
 
@@ -2693,6 +2737,8 @@ function ghApply(d) {
     if (typeof b === 'number' || b === null) rotCfg.balance = b;
   }
   if (d.daylog && typeof d.daylog === 'object') daylog = d.daylog;
+  if (d.household && Array.isArray(d.household.members) && d.household.members.length)
+    household = d.household;
   return true;
 }
 
@@ -2701,7 +2747,7 @@ async function ghPersistAll() {
   await Promise.all([
     persist(), persistCats(), persistIncome(), persistTransactions(),
     persistPayments(), persistTxCats(), persistSettlements(),
-    persistAccCfg(), persistRotCfg(), persistDaylog()
+    persistAccCfg(), persistRotCfg(), persistDaylog(), persistHousehold()
   ]);
   applyingRemote = false;
 }
@@ -2867,6 +2913,58 @@ function ghConflict(remote) {
   };
   box.querySelector("#gh-keep-mine").onclick = () => { close(); ghPush({ force: true }); };
   scrim.onclick = close;
+}
+
+function openHousehold() {
+  document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  const scrim = document.createElement("div");
+  scrim.className = "scrim on"; scrim.setAttribute("data-scrim", "1");
+  const box = document.createElement("div");
+  box.className = "sheet on gh-popup";
+  const rows = household.members.map((m, i) => `
+    <div class="hh-row">
+      <input type="text" value="${esc(m.name)}" data-i="${i}" placeholder="Name">
+      ${household.members.length > 1
+        ? `<button class="row-x" onclick="hhRemove(${i})" title="Entfernen">✕</button>` : ''}
+    </div>`).join('');
+  box.innerHTML = `
+    <div class="grab"></div>
+    <h2>Haushalt</h2>
+    <p class="gh-note">Wie viele Personen teilen sich die Kosten? Für jede gibt es in der
+    Prognose eine Lohn-Zeile, eine Vormonats-Zeile und eine Auszahlung. Der Überschuss
+    wird durch die Anzahl geteilt.</p>
+    <div class="hh-list" id="hh-list">${rows}</div>
+    <button class="btn-ghost hh-add" onclick="hhAdd()">+ Person hinzufügen</button>
+    <div class="gh-actions"><button class="btn-primary" id="hh-save">Speichern</button></div>`;
+  document.body.append(scrim, box);
+  const close = () => document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
+  scrim.onclick = close;
+  box.querySelector("#hh-save").onclick = async () => {
+    box.querySelectorAll("#hh-list input").forEach(inp => {
+      const n = inp.value.trim();
+      if (n) household.members[+inp.dataset.i].name = n;
+    });
+    await persistHousehold();
+    close(); render();
+    showToast(`Haushalt: ${household.members.length} ${household.members.length === 1 ? 'Person' : 'Personen'}`);
+  };
+}
+
+function hhAdd() {
+  // Keep unsaved names while the sheet rebuilds
+  document.querySelectorAll("#hh-list input").forEach(inp => {
+    const n = inp.value.trim();
+    if (n) household.members[+inp.dataset.i].name = n;
+  });
+  household.members.push({ id: 'm' + Date.now().toString(36), name: '' });
+  openHousehold();
+}
+
+function hhRemove(i) {
+  const m = household.members[i];
+  if (!confirm(`„${m.name || 'Person'}" entfernen? Die eingetragenen Löhne dieser Person bleiben gespeichert, werden aber nicht mehr angezeigt.`)) return;
+  household.members.splice(i, 1);
+  openHousehold();
 }
 
 function openSyncConfig() {
@@ -3214,29 +3312,28 @@ function setInc(mk, field, val) {
 }
 
 function updateIncomeCol(mk) {
-  const p    = getInc(mk, 'patrick');
-  const s    = getInc(mk, 'sara');
-  const o    = getInc(mk, 'other');
-  const tot  = p + s + o;
-  const surp = tot - (lastTotals[mk - lastStartIdx] || 0);
-  const half = surp / 2;
-  const prevS  = getInc(mk, 'prevSara');
-  const prevP  = getInc(mk, 'prevPatrick');
-  const sock   = getInc(mk, 'sockel');
-  const remain = surp - sock * 2 - prevS - prevP;
-  const hasData = p || s || o || sock || prevS || prevP;
+  const M = household.members;
+  const wages = M.map(m => getInc(mk, m.id));
+  const prevs = M.map(m => getInc(mk, 'prev_' + m.id));
+  const o     = getInc(mk, 'other');
+  const sock  = getInc(mk, 'sockel');
+
+  const tot    = wages.reduce((a, v) => a + v, 0) + o;
+  const surp   = tot - (lastTotals[mk - lastStartIdx] || 0);
+  const share  = M.length ? surp / M.length : 0;
+  const remain = surp - sock * M.length - prevs.reduce((a, v) => a + v, 0);
+  const hasData = wages.some(v => v) || o || sock || prevs.some(v => v);
 
   const set = (id, v) => {
     const el = document.getElementById(id);
     if (el) el.textContent = hasData ? eur.format(v) : '–';
   };
 
-  set(`cc-total-${mk}`,    tot);
-  set(`cc-surp-${mk}`,     surp);
-  set(`cc-half-${mk}`,     half);
-  set(`cc-remain-${mk}`,   remain);
-  set(`cc-sarap-${mk}`,    sock + prevS);
-  set(`cc-patrickp-${mk}`, sock + prevP);
+  set(`cc-total-${mk}`,  tot);
+  set(`cc-surp-${mk}`,   surp);
+  set(`cc-share-${mk}`,  share);
+  set(`cc-remain-${mk}`, remain);
+  M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`, sock + prevs[i]));
 }
 
 function catColor(cat) {
@@ -3659,20 +3756,18 @@ function renderForecast() {
     sepCells += `<td class="${cls}"></td>`;
   }
 
+  const M = household.members;
   const incRows =
     `<tr class="inc-sep"><td class="name"><span class="lbl">Einnahmen &amp; Auszahlung</span></td>${sepCells}</tr>`
-    + iRow('inc-input', 'Patrick Lohn',       inputCells('patrick'))
-    + iRow('inc-input', 'Sara Lohn',          inputCells('sara'))
+    + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
     + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
     + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
     + iRow('inc-calc',  'Überschuss',         calcCells('surp'))
-    + iRow('inc-calc muted', 'Überschuss / 2', calcCells('half'))
-    + iRow('inc-input', 'Vormonat Sara',      inputCells('prevSara'))
-    + iRow('inc-input', 'Vormonat Patrick',   inputCells('prevPatrick'))
+    + iRow('inc-calc muted', `Überschuss / ${M.length}`, calcCells('share'))
+    + M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
     + iRow('inc-input', 'Sockel / Person',    inputCells('sockel'))
     + iRow('inc-calc remain', 'Verbleibend',  calcCells('remain'))
-    + iRow('inc-payout', 'Sara erhält',       calcCells('sarap'))
-    + iRow('inc-payout', 'Patrick erhält',    calcCells('patrickp'));
+    + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('');
 
   lastTotals   = totals;    // all months so past-column lookups work
   lastStartIdx = startIdx; // absolute month index of column 0
@@ -5240,7 +5335,7 @@ function exportData() {
     v: 2,
     subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, daylog,
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household,
     exported: new Date().toISOString()
   }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
@@ -5283,6 +5378,8 @@ async function importData(file) {
       if (typeof r.balance === 'number' || r.balance === null) rotCfg.balance = r.balance;
     }
     if (data.daylog && typeof data.daylog === 'object') daylog = data.daylog;
+    if (data.household && Array.isArray(data.household.members) && data.household.members.length)
+      household = data.household;
 
     await Promise.all([
       persist(), persistCats(), persistIncome(), persistTransactions(),
@@ -5318,6 +5415,7 @@ $("sort").onchange      = render;
 $("export-btn").onclick = exportData;
 $("import-btn").onclick = () => $("import-file").click();
 $("import-file").onchange = e => { importData(e.target.files[0]); e.target.value = ""; };
+$("hh-btn").onclick = () => openHousehold();
 $("sync-btn").onclick = () => ghReady() ? ghPull() : openSyncConfig();
 $("sync-btn").oncontextmenu = e => { e.preventDefault(); openSyncConfig(); };
 // Pick up changes made on another device when the tab comes back into focus
@@ -5337,6 +5435,11 @@ document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   if (tab === "sleep") renderSleep();
   if (tab === "stats") renderStats();
 });
+
+// Register the worker so the app opens without a connection once installed
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
 
 load();
 </script>
