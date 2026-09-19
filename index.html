@@ -38,6 +38,40 @@
       --c3: #8E52B0;
       --c4: #B0483A;
       --c5: #8A857C;
+      --ch-good: #3b6fb0;
+      --ch-bad:  #c2783f;
+      --ch-mute: #9aa19e;
+      --on-ink:    #FBFAF7;
+      --on-accent: #FFFFFF;
+    }
+
+    /* Dark palette. Hues re-picked for the dark lightness band (0.48–0.67),
+       which is narrower than the light one, and re-validated for CVD. */
+    :root[data-theme="dark"] {
+      --bg:          #16150F;
+      --surface:     #1E1D18;
+      --sunken:      #121109;
+      --bg-2:        #262419;
+      --ink:         #F2EFE6;
+      --muted:       #A39C8C;
+      --faint:       #6E6759;
+      --line:        #302E26;
+      --line-soft:   #27251E;
+      --accent:      #5FA184;
+      --accent-tint: #1F2B24;
+      --danger:      #C97A6A;
+      --c0: #2A9068;
+      --c1: #4E86CC;
+      --c2: #C2783F;
+      --c3: #9F5FC6;
+      --c4: #C85A48;
+      --c5: #8A857C;
+      --ch-good: #4E86CC;
+      --ch-bad:  #C2783F;
+      --ch-mute: #8A857C;
+      --on-ink:    #16150F;
+      --on-accent: #12160F;
+      color-scheme: dark;
     }
 
     * {
@@ -352,7 +386,7 @@
     }
 
     .btn:active       { transform: scale(.985); }
-    .btn-primary      { background: var(--accent); color: #fff; }
+    .btn-primary      { background: var(--accent); color: var(--on-accent); }
     .btn-primary:hover{ opacity: .92; }
     .btn-ghost        { background: transparent; color: var(--muted); }
     .btn-danger       { background: transparent; color: var(--danger); font-weight: 500; }
@@ -365,7 +399,7 @@
       transform: translateX(-50%);
       z-index: 30;
       background: var(--ink);
-      color: #fff;
+      color: var(--on-ink);
       border: none;
       border-radius: 11px;
       padding: 16px 26px;
@@ -1055,7 +1089,7 @@
       border: 1px solid var(--line); border-radius: 9px;
       padding: 9px 8px; cursor: pointer;
     }
-    .ytab.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+    .ytab.on { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 
     .qbars { display: flex; flex-direction: column; gap: 8px; }
     .qbar { display: grid; grid-template-columns: 96px 1fr 84px; align-items: center; gap: 9px; }
@@ -1177,7 +1211,7 @@
       border: 1px solid var(--line); border-radius: 8px;
       padding: 6px 10px; cursor: pointer;
     }
-    .xtab.on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+    .xtab.on { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 
     @media (max-width: 430px) {
       .tab-btn { font-size: 12.5px; padding: 10px 2px; }
@@ -1267,7 +1301,7 @@
     .bigbtn {
       width: 100%; margin-top: 14px; cursor: pointer; font-family: inherit;
       background: var(--accent); border: none; border-radius: 14px;
-      padding: 17px 16px; color: #fff;
+      padding: 17px 16px; color: var(--on-accent);
       display: flex; flex-direction: column; gap: 3px;
       transition: transform .09s ease;
     }
@@ -1344,7 +1378,7 @@
     .seg-btn.on {
       background: var(--accent);
       border-color: var(--accent);
-      color: #fff;
+      color: var(--on-accent);
       position: relative;
     }
 
@@ -1567,6 +1601,41 @@
       display: block; font-size: 10.5px; font-weight: 500; letter-spacing: .06em;
       text-transform: uppercase; color: var(--muted); margin: 16px 0 8px;
     }
+
+    .gear {
+      flex-shrink: 0; width: 38px; height: 38px; margin-left: 12px;
+      display: grid; place-items: center; cursor: pointer;
+      background: transparent; border: none; border-radius: 10px;
+      color: var(--muted); transition: color .18s ease, background .18s ease;
+    }
+    .gear svg { width: 21px; height: 21px; }
+    .gear:hover { color: var(--ink); background: var(--bg-2); }
+
+    .set-sec {
+      font-size: 10.5px; font-weight: 500; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--faint);
+      margin: 28px 0 10px;
+    }
+    .set-sec:first-of-type { margin-top: 18px; }
+    .set-hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: -4px 0 12px; }
+    .set-opt {
+      width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+      background: transparent; border: 1px solid var(--line);
+      border-radius: 11px; padding: 14px 15px; margin-bottom: 7px;
+      display: flex; flex-direction: column; gap: 3px;
+      transition: border-color .18s ease, background .18s ease;
+    }
+    .set-opt.on { border-color: var(--ink); background: var(--bg-2); }
+    .set-opt-l { font-size: 14px; font-weight: 500; color: var(--ink); }
+    .set-opt-d { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+    .set-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; cursor: pointer;
+      padding: 15px 2px; font-size: 14px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .set-row:hover { opacity: .65; }
+    .set-val { font-size: 12.5px; color: var(--faint); }
 
     .hh-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
     .hh-row { display: flex; align-items: center; gap: 6px; }
@@ -2369,7 +2438,7 @@
       font-variant-numeric: tabular-nums;
       font-weight: 500;
       font-size: 12px;
-      color: #fff;
+      color: var(--on-accent);
       flex-shrink: 0;
     }
 
@@ -2525,7 +2594,7 @@
       left: 50%;
       transform: translateX(-50%) translateY(10px);
       background: var(--ink);
-      color: #fff;
+      color: var(--on-ink);
       font-size: 13.5px;
       font-weight: 500;
       padding: 10px 18px;
@@ -2558,6 +2627,9 @@
     <header>
       <div class="brand"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 12V3M12 12l5.2 7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>togethr</div>
       <div class="tagline">Gemeinsame Kosten, fair geteilt</div>
+      <button class="gear" id="gear-btn" title="Einstellungen" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
     </header>
 
     <div class="tab-nav">
@@ -2584,29 +2656,7 @@
 
 
 
-      <div class="data-row" id="data-row">
-        <button class="btn-data" id="export-btn">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13M7 11l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          Exportieren
-        </button>
-        <button class="btn-data" id="import-btn">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 21V8M7 13l5-5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 3h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          Importieren
-        </button>
-        <input type="file" id="import-file" accept=".json,application/json" style="display:none">
-        <button class="btn-data" id="one-btn">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          Einmalig
-        </button>
-        <button class="btn-data" id="hh-btn">
-          <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17.5" cy="9.5" r="2.4" stroke="currentColor" stroke-width="1.8"/><path d="M16 15.2a4.4 4.4 0 0 1 4.5 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          Haushalt
-        </button>
-        <button class="btn-data" id="sync-btn">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.5-4M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M19.5 3v4h-4M4.5 21v-4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span id="sync-btn-lbl">Sync</span>
-        </button>
-      </div>
+      <input type="file" id="import-file" accept=".json,application/json" style="display:none">
     </div>
 
     <div id="pane-plan" style="display:none">
@@ -2762,6 +2812,7 @@ const RKEY = "turnus:rotierkonto";
 const DKEY = "turnus:daylog";
 const HKEY = "turnus:household";
 const OKEY = "turnus:oneoffs";
+const TKEY2 = "turnus:theme";
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // Backed by localStorage, with an in-memory fallback for private windows or
@@ -2820,6 +2871,7 @@ let subs        = [];
 // One-off costs. They land in the month of their date, not every month.
 let oneoffs     = [];
 let editingOne  = null;
+let theme       = 'auto';   // 'auto' | 'light' | 'dark'
 let income      = {};   // { [absMonthIdx]: { patrick, sara, other, prevSara, prevPatrick, sockel } }
 let editing     = null;
 let draft       = { cycle: "monthly", cat: "Sonstiges", payer: "" };
@@ -2950,6 +3002,11 @@ async function load() {
     }
   } catch (e) {}
   try {
+    const rt = await window.storage.get(TKEY2);
+    if (rt && ['auto','light','dark'].includes(rt.value)) theme = rt.value;
+  } catch (e) {}
+  applyTheme();
+  try {
     const ro = await window.storage.get(OKEY);
     if (ro && ro.value) { const d = JSON.parse(ro.value); if (Array.isArray(d)) oneoffs = d; }
   } catch (e) {}
@@ -2981,6 +3038,24 @@ async function persistRotCfg() {
   try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
   syncSoon();
 }
+
+// Applied before first paint where possible, so the app never flashes light
+function applyTheme() {
+  const dark = theme === 'dark' ||
+    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#16150F' : '#F2EFE9');
+}
+async function setTheme(t) {
+  theme = t;
+  applyTheme();
+  try { await window.storage.set(TKEY2, t); } catch (e) {}
+  if (document.querySelector('.settings-sheet')) openSettings();
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (theme === 'auto') applyTheme();
+});
 
 async function persistOneoffs() {
   try { await window.storage.set(OKEY, JSON.stringify(oneoffs)); } catch (e) {}
@@ -3330,6 +3405,75 @@ function renderWizard() {
   $("list").innerHTML = `<div class="wiz"><div class="wiz-steps">${dots}</div>${body}</div>`;
   const f = document.querySelector('.wiz-in');
   if (f && wizStep === 0) f.focus();
+}
+
+// One place for everything that is configured rather than entered
+function openSettings() {
+  document.querySelectorAll(".gh-popup,.settings-sheet,[data-scrim]").forEach(p => p.remove());
+  const scrim = document.createElement("div");
+  scrim.className = "scrim on"; scrim.setAttribute("data-scrim", "1");
+  const box = document.createElement("div");
+  box.className = "sheet on gh-popup settings-sheet";
+
+  const modeRows = MODES.map(m => `
+    <button class="set-opt ${hhMode() === m.v ? 'on' : ''}" onclick="setMode('${m.v}')">
+      <span class="set-opt-l">${esc(m.l)}</span>
+      <span class="set-opt-d">${esc(m.d)}</span>
+    </button>`).join('');
+
+  const THEMES = [
+    { v: 'auto',  l: 'Automatisch', d: 'Folgt der Einstellung deines Geräts.' },
+    { v: 'light', l: 'Hell',        d: '' },
+    { v: 'dark',  l: 'Dunkel',      d: '' }
+  ];
+  const themeRows = THEMES.map(t => `
+    <button class="set-opt ${theme === t.v ? 'on' : ''}" onclick="setTheme('${t.v}')">
+      <span class="set-opt-l">${esc(t.l)}</span>
+      ${t.d ? `<span class="set-opt-d">${esc(t.d)}</span>` : ''}
+    </button>`).join('');
+
+  box.innerHTML = `
+    <div class="grab"></div>
+    <h2>Einstellungen</h2>
+
+    <div class="set-sec">Aufteilung</div>
+    <p class="set-hint">Wie die gemeinsamen Kosten auf euch verteilt werden. Wirkt sofort,
+      ohne dass Daten verloren gehen.</p>
+    ${modeRows}
+
+    <div class="set-sec">Haushalt</div>
+    <div class="set-row" onclick="openHousehold()">
+      <span>Name und Personen</span>
+      <span class="set-val">${esc(household.name || 'Haushalt')} · ${household.members.length}</span>
+    </div>
+
+    <div class="set-sec">Darstellung</div>
+    ${themeRows}
+
+    <div class="set-sec">Daten</div>
+    <div class="set-row" onclick="closeSettings();openOneSheet()"><span>Einmalige Kosten erfassen</span><span class="set-val">›</span></div>
+    <div class="set-row" onclick="closeSettings();openAccConfig()"><span>Konten für den Umsatzimport</span><span class="set-val">›</span></div>
+    <div class="set-row" onclick="closeSettings();ghReady()?ghPull():openSyncConfig()">
+      <span>Sync über GitHub</span><span class="set-val">${ghReady() ? 'aktiv' : 'aus'}</span></div>
+    <div class="set-row" onclick="closeSettings();exportData()"><span>Exportieren</span><span class="set-val">›</span></div>
+    <div class="set-row" onclick="closeSettings();document.getElementById('import-file').click()"><span>Importieren</span><span class="set-val">›</span></div>
+    <div class="set-row" onclick="closeSettings();${'hasDemo()?clearDemo():loadDemo()'}">
+      <span>${hasDemo() ? 'Beispieltage entfernen' : 'Beispieltage laden'}</span><span class="set-val">›</span></div>
+
+    <div class="gh-actions"><button class="btn-primary" onclick="closeSettings()">Fertig</button></div>`;
+  document.body.append(scrim, box);
+  scrim.onclick = closeSettings;
+}
+function closeSettings() {
+  document.querySelectorAll(".gh-popup,.settings-sheet,[data-scrim]").forEach(p => p.remove());
+}
+async function setMode(v) {
+  household.mode = v;
+  await persistHousehold();
+  render();
+  renderForecast();
+  openSettings();
+  showToast('Aufteilung: ' + (MODES.find(m => m.v === v) || {}).l);
 }
 
 function openHousehold() {
@@ -3986,13 +4130,11 @@ function render() {
     $("toolbar").style.display = "none";
     $("fab").style.display = "none";
     $("summary").style.display = "none";
-    $("data-row").style.display = "none";
     if (!wizDraft) wizStart(); else renderWizard();
     return;
   }
   const hasData = subs.length > 0;
   $("summary").style.display = "";
-  $("data-row").style.display = "flex";
   $("toolbar").style.display = hasData ? "flex" : "none";
   $("fab").style.display = "flex";
 
@@ -4986,9 +5128,9 @@ function renderSleep() {
 // estimates: each number is "the middle night of this group", nothing more.
 // Diverging poles validated for colour-vision deficiency (protan ΔE 20.0);
 // the app's green/red pair fails that check and is deliberately not used.
-const CH_GOOD = "#3b6fb0";
-const CH_BAD  = "#c2783f";
-const CH_MUTE = "#9aa19e";
+const CH_GOOD = "var(--ch-good)";
+const CH_BAD  = "var(--ch-bad)";
+const CH_MUTE = "var(--ch-mute)";
 
 const MIN_BIN = 8;     // nights per group before a comparison is worth reading
 
@@ -6562,9 +6704,8 @@ $("cancel-btn").onclick = closeSheet;
 $("delete-btn").onclick = del;
 $("scrim").onclick      = closeSheet;
 $("sort").onchange      = render;
-$("export-btn").onclick = exportData;
-$("import-btn").onclick = () => $("import-file").click();
 $("import-file").onchange = e => { importData(e.target.files[0]); e.target.value = ""; };
+$("gear-btn").onclick = () => openSettings();
 $("step-back").onclick = () => stepGo(-1);
 $("step-next").onclick = () => stepGo(1);
 $("sheet").addEventListener('keydown', e => {
@@ -6572,11 +6713,7 @@ $("sheet").addEventListener('keydown', e => {
     e.preventDefault(); stepGo(1);
   }
 });
-$("one-btn").onclick = () => openOneSheet();
 $("one-scrim").onclick = () => closeOneSheet();
-$("hh-btn").onclick = () => openHousehold();
-$("sync-btn").onclick = () => ghReady() ? ghPull() : openSyncConfig();
-$("sync-btn").oncontextmenu = e => { e.preventDefault(); openSyncConfig(); };
 // Pick up changes made on another device when the tab comes back into focus
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && ghReady()) ghPull({ silent: true });
