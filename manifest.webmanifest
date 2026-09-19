@@ -1,7 +1,7 @@
 {
-  "name": "Turnus — Haushalt & Schlaf",
-  "short_name": "Turnus",
-  "description": "Wiederkehrende Kosten und Einschlafphasen im Blick",
+  "name": "togethr — gemeinsame Kosten",
+  "short_name": "togethr",
+  "description": "Gemeinsame Kosten und Schlaf im Blick",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
@@ -10,8 +10,23 @@
   "theme_color": "#eef0ee",
   "lang": "de",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

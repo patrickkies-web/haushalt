@@ -1,6 +1,6 @@
 // Cache-first for the shell so the app opens offline; the network refreshes it
 // in the background. Bump CACHE when the shell changes.
-const CACHE = 'turnus-v1';
+const CACHE = 'togethr-v2';
 const SHELL = ['.', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
