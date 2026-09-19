@@ -1380,6 +1380,37 @@
     .ft-fettig { background: #b0556a; }
     .ft-scharf { background: #c8763a; }
 
+    .one-head {
+      font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--muted);
+      margin: 26px 0 8px;
+    }
+    .one-item {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; font-family: inherit; cursor: pointer; text-align: left;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 12px; padding: 13px 15px; margin-bottom: 7px;
+    }
+    .one-item:hover { border-color: var(--muted); }
+    .one-l { font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 2px; }
+    .one-sub { font-size: 11px; font-weight: 400; color: var(--muted); }
+    .one-amt {
+      font-family: "Space Grotesk"; font-size: 15px; font-weight: 700;
+      font-variant-numeric: tabular-nums; flex-shrink: 0;
+    }
+    table.fc tr.oneoff-row td {
+      font-family: "Space Grotesk"; font-size: 12px; font-weight: 600;
+      color: var(--c2); font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.fc tr.oneoff-row td.name .lbl { color: var(--c2); }
+    table.fc tr.inc-balance td {
+      font-family: "Space Grotesk"; font-size: 12.5px; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    table.fc tr.inc-balance td.cur { background: var(--bg-2, var(--bg)); }
+
     .wiz {
       background: var(--surface); border: 1px solid var(--line);
       border-radius: var(--radius); padding: 22px 20px 20px;
@@ -2436,6 +2467,10 @@
           Importieren
         </button>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+        <button class="btn-data" id="one-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Einmalig
+        </button>
         <button class="btn-data" id="hh-btn">
           <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17.5" cy="9.5" r="2.4" stroke="currentColor" stroke-width="1.8"/><path d="M16 15.2a4.4 4.4 0 0 1 4.5 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           Haushalt
@@ -2468,6 +2503,45 @@
   </button>
 
   <div class="toast" id="toast"></div>
+
+  <div class="scrim" id="one-scrim"></div>
+  <div class="sheet" id="one-sheet">
+    <div class="grab"></div>
+    <h2 id="one-title">Einmalige Kosten</h2>
+    <div class="field">
+      <label>Was war das?</label>
+      <input id="o-name" type="text" placeholder="z. B. Baumarkt, Kiste Bier, Reparatur" autocomplete="off">
+      <div class="err" id="err-o-name">Bitte einen Namen eingeben.</div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Betrag (€)</label>
+        <input id="o-amount" type="text" inputmode="decimal" placeholder="0,00">
+        <div class="err" id="err-o-amount">Bitte einen gültigen Betrag eingeben.</div>
+      </div>
+      <div class="field">
+        <label>Datum</label>
+        <input id="o-date" type="date">
+      </div>
+    </div>
+    <div class="field">
+      <label>Zählt im Monat <span style="font-weight:400;color:var(--muted)" id="o-month-hint"></span></label>
+      <input id="o-month" type="month">
+    </div>
+    <div class="field">
+      <label>Bezahlt von <span style="font-weight:400;color:var(--muted)">— wessen Konto wurde belastet?</span></label>
+      <div class="chips" id="o-payer"></div>
+    </div>
+    <div class="field">
+      <label>Notiz (optional)</label>
+      <textarea id="o-note" placeholder="z. B. Farbe fürs Wohnzimmer"></textarea>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" onclick="closeOneSheet()">Abbrechen</button>
+      <button class="btn btn-danger" id="one-del" style="display:none" onclick="delOne()">Löschen</button>
+      <button class="btn btn-primary" onclick="saveOne()">Speichern</button>
+    </div>
+  </div>
 
   <div class="scrim" id="scrim"></div>
   <div class="sheet" id="sheet">
@@ -2502,6 +2576,10 @@
       <div class="chips" id="f-cat"></div>
     </div>
     <div class="field">
+      <label>Geht ab von <span style="font-weight:400;color:var(--muted)">— wessen Konto wird belastet?</span></label>
+      <div class="chips" id="f-payer"></div>
+    </div>
+    <div class="field">
       <label>Notiz (optional)</label>
       <textarea id="f-note" placeholder="z. B. gemeinsam mit Anna, Kündigungsfrist 1 Monat"></textarea>
     </div>
@@ -2534,6 +2612,7 @@ const AKEY = "turnus:accounts";
 const RKEY = "turnus:rotierkonto";
 const DKEY = "turnus:daylog";
 const HKEY = "turnus:household";
+const OKEY = "turnus:oneoffs";
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // Backed by localStorage, with an in-memory fallback for private windows or
@@ -2589,9 +2668,12 @@ const eur0 = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR"
 // ── State ──────────────────────────────────────────────────────────────────
 let CATS        = [...DEFAULT_CATS];
 let subs        = [];
+// One-off costs. They land in the month of their date, not every month.
+let oneoffs     = [];
+let editingOne  = null;
 let income      = {};   // { [absMonthIdx]: { patrick, sara, other, prevSara, prevPatrick, sockel } }
 let editing     = null;
-let draft       = { cycle: "monthly", cat: "Sonstiges" };
+let draft       = { cycle: "monthly", cat: "Sonstiges", payer: "" };
 let addingCat   = false;
 let mem         = null; // in-memory fallback if storage unavailable
 let lastTotals    = [];   // subscription costs per month, kept for income recalc
@@ -2719,6 +2801,10 @@ async function load() {
     }
   } catch (e) {}
   try {
+    const ro = await window.storage.get(OKEY);
+    if (ro && ro.value) { const d = JSON.parse(ro.value); if (Array.isArray(d)) oneoffs = d; }
+  } catch (e) {}
+  try {
     const rh = await window.storage.get(HKEY);
     if (rh && rh.value) {
       const d = JSON.parse(rh.value);
@@ -2744,6 +2830,11 @@ async function load() {
 
 async function persistRotCfg() {
   try { await window.storage.set(RKEY, JSON.stringify(rotCfg)); } catch (e) {}
+  syncSoon();
+}
+
+async function persistOneoffs() {
+  try { await window.storage.set(OKEY, JSON.stringify(oneoffs)); } catch (e) {}
   syncSoon();
 }
 
@@ -2786,7 +2877,7 @@ function ghSnapshot() {
   return {
     v: 2, subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household, oneoffs
   };
 }
 
@@ -2811,6 +2902,7 @@ function ghApply(d) {
   if (d.daylog && typeof d.daylog === 'object') daylog = d.daylog;
   if (d.household && Array.isArray(d.household.members) && d.household.members.length)
     household = d.household;
+  if (Array.isArray(d.oneoffs)) oneoffs = d.oneoffs;
   return true;
 }
 
@@ -2819,7 +2911,7 @@ async function ghPersistAll() {
   await Promise.all([
     persist(), persistCats(), persistIncome(), persistTransactions(),
     persistPayments(), persistTxCats(), persistSettlements(),
-    persistAccCfg(), persistRotCfg(), persistDaylog(), persistHousehold()
+    persistAccCfg(), persistRotCfg(), persistDaylog(), persistHousehold(), persistOneoffs()
   ]);
   applyingRemote = false;
 }
@@ -3507,18 +3599,51 @@ function setInc(mk, field, val) {
   income[k][field] = val;
 }
 
+// What each member's account actually carries in a given month — the sum of
+// the recurring costs due that month plus the one-offs booked to it.
+function paidByMember(mk) {
+  const out = {};
+  household.members.forEach(m => { out[m.id] = 0; });
+  const stepOf = { monthly: 1, quarterly: 3, yearly: 12 };
+  subs.forEach(s => {
+    if (!s.payer || !(s.payer in out)) return;
+    const step = stepOf[s.cycle] || 1;
+    const d = s.date ? new Date(s.date + "T00:00:00") : null;
+    const bi = d ? d.getFullYear() * 12 + d.getMonth() : mk;
+    if ((((mk - bi) % step) + step) % step !== 0) return;
+    const deact = subDeactMk(s);
+    if (mk >= deact) return;
+    out[s.payer] += s.amount;
+  });
+  oneoffs.forEach(o => {
+    if (!o.payer || !(o.payer in out)) return;
+    if (oneMk(o) === mk) out[o.payer] += o.amount;
+  });
+  return out;
+}
+
 function updateIncomeCol(mk) {
   const M = household.members;
   const exp = lastTotals[mk - lastStartIdx] || 0;
+  const paid = paidByMember(mk);
   const put = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
   };
 
+  const balance = (soll) => M.forEach((m, i) => {
+    put(`cc-paid_${m.id}-${mk}`, paid[m.id] ? eur.format(paid[m.id]) : '–');
+    const d = paid[m.id] - soll[i];
+    put(`cc-bal_${m.id}-${mk}`, exp
+      ? (Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d)))
+      : '–');
+  });
+
   if (hhMode() === 'equal') {
     const per = M.length ? exp / M.length : 0;
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
     M.forEach(m => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(per) : '–'));
+    balance(M.map(() => per));
     return;
   }
 
@@ -3530,8 +3655,9 @@ function updateIncomeCol(mk) {
     put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
     put(`cc-exp-${mk}`,    exp ? eur.format(exp) : '–');
     put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
-    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`,
-      sum ? eur.format(exp * wages[i] / sum) : '–'));
+    const soll = M.map((m, i) => sum ? exp * wages[i] / sum : 0);
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, sum ? eur.format(soll[i]) : '–'));
+    balance(soll);
     return;
   }
 
@@ -3556,6 +3682,93 @@ function updateIncomeCol(mk) {
   set(`cc-share-${mk}`,  share);
   set(`cc-remain-${mk}`, remain);
   M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`, sock + prevs[i]));
+}
+
+// Which member's account a cost is debited from — the basis for who owes whom
+function buildPayers() {
+  const host = $("f-payer");
+  if (!host) return;
+  host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
+    `<button type="button" class="chip ${draft.payer === m.id ? 'on' : ''}"
+      onclick="pickPayer('${m.id}')">${esc(m.name)}</button>`).join('');
+}
+function pickPayer(id) { draft.payer = id; buildPayers(); }
+
+// ── One-off costs ──────────────────────────────────────────────────────────
+const oneMonth = o => (o.month || (o.date || '').slice(0, 7));
+const oneMk = o => {
+  const m = /^(\d{4})-(\d{2})$/.exec(oneMonth(o));
+  return m ? (+m[1]) * 12 + (+m[2]) - 1 : null;
+};
+
+let onePayer = '';
+function buildOnePayers() {
+  const host = $("o-payer");
+  if (!host) return;
+  host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
+    `<button type="button" class="chip ${onePayer === m.id ? 'on' : ''}"
+      onclick="pickOnePayer('${m.id}')">${esc(m.name)}</button>`).join('');
+}
+function pickOnePayer(id) { onePayer = id; buildOnePayers(); }
+
+function openOneSheet(id) {
+  editingOne = id || null;
+  const o = id ? oneoffs.find(x => x.id === id) : null;
+  const today = new Date();
+  const thisMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  $("one-title").textContent = o ? "Einmalige Kosten bearbeiten" : "Einmalige Kosten";
+  $("o-name").value   = o ? o.name : "";
+  $("o-amount").value = o ? String(o.amount).replace(".", ",") : "";
+  $("o-date").value   = o ? (o.date || "") : dayKey(today);
+  $("o-month").value  = o ? oneMonth(o) : thisMonth;
+  $("o-note").value   = o ? (o.note || "") : "";
+  onePayer = o ? (o.payer || "") : "";
+  buildOnePayers();
+  $("one-del").style.display = o ? "block" : "none";
+  $("err-o-name").classList.remove("on");
+  $("err-o-amount").classList.remove("on");
+  $("o-month-hint").textContent = "— in dem die Kosten abgerechnet werden";
+  $("one-scrim").classList.add("on");
+  $("one-sheet").classList.add("on");
+}
+function closeOneSheet() {
+  $("one-scrim").classList.remove("on");
+  $("one-sheet").classList.remove("on");
+  editingOne = null;
+}
+
+async function saveOne() {
+  const name = $("o-name").value.trim();
+  const amount = parseAmount($("o-amount").value);
+  let ok = true;
+  $("err-o-name").classList.remove("on"); $("err-o-amount").classList.remove("on");
+  if (!name) { $("err-o-name").classList.add("on"); ok = false; }
+  if (isNaN(amount) || amount <= 0) { $("err-o-amount").classList.add("on"); ok = false; }
+  if (!ok) return;
+  const data = {
+    name, amount: Math.round(amount * 100) / 100,
+    date: $("o-date").value || null,
+    month: $("o-month").value || null,
+    payer: onePayer || null,
+    note: $("o-note").value.trim()
+  };
+  if (editingOne) {
+    const i = oneoffs.findIndex(x => x.id === editingOne);
+    if (i > -1) oneoffs[i] = { ...oneoffs[i], ...data };
+  } else {
+    oneoffs.push({ id: "o" + Date.now() + Math.random().toString(36).slice(2, 6), ...data });
+  }
+  await persistOneoffs();
+  closeOneSheet();
+  render();
+}
+
+async function delOne() {
+  if (!editingOne) return;
+  oneoffs = oneoffs.filter(x => x.id !== editingOne);
+  await persistOneoffs();
+  closeOneSheet();
+  render();
 }
 
 function catColor(cat) {
@@ -3757,7 +3970,31 @@ function render() {
     }
   }
 
+  const upcoming = oneoffs.slice().sort((a, b) => (oneMonth(b) || '').localeCompare(oneMonth(a) || ''));
+  if (upcoming.length) {
+    const mf = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
+    listHtml += `<div class="one-head">Einmalige Kosten</div>` + upcoming.map(o => {
+      const mk = oneMk(o);
+      const when = mk === null ? '–'
+        : mf.format(new Date(Math.floor(mk / 12), mk % 12, 1));
+      const who = o.payer && household.members.find(m => m.id === o.payer);
+      return `<button class="one-item" onclick="openOneSheet('${o.id}')">
+        <span class="one-l">${esc(o.name)}
+          <span class="one-sub">${esc(when)}${who ? ` · ${esc(who.name)}` : ' · Konto offen'}</span></span>
+        <span class="one-amt">${eur.format(o.amount)}</span>
+      </button>`;
+    }).join('');
+  }
+
   $("list").innerHTML = listHtml;
+}
+
+// Only worth showing once at least one cost is assigned to an account
+function balanceRows(M, iRow, calcCells) {
+  const any = subs.some(s => s.payer) || oneoffs.some(o => o.payer);
+  if (!any) return '';
+  return M.map(m => iRow('inc-calc muted', `${esc(m.name)} gezahlt`, calcCells('paid_' + m.id))).join('')
+       + M.map(m => iRow('inc-balance', `${esc(m.name)} Saldo`, calcCells('bal_' + m.id))).join('');
 }
 
 function renderForecast() {
@@ -3841,6 +4078,21 @@ function renderForecast() {
       ${cells}
     </tr>`;
   });
+
+  // One-off costs count in the month they are booked to
+  const oneByCol = new Array(N).fill(0);
+  oneoffs.forEach(o => {
+    const mk = oneMk(o);
+    if (mk === null) return;
+    const k = mk - startIdx;
+    if (k >= 0 && k < N) { oneByCol[k] += o.amount; totals[k] += o.amount; }
+  });
+  const hasOne = oneByCol.some(v => v > 0);
+  let oneRow = `<td class="name"><span class="lbl">Einmalige Kosten</span></td>`;
+  for (let k = 0; k < N; k++) {
+    const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
+    oneRow += `<td class="${cls}">${oneByCol[k] ? eur.format(oneByCol[k]) : "–"}</td>`;
+  }
 
   // Totals row
   let tot = `<td class="name"><span class="lbl">Summe / Monat</span></td>`;
@@ -3996,6 +4248,7 @@ function renderForecast() {
     ? sepRow('Aufteilung · 50 : 50')
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
+      + balanceRows(M, iRow, calcCells)
     : hhMode() === 'income'
     ? sepRow('Aufteilung · nach Einkommen')
       + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
@@ -4003,6 +4256,7 @@ function renderForecast() {
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + iRow('inc-calc muted', 'Anteil vom Einkommen', calcCells('pct'))
       + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
+      + balanceRows(M, iRow, calcCells)
     :
     sepRow('Einnahmen &amp; Auszahlung')
     + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
@@ -4029,21 +4283,23 @@ function renderForecast() {
         <span class="avg-val">${hasIrr ? eur.format(avgIrr) : '–'}</span>
       </div>
     </div>
-    ${actBox}
+    ${hhMode() === 'rotation' ? `${actBox}
     <div class="reserve-note">${note}</div>
-    ${cfgRow}
+    ${cfgRow}` : ''}
     <div class="fc-scroll" id="fc-scroll">
       <table class="fc">
         <thead><tr>${head}</tr></thead>
         <tbody>
           ${body}
+          ${hasOne ? `<tr class="oneoff-row">${oneRow}</tr>` : ''}
           <tr class="totals">${tot}</tr>
           <tr class="fc-avg">${avgRow}</tr>
+          ${hhMode() === 'rotation' ? `
           <tr class="rot-sep">${rotSep}</tr>
           <tr class="rot-ein">${rotEin}</tr>
           <tr class="rot-aus">${rotAus}</tr>
           <tr class="rot-net">${rotNet}</tr>
-          <tr class="reserve">${rotRes}</tr>
+          <tr class="reserve">${rotRes}</tr>` : ''}
           ${incRows}
         </tbody>
       </table>
@@ -5451,8 +5707,10 @@ function openSheet(id) {
   draft.cycle = s ? s.cycle : "monthly";
   draft.cat   = s ? s.cat   : "Sonstiges";
   $("f-cycle").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.c === draft.cycle));
+  draft.payer = s ? (s.payer || "") : "";
   addingCat = false;
   buildCats();
+  buildPayers();
   $("delete-btn").style.display = s ? "block" : "none";
   // Deactivation section — only when editing
   const deactWrap = $("f-deact-wrap");
@@ -5551,6 +5809,7 @@ async function save() {
     cat:    draft.cat,
     date:   $("f-date").value || null,
     note:   $("f-note").value.trim(),
+    payer:  draft.payer || null,
     deactivatedFrom: (deactEl && deactEl.value) ? deactEl.value : null,
   };
 
@@ -5581,7 +5840,7 @@ function exportData() {
     v: 2,
     subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household,
+    accounts: txAccCfg, rotierkonto: rotCfg, daylog, household, oneoffs,
     exported: new Date().toISOString()
   }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
@@ -5626,6 +5885,7 @@ async function importData(file) {
     if (data.daylog && typeof data.daylog === 'object') daylog = data.daylog;
     if (data.household && Array.isArray(data.household.members) && data.household.members.length)
       household = data.household;
+    if (Array.isArray(data.oneoffs)) oneoffs = data.oneoffs;
 
     await Promise.all([
       persist(), persistCats(), persistIncome(), persistTransactions(),
@@ -5661,6 +5921,8 @@ $("sort").onchange      = render;
 $("export-btn").onclick = exportData;
 $("import-btn").onclick = () => $("import-file").click();
 $("import-file").onchange = e => { importData(e.target.files[0]); e.target.value = ""; };
+$("one-btn").onclick = () => openOneSheet();
+$("one-scrim").onclick = () => closeOneSheet();
 $("hh-btn").onclick = () => openHousehold();
 $("sync-btn").onclick = () => ghReady() ? ghPull() : openSyncConfig();
 $("sync-btn").oncontextmenu = e => { e.preventDefault(); openSyncConfig(); };
