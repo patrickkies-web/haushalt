@@ -1380,6 +1380,61 @@
     .ft-fettig { background: #b0556a; }
     .ft-scharf { background: #c8763a; }
 
+    .wiz {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: var(--radius); padding: 22px 20px 20px;
+    }
+    .wiz-steps { display: flex; gap: 6px; margin-bottom: 20px; }
+    .wiz-dot {
+      flex: 1; font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--faint); text-align: center;
+      padding-bottom: 7px; border-bottom: 2px solid var(--line);
+    }
+    .wiz-dot.done { color: var(--muted); border-color: var(--muted); }
+    .wiz-dot.on { color: var(--accent); border-color: var(--accent); }
+    .wiz-h {
+      font-family: "Space Grotesk"; font-size: 20px; font-weight: 600;
+      letter-spacing: -.02em; margin: 0 0 8px;
+    }
+    .wiz-p { font-size: 13px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
+    input.wiz-in {
+      width: 100%; font-family: inherit; font-size: 15px; color: var(--ink);
+      background: var(--bg); border: 1px solid var(--line);
+      border-radius: 11px; padding: 13px 14px; margin-bottom: 8px;
+    }
+    input.wiz-in:focus { outline: none; border-color: var(--accent); }
+    .wiz-count {
+      display: flex; align-items: center; justify-content: center; gap: 14px;
+      margin-bottom: 16px;
+    }
+    .wiz-count button {
+      width: 44px; height: 44px; font-size: 21px; font-weight: 600;
+      color: var(--muted); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
+    }
+    .wiz-count button:disabled { opacity: .35; cursor: default; }
+    .wiz-count span {
+      font-family: "Space Grotesk"; font-size: 17px; font-weight: 600;
+      min-width: 120px; text-align: center;
+    }
+    .wiz-names { display: flex; flex-direction: column; }
+    .wiz-modes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+    .wiz-mode {
+      width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+      background: var(--bg); border: 1.5px solid var(--line);
+      border-radius: 12px; padding: 13px 14px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .wiz-mode.on { border-color: var(--accent); background: var(--accent-tint); }
+    .wiz-mode-l { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .wiz-mode-d { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+    .wiz-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+    .wiz-nav button { padding: 12px 22px; border-radius: 11px; font-size: 14px; }
+    .hh-lbl {
+      display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--muted); margin: 16px 0 8px;
+    }
+
     .hh-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
     .hh-row { display: flex; align-items: center; gap: 6px; }
     .hh-row input {
@@ -2278,6 +2333,7 @@
     .data-row {
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
       justify-content: center;
       margin-top: 32px;
       padding-top: 22px;
@@ -2370,7 +2426,7 @@
 
       <section id="forecast"></section>
 
-      <div class="data-row">
+      <div class="data-row" id="data-row">
         <button class="btn-data" id="export-btn">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v13M7 11l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           Exportieren
@@ -2557,10 +2613,26 @@ let rotCfg        = { start: "", balance: null };
 // caused it, but gets filled in the next morning.
 let daylog        = {};
 // Income keys stay the member id, so the two original people keep their data
-let household     = { members: [
-  { id: 'patrick', name: 'Patrick' },
-  { id: 'sara',    name: 'Sara' }
-] };
+let household     = {
+  name: '',
+  mode: 'rotation',
+  members: [
+    { id: 'patrick', name: 'Patrick' },
+    { id: 'sara',    name: 'Sara' }
+  ]
+};
+
+// How the monthly costs get divided. The maths differs per mode, so the
+// bottom block of the forecast is built from whichever one is active.
+const MODES = [
+  { v: 'rotation', l: 'Rotationskonto',
+    d: 'Ein Konto trägt alle Kosten. Der Überschuss wird geteilt, mit Sockel und Vormonats-Ausgleich.' },
+  { v: 'equal', l: '50 : 50',
+    d: 'Die Ausgaben werden zu gleichen Teilen auf alle umgelegt — unabhängig vom Einkommen.' },
+  { v: 'income', l: 'Nach Einkommen',
+    d: 'Jeder zahlt denselben Prozentsatz seines Einkommens. Wer mehr verdient, zahlt mehr — die Belastung ist für alle gleich.' }
+];
+const hhMode = () => household.mode || 'rotation';
 
 const $ = id => document.getElementById(id);
 
@@ -2915,6 +2987,110 @@ function ghConflict(remote) {
   scrim.onclick = close;
 }
 
+// Shown once, before any data exists: name, people, how costs get divided
+let wizStep = 0;
+let wizDraft = null;
+
+const needsSetup = () => !household.name && subs.length === 0;
+
+function wizStart() {
+  wizDraft = {
+    name: '',
+    mode: 'rotation',
+    members: household.members.map(m => ({ ...m }))
+  };
+  wizStep = 0;
+  render();
+}
+
+function wizSet(field, value) {
+  if (field === 'count') {
+    const n = Math.max(1, Math.min(8, value));
+    while (wizDraft.members.length < n)
+      wizDraft.members.push({ id: 'm' + Date.now().toString(36) + wizDraft.members.length, name: '' });
+    while (wizDraft.members.length > n) wizDraft.members.pop();
+  } else wizDraft[field] = value;
+  renderWizard();
+}
+
+function wizName(i, v) { wizDraft.members[i].name = v; }
+
+function wizGo(n) {
+  // Carry the typed values over before the step is rebuilt
+  document.querySelectorAll('.wiz-in').forEach(inp => {
+    if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
+    else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
+  });
+  wizStep = Math.max(0, Math.min(2, wizStep + n));
+  renderWizard();
+}
+
+async function wizFinish() {
+  document.querySelectorAll('.wiz-in').forEach(inp => {
+    if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
+    else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
+  });
+  household.name = wizDraft.name || 'Haushalt';
+  household.mode = wizDraft.mode;
+  household.members = wizDraft.members.map((m, i) => ({
+    id: m.id, name: m.name || `Person ${i + 1}`
+  }));
+  wizDraft = null;
+  await persistHousehold();
+  render();
+  showToast('Eingerichtet — jetzt die wiederkehrenden Kosten anlegen');
+}
+
+function renderWizard() {
+  const d = wizDraft;
+  const steps = ['Haushalt', 'Personen', 'Aufteilung'];
+  const dots = steps.map((t, i) =>
+    `<span class="wiz-dot ${i === wizStep ? 'on' : ''} ${i < wizStep ? 'done' : ''}">${esc(t)}</span>`).join('');
+
+  let body = '';
+  if (wizStep === 0) {
+    body = `
+      <h2 class="wiz-h">Wie heißt euer Haushalt?</h2>
+      <p class="wiz-p">Ein Name, unter dem ihr die gemeinsamen Kosten führt — WG Hauptstraße,
+        Familie Kies, Projekt Umbau. Kannst du später ändern.</p>
+      <input class="wiz-in" id="wiz-hhname" type="text" value="${esc(d.name)}"
+        placeholder="z. B. WG Hauptstraße" autofocus>
+      <div class="wiz-nav"><span></span>
+        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+  } else if (wizStep === 1) {
+    body = `
+      <h2 class="wiz-h">Wer teilt sich die Kosten?</h2>
+      <p class="wiz-p">Für jede Person entsteht eine eigene Zeile in der Prognose.</p>
+      <div class="wiz-count">
+        <button onclick="wizSet('count',${d.members.length - 1})" ${d.members.length <= 1 ? 'disabled' : ''}>−</button>
+        <span>${d.members.length} ${d.members.length === 1 ? 'Person' : 'Personen'}</span>
+        <button onclick="wizSet('count',${d.members.length + 1})" ${d.members.length >= 8 ? 'disabled' : ''}>+</button>
+      </div>
+      <div class="wiz-names">${d.members.map((m, i) =>
+        `<input class="wiz-in" data-member="${i}" type="text" value="${esc(m.name)}"
+           placeholder="Name der ${i + 1}. Person">`).join('')}</div>
+      <div class="wiz-nav">
+        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
+        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+  } else {
+    body = `
+      <h2 class="wiz-h">Wie teilt ihr auf?</h2>
+      <p class="wiz-p">Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.</p>
+      <div class="wiz-modes">${MODES.map(m => `
+        <button class="wiz-mode ${d.mode === m.v ? 'on' : ''}" onclick="wizSet('mode','${m.v}')">
+          <span class="wiz-mode-l">${esc(m.l)}</span>
+          <span class="wiz-mode-d">${esc(m.d)}</span>
+        </button>`).join('')}</div>
+      <div class="wiz-nav">
+        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
+        <button class="btn-primary" onclick="wizFinish()">Fertig</button></div>`;
+  }
+
+  $("list").innerHTML = `<div class="wiz"><div class="wiz-steps">${dots}</div>${body}</div>`;
+  const f = document.querySelector('.wiz-in');
+  if (f && wizStep === 0) f.focus();
+}
+
 function openHousehold() {
   document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
   const scrim = document.createElement("div");
@@ -2930,16 +3106,24 @@ function openHousehold() {
   box.innerHTML = `
     <div class="grab"></div>
     <h2>Haushalt</h2>
-    <p class="gh-note">Wie viele Personen teilen sich die Kosten? Für jede gibt es in der
-    Prognose eine Lohn-Zeile, eine Vormonats-Zeile und eine Auszahlung. Der Überschuss
-    wird durch die Anzahl geteilt.</p>
+    <div class="field"><label>Name</label>
+      <input id="hh-name" type="text" value="${esc(household.name)}" placeholder="z. B. WG Hauptstraße"></div>
+    <label class="hh-lbl">Personen</label>
     <div class="hh-list" id="hh-list">${rows}</div>
     <button class="btn-ghost hh-add" onclick="hhAdd()">+ Person hinzufügen</button>
+    <label class="hh-lbl">Aufteilung</label>
+    <div class="wiz-modes">${MODES.map(m => `
+      <button class="wiz-mode ${hhMode() === m.v ? 'on' : ''}" onclick="hhMode2('${m.v}')">
+        <span class="wiz-mode-l">${esc(m.l)}</span>
+        <span class="wiz-mode-d">${esc(m.d)}</span>
+      </button>`).join('')}</div>
     <div class="gh-actions"><button class="btn-primary" id="hh-save">Speichern</button></div>`;
   document.body.append(scrim, box);
   const close = () => document.querySelectorAll(".gh-popup,[data-scrim]").forEach(p => p.remove());
   scrim.onclick = close;
   box.querySelector("#hh-save").onclick = async () => {
+    const nm = box.querySelector("#hh-name").value.trim();
+    if (nm) household.name = nm;
     box.querySelectorAll("#hh-list input").forEach(inp => {
       const n = inp.value.trim();
       if (n) household.members[+inp.dataset.i].name = n;
@@ -2948,6 +3132,18 @@ function openHousehold() {
     close(); render();
     showToast(`Haushalt: ${household.members.length} ${household.members.length === 1 ? 'Person' : 'Personen'}`);
   };
+}
+
+function hhMode2(v) {
+  household.mode = v;
+  // Keep what is typed before the sheet rebuilds
+  document.querySelectorAll("#hh-list input").forEach(inp => {
+    const n = inp.value.trim();
+    if (n) household.members[+inp.dataset.i].name = n;
+  });
+  const nm = document.querySelector("#hh-name");
+  if (nm && nm.value.trim()) household.name = nm.value.trim();
+  openHousehold();
 }
 
 function hhAdd() {
@@ -3313,6 +3509,32 @@ function setInc(mk, field, val) {
 
 function updateIncomeCol(mk) {
   const M = household.members;
+  const exp = lastTotals[mk - lastStartIdx] || 0;
+  const put = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+
+  if (hhMode() === 'equal') {
+    const per = M.length ? exp / M.length : 0;
+    put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
+    M.forEach(m => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(per) : '–'));
+    return;
+  }
+
+  if (hhMode() === 'income') {
+    const wages = M.map(m => getInc(mk, m.id));
+    const sum   = wages.reduce((a, v) => a + v, 0);
+    // The rate that covers the costs exactly: p = Ausgaben / Gesamteinkommen
+    const p = sum > 0 ? exp / sum : 0;
+    put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
+    put(`cc-exp-${mk}`,    exp ? eur.format(exp) : '–');
+    put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`,
+      sum ? eur.format(exp * wages[i] / sum) : '–'));
+    return;
+  }
+
   const wages = M.map(m => getInc(mk, m.id));
   const prevs = M.map(m => getInc(mk, 'prev_' + m.id));
   const o     = getInc(mk, 'other');
@@ -3398,7 +3620,18 @@ function animateAmount(el, target) {
 
 // ── Render ─────────────────────────────────────────────────────────────────
 function render() {
+  if (needsSetup() || wizDraft) {
+    $("toolbar").style.display = "none";
+    $("fab").style.display = "none";
+    $("summary").style.display = "none";
+    $("data-row").style.display = "none";
+    $("forecast").innerHTML = "";
+    if (!wizDraft) wizStart(); else renderWizard();
+    return;
+  }
   const hasData = subs.length > 0;
+  $("summary").style.display = "";
+  $("data-row").style.display = "flex";
   $("toolbar").style.display = hasData ? "flex" : "none";
   $("fab").style.display = "flex";
 
@@ -3757,8 +3990,21 @@ function renderForecast() {
   }
 
   const M = household.members;
-  const incRows =
-    `<tr class="inc-sep"><td class="name"><span class="lbl">Einnahmen &amp; Auszahlung</span></td>${sepCells}</tr>`
+  const sepRow = t => `<tr class="inc-sep"><td class="name"><span class="lbl">${t}</span></td>${sepCells}</tr>`;
+
+  const incRows = hhMode() === 'equal'
+    ? sepRow('Aufteilung · 50 : 50')
+      + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
+      + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
+    : hhMode() === 'income'
+    ? sepRow('Aufteilung · nach Einkommen')
+      + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
+      + iRow('inc-calc', 'Gesamteinkommen', calcCells('inctot'))
+      + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
+      + iRow('inc-calc muted', 'Anteil vom Einkommen', calcCells('pct'))
+      + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
+    :
+    sepRow('Einnahmen &amp; Auszahlung')
     + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
     + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
     + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
