@@ -2962,6 +2962,8 @@ let mem         = null; // in-memory fallback if storage unavailable
 let lastTotals    = [];   // subscription costs per month, kept for income recalc
 let showInactive  = false;
 let lastStartIdx = 0;
+let lastAvgIrrBy = null;  // Ø smoothed share per member, set by renderForecast
+let lastWinFromMk = 0;    // first month the smoothing rhythm covers
 let transactions  = [];
 let payments      = {};   // { [subId]: { [yymm]: { txId, txAmount, date, isException } } }
 let txMonthOffset = 0;
@@ -2999,6 +3001,15 @@ const MODES = [
   { v: 'fixed', l: 'Feste Anteile',
     d: 'Ihr legt die Prozentsätze selbst fest — etwa 60 zu 40, weil einer das größere Zimmer hat oder seltener da ist.' }
 ];
+// The other half of the question: do the expensive months hit as they come,
+// or does everyone pay the same every month and a Rotierkonto carries the peaks?
+const SMOOTHS = [
+  { v: 0, l: 'Monat für Monat',
+    d: 'Ihr zahlt, was gerade anfällt. Ein Monat mit Jahresrechnung wird spürbar teurer als der davor.' },
+  { v: 1, l: 'Geglättet · Rotierkonto',
+    d: 'Jeder zahlt jeden Monat denselben Betrag. Quartals- und Jahresrechnungen liegen längst auf dem Rotierkonto, wenn sie fällig werden.' }
+];
+
 // Falls noch keine Anteile gesetzt sind, teilt sich alles gleichmäßig
 const hhShares = () => {
   const M = household.members;
@@ -3404,6 +3415,7 @@ function wizStart() {
   wizDraft = {
     name: '',
     mode: 'rotation',
+    smooth: true,
     members: household.members.map(m => ({ ...m }))
   };
   wizStep = 0;
@@ -3439,6 +3451,7 @@ async function wizFinish() {
   });
   household.name = wizDraft.name || 'Haushalt';
   household.mode = wizDraft.mode;
+  household.smooth = !!wizDraft.smooth;
   household.members = wizDraft.members.map((m, i) => ({
     id: m.id, name: m.name || `Person ${i + 1}`
   }));
@@ -3488,6 +3501,15 @@ function renderWizard() {
           <span class="wiz-mode-l">${esc(m.l)}</span>
           <span class="wiz-mode-d">${esc(m.d)}</span>
         </button>`).join('')}</div>
+      ${d.mode === 'rotation' ? '' : `
+      <h2 class="wiz-h" style="margin-top:26px">Und die teuren Monate?</h2>
+      <p class="wiz-p">Jahres- und Quartalsrechnungen fallen geballt an. Ihr könnt sie
+        nehmen, wie sie kommen — oder jeden Monat denselben Betrag zahlen.</p>
+      <div class="wiz-modes">${SMOOTHS.map(s => `
+        <button class="wiz-mode ${(d.smooth ? 1 : 0) === s.v ? 'on' : ''}" onclick="wizSet('smooth',${s.v})">
+          <span class="wiz-mode-l">${esc(s.l)}</span>
+          <span class="wiz-mode-d">${esc(s.d)}</span>
+        </button>`).join('')}</div>`}
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizFinish()">Fertig</button></div>`;
@@ -3512,16 +3534,25 @@ function modePreview(mode) {
 
   if (mode === 'rotation') {
     return `<div class="mp">Ein Konto trägt alles, der Rest wird über den Überschuss ausgeglichen —
-      keine feste Quote je Person.</div>`;
+      keine feste Quote je Person. Die teuren Monate sind darin schon geglättet.${
+      hasOwnSplit() ? ' Posten mit eigenen Prozenten erscheinen unten als Ausgleich zwischen euch.' : ''}</div>`;
   }
+  // With real costs the preview goes through the same maths as the table, so
+  // an expense with its own percentages shows up here too.
+  const mkNow = new Date().getFullYear() * 12 + new Date().getMonth();
+  const real  = f => sample ? dueByMember(mkNow, f) : f.map(v => base * v);
+  const note  = sample ? 'bei euren aktuellen Kosten' : 'Beispiel: 1.000 € Kosten';
+
   if (mode === 'equal') {
-    return `<div class="mp">${M.map(m => pill(m.name, base / M.length)).join('')}
-      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+    const v = real(M.map(() => 1 / M.length));
+    return `<div class="mp">${M.map((m, i) => pill(m.name, v[i])).join('')}
+      <span class="mp-n">${note}</span></div>`;
   }
   if (mode === 'fixed') {
     const f = hhShares();
-    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (f[i] * 100).toFixed(0) + ' %', base * f[i])).join('')}
-      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+    const v = real(f);
+    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (f[i] * 100).toFixed(0) + ' %', v[i])).join('')}
+      <span class="mp-n">${note}</span></div>`;
   }
   if (mode === 'income') {
     const mk = new Date().getFullYear() * 12 + new Date().getMonth();
@@ -3529,10 +3560,30 @@ function modePreview(mode) {
     const sum = w.reduce((a, v) => a + v, 0);
     if (sum <= 0) return `<div class="mp"><span class="mp-n">Sobald die Löhne in der Prognose
       stehen, siehst du hier, wer wie viel zahlt.</span></div>`;
-    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (w[i] / sum * 100).toFixed(0) + ' %', base * w[i] / sum)).join('')}
+    const v = real(w.map(x => x / sum));
+    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (w[i] / sum * 100).toFixed(0) + ' %', v[i])).join('')}
       <span class="mp-n">${sample ? 'bei euren aktuellen Kosten und Löhnen' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
   }
   return '';
+}
+
+// What the two settlement options mean in euros, on the household's own costs
+function smoothPreview(on) {
+  const M = household.members;
+  if (!M.length) return '';
+  const mk   = new Date().getFullYear() * 12 + new Date().getMonth();
+  const base = baseAt(mk);
+  const { reg, irr } = duePartsByMember(mk, base);
+  const avg  = lastAvgIrrBy || irr;
+  const vals = on ? reg.map((v, i) => v + (avg[i] || 0)) : reg.map((v, i) => v + irr[i]);
+  if (!vals.some(v => v > 0.005))
+    return `<div class="mp"><span class="mp-n">Sobald Kosten erfasst sind, siehst du hier,
+      was das für euch heißt.</span></div>`;
+  const pill = (n, v) => `<span class="mp-p"><b>${esc(n)}</b>${esc(eur.format(v))}</span>`;
+  return `<div class="mp">${M.map((m, i) => pill(m.name, vals[i])).join('')}
+    <span class="mp-n">${on
+      ? 'jeden Monat gleich — Stand diesen Monat'
+      : 'in diesem Monat; in anderen Monaten mehr oder weniger'}</span></div>`;
 }
 
 function shareEditor() {
@@ -3581,6 +3632,18 @@ function openSettings() {
     </div>`;
   }).join('');
 
+  const smoothRows = hhMode() === 'rotation'
+    ? `<p class="set-hint">Das Rotationskonto glättet die teuren Monate von sich aus —
+        die Wahl hast du in den anderen Aufteilungen.</p>`
+    : SMOOTHS.map(s => {
+        const on = (household.smooth === true ? 1 : 0) === s.v;
+        return `<button class="set-opt ${on ? 'on' : ''}" onclick="setSmooth(${s.v})">
+          <span class="set-opt-l">${esc(s.l)}</span>
+          <span class="set-opt-d">${esc(s.d)}</span>
+          ${on ? smoothPreview(!!s.v) : ''}
+        </button>`;
+      }).join('');
+
   const THEMES = [
     { v: 'auto',  l: 'Automatisch', d: 'Folgt der Einstellung deines Geräts.' },
     { v: 'light', l: 'Hell',        d: '' },
@@ -3600,6 +3663,11 @@ function openSettings() {
     <p class="set-hint">Wie die gemeinsamen Kosten auf euch verteilt werden. Wirkt sofort,
       ohne dass Daten verloren gehen.</p>
     ${modeRows}
+
+    <div class="set-sec">Abrechnung</div>
+    <p class="set-hint">Ob teure Monate teuer bleiben oder ihr jeden Monat denselben
+      Betrag zahlt. An der Aufteilung ändert das nichts — nur daran, wann ihr zahlt.</p>
+    ${smoothRows}
 
     <div class="set-sec">Haushalt</div>
     <div class="set-row" onclick="openHousehold()">
@@ -3634,6 +3702,15 @@ async function setMode(v) {
   renderForecast();
   openSettings();
   showToast('Aufteilung: ' + (MODES.find(m => m.v === v) || {}).l);
+}
+
+async function setSmooth(v) {
+  household.smooth = !!v;
+  await persistHousehold();
+  render();
+  renderForecast();
+  openSettings();
+  showToast('Abrechnung: ' + (SMOOTHS.find(s => s.v === (v ? 1 : 0)) || {}).l);
 }
 
 function openHousehold() {
@@ -4079,10 +4156,10 @@ function costsInMonth(mk) {
     const bi = d.getFullYear() * 12 + d.getMonth();
     const phase = (((mk - bi) % step) + step) % step === 0;
     if (phase && (bi <= curMk || mk >= bi) && mk < subDeactMk(s))
-      out.push({ amount: s.amount, payer: s.payer, split: s.split });
+      out.push({ amount: s.amount, payer: s.payer, split: s.split, irr: step > 1 });
   });
   oneoffs.forEach(o => {
-    if (oneMk(o) === mk) out.push({ amount: o.amount, payer: o.payer, split: o.split });
+    if (oneMk(o) === mk) out.push({ amount: o.amount, payer: o.payer, split: o.split, irr: false });
   });
   return out;
 }
@@ -4131,16 +4208,7 @@ const fmtPct = v => String(Math.round((v || 0) * 10) / 10).replace('.', ',');
 // The household's own shares right now — the sensible starting point when
 // someone switches an expense to its own percentages.
 function baseSharesNow() {
-  const M = household.members, n = M.length || 1;
-  if (hhMode() === 'fixed') return hhShares();
-  if (hhMode() === 'income') {
-    const now = new Date();
-    const mk  = now.getFullYear() * 12 + now.getMonth();
-    const w   = M.map(m => getInc(mk, m.id));
-    const s   = w.reduce((a, v) => a + v, 0);
-    if (s > 0) return w.map(v => v / s);
-  }
-  return M.map(() => 1 / n);
+  return baseAt(new Date().getFullYear() * 12 + new Date().getMonth());
 }
 
 function splitRuleLabel() {
@@ -4149,8 +4217,8 @@ function splitRuleLabel() {
   if (hhMode() === 'fixed')  return 'Es gilt die Haushaltsregel: ' +
     M.map((m, i) => `${m.name} ${fmtPct(hhShares()[i] * 100)} %`).join(', ') + '.';
   if (hhMode() === 'income') return 'Es gilt die Haushaltsregel: Anteil nach Einkommen.';
-  return 'Es gilt die Haushaltsregel. Im Rotationskonto wird nicht pro Person aufgeteilt — ' +
-         'eigene Prozente wirken erst in den Modi 50:50, feste Anteile oder nach Einkommen.';
+  return 'Es gilt die Haushaltsregel: im Rotationskonto trägt jeder gleich viel. ' +
+         'Eigene Prozente erscheinen unten als Ausgleich zwischen euch.';
 }
 
 function splitAmount(pfx) {
@@ -4229,6 +4297,8 @@ function setSplitVal(pfx, i, v) {
   paintSplitSum(pfx);
 }
 
+const hasOwnSplit = () => subs.some(s => splitOf(s)) || oneoffs.some(o => splitOf(o));
+
 // Shown on a cost row so an own split is visible without opening it.
 function splitTag(item) {
   const sp = splitOf(item);
@@ -4241,6 +4311,59 @@ function splitValue(pfx) {
   if (!cur) return null;
   const vals = household.members.map(m => cur[m.id] || 0);
   return vals.some(v => v > 0) ? { ...cur } : null;
+}
+
+// Same as dueByMember, but keeping the two halves apart: what recurs every
+// month, and what the Rotierkonto smooths (quartalsweise, jährlich).
+function duePartsByMember(mk, base) {
+  const M = household.members;
+  const reg = M.map(() => 0), irr = M.map(() => 0);
+  costsInMonth(mk).forEach(c => {
+    const sp  = splitOf(c);
+    const bin = c.irr ? irr : reg;
+    M.forEach((m, i) => { bin[i] += c.amount * (sp ? sp[i] : base[i]); });
+  });
+  return { reg, irr };
+}
+
+// The household's share per member in one month — rotation has no quota of
+// its own, so it is measured against equal parts.
+function baseAt(mk) {
+  const M = household.members, n = M.length || 1;
+  if (hhMode() === 'fixed') return hhShares();
+  if (hhMode() === 'income') {
+    const w = M.map(m => getInc(mk, m.id));
+    const s = w.reduce((a, v) => a + v, 0);
+    if (s > 0) return w.map(v => v / s);
+  }
+  return M.map(() => 1 / n);
+}
+
+// Smoothing is a question of its own: take the expensive months as they come,
+// or pay the same amount every month and let the Rotierkonto carry the peaks.
+// The Rotationskonto-Modus has it built in.
+const smoothOn = () => hhMode() === 'rotation' || household.smooth === true;
+
+// Ø irregular due per member over the smoothing window — each person's
+// standing transfer to the Rotierkonto.
+function avgIrrByMember(fromMk, len) {
+  const M = household.members;
+  const out = M.map(() => 0);
+  const n = Math.max(1, len);
+  for (let i = 0; i < n; i++) {
+    const irr = duePartsByMember(fromMk + i, baseAt(fromMk + i)).irr;
+    M.forEach((m, j) => { out[j] += irr[j]; });
+  }
+  return out.map(v => v / n);
+}
+
+// What each member pays this month: the recurring part as it falls, plus the
+// standing rate for everything the Rotierkonto smooths.
+function sollByMember(mk, base) {
+  if (!smoothOn() || !lastAvgIrrBy || mk < lastWinFromMk)
+    return dueByMember(mk, base);
+  const { reg } = duePartsByMember(mk, base);
+  return reg.map((v, i) => v + (lastAvgIrrBy[i] || 0));
 }
 
 function updateIncomeCol(mk) {
@@ -4260,18 +4383,27 @@ function updateIncomeCol(mk) {
       : '–');
   });
 
+  // The standing transfer each person makes to the Rotierkonto
+  const rotRow = () => {
+    if (!smoothOn() || !lastAvgIrrBy) return;
+    M.forEach((m, i) => put(`cc-rot_${m.id}-${mk}`,
+      mk >= lastWinFromMk && lastAvgIrrBy[i] > 0.005 ? eur.format(lastAvgIrrBy[i]) : '–'));
+  };
+
   if (hhMode() === 'equal') {
-    const soll = dueByMember(mk, M.map(() => 1 / (M.length || 1)));
+    const soll = sollByMember(mk, M.map(() => 1 / (M.length || 1)));
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
     M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
+    rotRow();
     balance(soll);
     return;
   }
 
   if (hhMode() === 'fixed') {
-    const soll = dueByMember(mk, hhShares());
+    const soll = sollByMember(mk, hhShares());
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
     M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
+    rotRow();
     balance(soll);
     return;
   }
@@ -4284,8 +4416,9 @@ function updateIncomeCol(mk) {
     put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
     put(`cc-exp-${mk}`,    exp ? eur.format(exp) : '–');
     put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
-    const soll = sum ? dueByMember(mk, wages.map(w => w / sum)) : M.map(() => 0);
+    const soll = sum ? sollByMember(mk, wages.map(w => w / sum)) : M.map(() => 0);
     M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, sum ? eur.format(soll[i]) : '–'));
+    rotRow();
     balance(soll);
     return;
   }
@@ -4311,6 +4444,24 @@ function updateIncomeCol(mk) {
   set(`cc-share-${mk}`,  share);
   set(`cc-remain-${mk}`, remain);
   M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`, sock + prevs[i]));
+
+  // Rotation runs on equal parts. Where a single cost carries its own
+  // percentages, one of you owes more than half — that difference is a
+  // transfer between you, on top of the account.
+  const n    = M.length || 1;
+  const even = M.map(() => 1 / n);
+  const { reg, irr } = duePartsByMember(mk, even);
+  const smoothed = lastAvgIrrBy && mk >= lastWinFromMk ? lastAvgIrrBy : irr;
+  const mine = reg.map((v, i) => v + smoothed[i]);
+  const avg  = mine.reduce((a, v) => a + v, 0) / n;
+  M.forEach((m, i) => {
+    const el = document.getElementById(`cc-dev_${m.id}-${mk}`);
+    if (!el) return;
+    const d = mine[i] - avg;
+    el.textContent = Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
+    el.classList.toggle('rot-net-neg', d < -0.005);
+    el.classList.toggle('rot-net-pos', d > 0.005);
+  });
 }
 
 // Which member's account a cost is debited from — the basis for who owes whom
@@ -4622,8 +4773,11 @@ function render() {
 function balanceRows(M, iRow, calcCells) {
   const any = subs.some(s => s.payer) || oneoffs.some(o => o.payer);
   if (!any) return '';
+  // Smoothed, the Saldi no longer cancel out within a month: what they add up
+  // to is exactly what flows into the Rotierkonto.
+  const tag = smoothOn() ? ' · geglättet' : '';
   return M.map(m => iRow('inc-calc muted', `${esc(m.name)} gezahlt`, calcCells('paid_' + m.id))).join('')
-       + M.map(m => iRow('inc-balance', `${esc(m.name)} Saldo`, calcCells('bal_' + m.id))).join('');
+       + M.map(m => iRow('inc-balance', `${esc(m.name)} Saldo${tag}`, calcCells('bal_' + m.id))).join('');
 }
 
 function renderForecast() {
@@ -4760,6 +4914,10 @@ function renderForecast() {
   const winEnd  = Math.min(winFrom + WIN, N);
   const winLen  = Math.max(1, winEnd - winFrom);
   const sumWin  = arr => arr.slice(winFrom, winEnd).reduce((a, v) => a + v, 0);
+
+  // Each person's standing rate into the Rotierkonto — read by updateIncomeCol
+  lastWinFromMk = startIdx + winFrom;
+  lastAvgIrrBy  = avgIrrByMember(lastWinFromMk, winLen);
   const avgAll  = sumWin(totals)    / winLen;  // all subs — what a month really costs
   const avgIrr  = sumWin(irrTotals) / winLen;  // irregular only — the Rotierkonto rate
 
@@ -4873,19 +5031,23 @@ function renderForecast() {
   const M = household.members;
   const sepRow = t => `<tr class="inc-sep"><td class="name"><span class="lbl">${t}</span></td>${sepCells}</tr>`;
 
+  // With smoothing on, the figure is the same every month — the peaks sit in
+  // the Rotierkonto, not in the column.
+  const head0 = smoothOn() ? 'Geglättet' : 'Aufteilung';
+
   const incRows = hhMode() === 'equal'
-    ? sepRow('Aufteilung · 50 : 50')
+    ? sepRow(head0 + ' · 50 : 50')
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
       + balanceRows(M, iRow, calcCells)
     : hhMode() === 'fixed'
-    ? (() => { const f = hhShares(); return sepRow('Aufteilung · feste Anteile')
+    ? (() => { const f = hhShares(); return sepRow(head0 + ' · feste Anteile')
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + M.map((m, i) => iRow('inc-payout',
           `${esc(m.name)} zahlt · ${(f[i] * 100).toFixed(0)} %`, calcCells('pay_' + m.id))).join('')
       + balanceRows(M, iRow, calcCells); })()
     : hhMode() === 'income'
-    ? sepRow('Aufteilung · nach Einkommen')
+    ? sepRow(head0 + ' · nach Einkommen')
       + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
       + iRow('inc-calc', 'Gesamteinkommen', calcCells('inctot'))
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
@@ -4902,7 +5064,15 @@ function renderForecast() {
     + M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
     + iRow('inc-input', 'Sockel / Person',    inputCells('sockel'))
     + iRow('inc-calc remain', 'Verbleibend',  calcCells('remain'))
-    + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('');
+    + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('')
+    + (hasOwnSplit() && M.length > 1
+        ? sepRow('Ausgleich · + zahlt, − bekommt')
+          + M.map(m => iRow('rot-net', esc(m.name), calcCells('dev_' + m.id))).join('')
+        : '');
+
+  // Who puts how much into the Rotierkonto every month
+  const rotPerPerson = (!hasIrr || M.length < 2 || hhMode() === 'rotation') ? '' :
+    M.map(m => iRow('inc-calc muted', `davon ${esc(m.name)}`, calcCells('rot_' + m.id))).join('');
 
   lastTotals   = totals;    // all months so past-column lookups work
   lastStartIdx = startIdx; // absolute month index of column 0
@@ -4918,7 +5088,7 @@ function renderForecast() {
         <span class="avg-val">${hasIrr ? eur.format(avgIrr) : '–'}</span>
       </div>
     </div>
-    ${hhMode() === 'rotation' ? `${actBox}
+    ${smoothOn() ? `${actBox}
     <div class="reserve-note">${note}</div>
     ${cfgRow}` : ''}
     <div class="fc-scroll" id="fc-scroll">
@@ -4929,9 +5099,10 @@ function renderForecast() {
           ${hasOne ? `<tr class="oneoff-row">${oneRow}</tr>` : ''}
           <tr class="totals">${tot}</tr>
           <tr class="fc-avg">${avgRow}</tr>
-          ${hhMode() === 'rotation' ? `
+          ${smoothOn() ? `
           <tr class="rot-sep">${rotSep}</tr>
           <tr class="rot-ein">${rotEin}</tr>
+          ${rotPerPerson}
           <tr class="rot-aus">${rotAus}</tr>
           <tr class="rot-net">${rotNet}</tr>
           <tr class="reserve">${rotRes}</tr>` : ''}
