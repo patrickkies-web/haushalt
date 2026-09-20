@@ -1736,6 +1736,13 @@
     .share-row input:focus { outline: none; border-color: var(--accent); }
     .share-pct { font-size: 12px; color: var(--faint); }
     .share-sum { font-size: 11px; color: var(--faint); margin-top: 9px; }
+    .acc-map { display: flex; flex-direction: column; gap: 9px; margin-bottom: 4px; }
+    .acc-row {
+      display: grid; grid-template-columns: 1fr 168px;
+      align-items: center; gap: 10px; font-size: 13.5px;
+    }
+    .acc-row .seg { padding: 3px; }
+    .acc-row .seg button { font-size: 12px; padding: 8px 4px; }
     .share-sum.off { color: var(--danger); }
     .set-opt-l { font-size: 14px; font-weight: 500; color: var(--ink); }
     .set-opt-d { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
@@ -2821,7 +2828,7 @@
       <input id="o-month" type="month">
     </div>
     <div class="field">
-      <label>Bezahlt von <span style="font-weight:400;color:var(--muted)">— wessen Konto wurde belastet?</span></label>
+      <label>Von welchem Konto <span style="font-weight:400;color:var(--muted)">— was wurde belastet?</span></label>
       <div class="chips" id="o-payer"></div>
     </div>
     <div class="field">
@@ -2876,8 +2883,8 @@
       </div>
     </div>
     <div class="fstep" data-s="5">
-      <div class="fstep-q">Wer zahlt das?</div>
-      <div class="fstep-h">Von wessen Konto wird abgebucht?</div>
+      <div class="fstep-q">Von welchem Konto?</div>
+      <div class="fstep-h">Wovon wird abgebucht — einem eurer eigenen Konten oder dem gemeinsamen?</div>
       <div class="field">
         <div class="chips" id="f-payer"></div>
       </div>
@@ -3050,11 +3057,15 @@ const INCOMES = [
     d: 'Egal wer es verdient und wo es ankommt: es zählt als ein Einkommen. Davon gehen die Kosten ab, der Rest gehört euch nach eurem Verhältnis — auch wenn einer weniger verdient, weil er den Haushalt oder die Kinder trägt.' }
 ];
 
+// Wie das Geld läuft. Entscheidet, wer am Ende wem was überweist — und ob es
+// überhaupt ein Konto gibt, das nicht einem von euch allein gehört.
 const POTS = [
-  { v: 'separate', l: 'Auf getrennten Konten',
-    d: 'Jeder bekommt sein Geld aufs eigene Konto. togethr rechnet aus, wer wem am Monatsende wie viel überweist, damit es eurem Verhältnis entspricht.' },
-  { v: 'joint', l: 'Auf einem gemeinsamen Konto',
-    d: 'Alles läuft über ein Konto: von dort gehen die Kosten ab, von dort wird ausgezahlt.' }
+  { v: 'separate', l: 'Jeder auf sein Konto',
+    d: 'Die Gehälter kommen auf euren eigenen Konten an. Mal zahlt der eine etwas für beide, mal der andere. togethr rechnet aus, wer wem am Monatsende wie viel überweist.' },
+  { v: 'joint', l: 'Über ein Gemeinschaftskonto',
+    d: 'Alle Gehälter gehen auf ein gemeinsames Konto, über das ihr beide verfügt. Von dort laufen sämtliche Ausgaben, und von dort wird auf eure eigenen Konten ausgezahlt, was zur freien Verfügung steht.' },
+  { v: 'mixed', l: 'Gemischt',
+    d: 'Es gibt ein Gemeinschaftskonto, aber nicht alles läuft darüber. Ihr legt für jedes Gehalt und jede Ausgabe einzeln fest, über welches Konto es geht.' }
 ];
 
 const MODES = [
@@ -3094,8 +3105,35 @@ const hhShares = () => {
 const hhMode    = () => household.mode || 'equal';
 const hhIncome  = () => household.income || 'own';
 const hhPot     = () => household.pot || 'separate';
-// Gemeinsames Einkommen auf einem Konto — nur dort gibt es eine Auszahlung
-const hhJoint   = () => hhIncome() === 'shared' && hhPot() === 'joint';
+
+// Konten sind das, worauf Gehälter landen und wovon Ausgaben abgehen. Jede
+// Person hat ihr eigenes — dessen id ist ihre member-id, damit alte Ausgaben
+// ohne Umschreiben weiter stimmen. Dazu kommt höchstens ein gemeinsames.
+const JOINT = 'joint';
+const hhHasJoint = () => hhPot() === 'joint' || hhPot() === 'mixed';
+const hhJointName = () => household.jointName || 'Gemeinschaftskonto';
+function hhAccounts() {
+  return [
+    ...(hhHasJoint() ? [{ id: JOINT, name: hhJointName(), kind: 'joint' }] : []),
+    ...household.members.map(m => ({ id: m.id, name: m.name, kind: 'private', owner: m.id }))
+  ];
+}
+// Kurzform fürs Tabellenlabel — die Namensspalte trägt nicht viel
+const accShort = id => {
+  const a = hhAccounts().find(x => x.id === id);
+  if (!a) return '–';
+  return a.kind === 'joint' ? 'gemeinsam' : a.name;
+};
+const accLabel = id => {
+  const a = hhAccounts().find(x => x.id === id);
+  return a ? (a.kind === 'joint' ? a.name : a.name + 's Konto') : 'Offen';
+};
+
+// Auf welches Konto das Gehalt dieser Person geht
+const payTo = m => {
+  const ok = hhAccounts().some(a => a.id === m.payTo);
+  return ok ? m.payTo : (hhPot() === 'joint' ? JOINT : m.id);
+};
 const hhSurplus = () => household.surplus || 'budget';
 // Was bei jedem unangetastet bleibt, bevor der Einkommensschlüssel greift
 const hhFree    = () => typeof household.free === 'number' && household.free >= 0 ? household.free : 0;
@@ -3111,6 +3149,11 @@ function hhMigrate() {
   // 'pot' hieß erst Kassenmodell und beantwortete beide Fragen auf einmal
   if (!household.income) household.income = household.pot === 'joint' ? 'shared' : 'own';
   if (!household.pot) household.pot = 'separate';
+  // Vor den Konten gab es nur Personen — wer sein Gehalt wohin bekommt, folgt
+  // aus dem damals gewählten Modell
+  household.members.forEach(m => {
+    if (!m.payTo) m.payTo = household.pot === 'joint' ? JOINT : m.id;
+  });
 }
 
 const $ = id => document.getElementById(id);
@@ -3533,6 +3576,11 @@ function wizSet(field, value) {
 
 function wizName(i, v) { wizDraft.members[i].name = v; }
 
+function wizPayTo(i, acc) {
+  wizDraft.members[i].payTo = acc;
+  renderWizard();
+}
+
 function wizGo(n) {
   // Carry the typed values over before the step is rebuilt
   document.querySelectorAll('.wiz-in').forEach(inp => {
@@ -3546,11 +3594,15 @@ function wizGo(n) {
 }
 
 // Which questions this household actually has to answer
+// Bei gemeinsamem Einkommen gibt es keinen Kostenschlüssel — die Kosten gehen
+// vom Gemeinsamen ab. Dafür wird die Kontenfrage zur eigentlichen.
 function wizSteps() {
   const d = wizDraft || {};
-  const s = ['Haushalt', 'Personen', 'Einkommen', 'Schlüssel'];
-  if (d.income === 'shared') s.push('Konto');
-  if (d.income === 'shared' && d.pot === 'joint') s.push('Überschuss');
+  const s = ['Haushalt', 'Personen', 'Einkommen'];
+  if (d.income === 'shared') {
+    s.push('Konten');
+    if (d.pot === 'joint' || d.pot === 'mixed') s.push('Überschuss');
+  } else s.push('Schlüssel');
   s.push('Abrechnung');
   return s;
 }
@@ -3568,7 +3620,8 @@ async function wizFinish() {
   household.free    = wizDraft.free;
   household.smooth  = !!wizDraft.smooth;
   household.members = wizDraft.members.map((m, i) => ({
-    id: m.id, name: m.name || `Person ${i + 1}`
+    id: m.id, name: m.name || `Person ${i + 1}`,
+    payTo: wizDraft.pot === 'joint' ? JOINT : (m.payTo || m.id)
   }));
   wizDraft = null;
   await persistHousehold();
@@ -3622,17 +3675,27 @@ function renderWizard() {
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
 
-  } else if (steps[wizStep] === 'Konto') {
+  } else if (steps[wizStep] === 'Konten') {
     body = `
-      <h2 class="wiz-h">Und wo kommt das Geld an?</h2>
-      <p class="wiz-p">Reine Organisationsfrage — am Verhältnis ändert sie nichts.
-        Sie entscheidet nur, ob togethr euch eine Überweisung ausrechnet oder eine
-        Auszahlung vom gemeinsamen Konto.</p>
+      <h2 class="wiz-h">Wie läuft das Geld?</h2>
+      <p class="wiz-p">Das entscheidet, wer am Monatsende wohin überweist. Jede Ausgabe
+        ordnest du später einem dieser Konten zu — dann weiß togethr, wo das Geld
+        tatsächlich abgegangen ist.</p>
       <div class="wiz-modes">${POTS.map(p => `
         <button class="wiz-mode ${d.pot === p.v ? 'on' : ''}" onclick="wizSet('pot','${p.v}')">
           <span class="wiz-mode-l">${esc(p.l)}</span>
           <span class="wiz-mode-d">${esc(p.d)}</span>
         </button>`).join('')}</div>
+      ${d.pot === 'mixed' ? `
+      <label class="hh-lbl">Wessen Gehalt geht wohin?</label>
+      <div class="acc-map">${d.members.map((m, i) => `
+        <div class="acc-row"><span>${esc(m.name || 'Person ' + (i + 1))}</span>
+          <div class="seg">
+            <button type="button" class="${(m.payTo || m.id) === JOINT ? '' : 'active'}"
+              onclick="wizPayTo(${i},'${m.id}')">eigenes</button>
+            <button type="button" class="${(m.payTo || m.id) === JOINT ? 'active' : ''}"
+              onclick="wizPayTo(${i},'${JOINT}')">gemeinsam</button>
+          </div></div>`).join('')}</div>` : ''}
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
@@ -3873,16 +3936,28 @@ function openSettings() {
     </button>`).join('');
 
   const potRows = hhIncome() !== 'shared' ? '' : `
-    <div class="set-sec">Konto</div>
-    <p class="set-hint">Wo das gemeinsame Geld ankommt. Reine Organisationsfrage —
-      am Verhältnis ändert sie nichts.</p>
+    <div class="set-sec">Konten</div>
+    <p class="set-hint">Wie das Geld läuft. Das entscheidet, wer am Monatsende wohin
+      überweist — jede Ausgabe wird einem dieser Konten zugeordnet.</p>
     ${POTS.map(p => `
       <button class="set-opt ${hhPot() === p.v ? 'on' : ''}" onclick="setPot('${p.v}')">
         <span class="set-opt-l">${esc(p.l)}</span>
         <span class="set-opt-d">${esc(p.d)}</span>
-      </button>`).join('')}`;
+      </button>`).join('')}
+    ${hhHasJoint() ? `<div class="shares">
+      <div class="acc-map">${household.members.map((m, i) => `
+        <div class="acc-row"><span>${esc(m.name)}s Gehalt</span>
+          <div class="seg">
+            <button type="button" class="${payTo(m) === JOINT ? '' : 'active'}"
+              onclick="setPayTo(${i},'${m.id}')">eigenes</button>
+            <button type="button" class="${payTo(m) === JOINT ? 'active' : ''}"
+              onclick="setPayTo(${i},'${JOINT}')">gemeinsam</button>
+          </div></div>`).join('')}</div>
+      <div class="share-sum">Wo das Gehalt ankommt. Ausgaben ordnest du beim Erfassen
+        einzeln zu.</div>
+    </div>` : ''}`;
 
-  const surplusRows = !hhJoint() ? '' : `
+  const surplusRows = !hhHasJoint() || hhIncome() !== 'shared' ? '' : `
     <div class="set-sec">Überschuss</div>
     <p class="set-hint">Was am Monatsende mit dem passiert, was nach allen Kosten übrig ist.</p>
     ${SURPLUS.map(s => `
@@ -3923,12 +3998,13 @@ function openSettings() {
     ${incomeRows}
     ${potRows}
 
+    ${surplusRows}
+
     <div class="set-sec">Schlüssel</div>
     <p class="set-hint">${hhIncome() === 'shared'
-      ? 'In welchem Verhältnis euch das gemeinsame Geld gehört.'
+      ? 'In welchem Verhältnis euch der Überschuss gehört. Meistens hälftig — die Kosten sind ohnehin gemeinsam getragen.'
       : 'Nach welchem Verhältnis die gemeinsamen Kosten getragen werden.'}</p>
     ${modeRows}
-    ${surplusRows}
 
     <div class="set-sec">Abrechnung</div>
     <p class="set-hint">Ob teure Monate teuer bleiben oder ihr jeden Monat denselben
@@ -3981,13 +4057,24 @@ async function setIncome(v) {
   showToast('Einkommen: ' + (INCOMES.find(p => p.v === v) || {}).l);
 }
 
+async function setPayTo(i, acc) {
+  const m = household.members[i];
+  if (!m) return;
+  m.payTo = acc;
+  await persistHousehold();
+  renderForecast();
+  openSettings();
+}
+
 async function setPot(v) {
   household.pot = v;
+  if (v === 'joint') household.members.forEach(m => { m.payTo = JOINT; });
+  if (v === 'separate') household.members.forEach(m => { m.payTo = m.id; });
   await persistHousehold();
   render();
   renderForecast();
   openSettings();
-  showToast('Konto: ' + (POTS.find(p => p.v === v) || {}).l);
+  showToast('Konten: ' + (POTS.find(p => p.v === v) || {}).l);
 }
 
 async function setSurplus(v) {
@@ -4472,14 +4559,17 @@ function splitOf(item) {
   return sum > 0 ? vals.map(v => v / sum) : null;
 }
 
-function paidByMember(mk) {
+// Was in diesem Monat von welchem Konto abgeht — die Basis dafür, wer
+// am Ende wem etwas schuldet.
+function paidByAccount(mk) {
   const out = {};
-  household.members.forEach(m => { out[m.id] = 0; });
+  hhAccounts().forEach(a => { out[a.id] = 0; });
   costsInMonth(mk).forEach(c => {
     if (c.payer && c.payer in out) out[c.payer] += c.amount;
   });
   return out;
 }
+const paidByMember = paidByAccount;
 
 // What each member owes: per-cost split where one is set, household rule
 // otherwise. base is the household share per member, summing to 1.
@@ -4702,21 +4792,6 @@ function updateIncomeCol(mk) {
       mk >= lastWinFromMk && lastAvgIrrBy[i] > 0.005 ? eur.format(lastAvgIrrBy[i]) : '–'));
   };
 
-  // What the per-cost percentages move between you, measured against the
-  // household key alone: the same sum, only carried by someone else.
-  const devRow = (base) => {
-    const plain = sollByMember(mk, base, true);
-    const mine  = sollByMember(mk, base);
-    M.forEach((m, i) => {
-      const el = document.getElementById(`cc-dev_${m.id}-${mk}`);
-      if (!el) return;
-      const d = mine[i] - plain[i];
-      el.textContent = Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
-      el.classList.toggle('rot-net-neg', d < -0.005);
-      el.classList.toggle('rot-net-pos', d > 0.005);
-    });
-  };
-
   const base = baseAt(mk);
 
   // ── Jedem sein Einkommen: geteilt werden nur die Kosten
@@ -4737,81 +4812,82 @@ function updateIncomeCol(mk) {
     return;
   }
 
-  // ── Gemeinsames Einkommen auf getrennten Konten: jedem steht sein Anteil am
-  // Überschuss zu, unabhängig davon, wer ihn verdient hat. Was jeder faktisch
-  // übrig hat, ist sein Lohn minus dem, was von seinem Konto abging — die
-  // Differenz ist die Überweisung, die das gerade rückt.
-  if (hhPot() === 'separate') {
-    const wages = M.map(m => getInc(mk, m.id));
-    const T     = wages.reduce((a, v) => a + v, 0);
-    const soll  = sollByMember(mk, base);
-    const C     = soll.reduce((a, v) => a + v, 0);
-    const S     = T - C;
-    const has   = wages.some(v => v);
+  // ── Gemeinsames Einkommen. Wie die Konten stehen, ändert nur den Weg des
+  // Geldes, nicht wem es gehört: jedem steht sein Anteil am Überschuss zu,
+  // und was er faktisch auf dem eigenen Konto hat, ist sein dort eingehendes
+  // Gehalt minus dem, was von dort abging. Die Differenz ist die Überweisung —
+  // vom Gemeinschaftskonto, wenn es eins gibt, sonst vom anderen.
+  const s = sharedSettle(mk, base);
+  const has = s.has;
 
-    put(`cc-inctot-${mk}`, has ? eur.format(T) : '–');
-    put(`cc-exp-${mk}`,    C ? eur.format(C) : '–');
-    put(`cc-surp-${mk}`,   has ? eur.format(S) : '–');
+  put(`cc-inctot-${mk}`, has ? eur.format(s.T) : '–');
+  put(`cc-exp-${mk}`,    s.C ? eur.format(s.C) : '–');
+  put(`cc-surp-${mk}`,   has ? eur.format(s.S) : '–');
+  put(`cc-remain-${mk}`, has ? eur.format(s.rest) : '–');
+  put(`cc-jointin-${mk}`, has ? eur.format(s.jointIn) : '–');
 
-    M.forEach((m, i) => {
-      // Eigene Prozente einzelner Posten trägt der Einzelne, nicht der Topf
-      const priv = soll[i] - C * base[i];
-      const owed = S * base[i] - priv;
-      const got  = (wages[i] || 0) - (paid[m.id] || 0);
-      put(`cc-owed_${m.id}-${mk}`, has ? eur.format(owed) : '–');
-      put(`cc-paid_${m.id}-${mk}`, paid[m.id] ? eur.format(paid[m.id]) : '–');
-      const d  = owed - got;
-      const el = document.getElementById(`cc-bal_${m.id}-${mk}`);
-      if (el) {
-        el.textContent = !has ? '–'
-          : Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
-        el.classList.toggle('rot-net-neg', has && d < -0.005);
-        el.classList.toggle('rot-net-pos', has && d > 0.005);
-      }
-    });
-    rotRow();
-    return;
-  }
+  M.forEach((m, i) => {
+    put(`cc-owed_${m.id}-${mk}`, has ? eur.format(s.owed[i]) : '–');
+    put(`cc-own_${m.id}-${mk}`,  has ? eur.format(s.own[i])  : '–');
+    put(`cc-paid_${m.id}-${mk}`, paid[m.id] ? eur.format(paid[m.id]) : '–');
+    const d  = s.balance[i];
+    const el = document.getElementById(`cc-bal_${m.id}-${mk}`);
+    if (el) {
+      el.textContent = !has ? '–'
+        : Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
+      el.classList.toggle('rot-net-neg', has && d < -0.005);
+      el.classList.toggle('rot-net-pos', has && d > 0.005);
+    }
+  });
+  rotRow();
+}
 
-  // ── Gemeinsames Konto: alles läuft über eine Kasse, der Überschuss wird verteilt
+// Ein Monat gemeinsamen Einkommens, über beliebig verteilte Konten gerechnet.
+function sharedSettle(mk, base) {
+  const M     = household.members;
   const wages = M.map(m => getInc(mk, m.id));
+  const other = getInc(mk, 'other');
   const prevs = M.map(m => getInc(mk, 'prev_' + m.id));
-  const o     = getInc(mk, 'other');
   const sock  = getInc(mk, 'sockel');
   const save  = getInc(mk, 'sparen');
+  const acc   = paidByAccount(mk);
 
-  const tot   = wages.reduce((a, v) => a + v, 0) + o;
-  const surp  = tot - exp;
-  const budget = hhSurplus() === 'budget';
-  const remain = budget
-    ? surp - sock * M.length - prevs.reduce((a, v) => a + v, 0)
-    : surp - save;
-  const hasData = wages.some(v => v) || o || sock || save || prevs.some(v => v);
+  const soll = sollByMember(mk, base);           // je Person, inkl. eigener Prozente
+  const C    = soll.reduce((a, v) => a + v, 0);
+  const T    = wages.reduce((a, v) => a + v, 0) + other;
+  const S    = T - C;
 
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = hasData ? eur.format(v) : '–';
+  // Was einer allein trägt, weil ein Posten eigene Prozente hat
+  const priv   = soll.map((v, i) => v - C * base[i]);
+  const budget = hhSurplus() === 'budget' && hhHasJoint();
+  // Auch beim festen Budget schmälert ein allein getragener Posten das, was
+  // sich derjenige auszahlen darf — sonst hätten eigene Prozente hier keine Wirkung.
+  const owed   = M.map((m, i) => (budget
+    ? sock
+    : Math.max(0, S - save) * base[i]) - priv[i] + prevs[i]);
+
+  // Auf dem eigenen Konto: das dort eingehende Gehalt minus die davon
+  // abgegangenen Ausgaben. Läuft das Gehalt aufs Gemeinschaftskonto, ist das 0.
+  const own = M.map((m, i) =>
+    (payTo(m) === m.id ? wages[i] : 0) - (acc[m.id] || 0));
+
+  const jointIn = M.reduce((a, m, i) => a + (payTo(m) === JOINT ? wages[i] : 0), 0) + other;
+  return {
+    T, C, S, owed, own, prevs,
+    balance: owed.map((v, i) => v - own[i]),
+    rest: S - owed.reduce((a, v) => a + v, 0) + prevs.reduce((a, v) => a + v, 0),
+    jointIn,
+    has: wages.some(v => v) || other !== 0
   };
-
-  put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');   // costs stand without wages
-  set(`cc-total-${mk}`,  tot);
-  set(`cc-surp-${mk}`,   surp);
-  set(`cc-remain-${mk}`, remain);
-  // Der Überschuss nach eurem Schlüssel — die Zeile über der Auszahlung
-  M.forEach((m, i) => set(`cc-share_${m.id}-${mk}`, surp * base[i]));
-  M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`,
-    budget ? sock + prevs[i] : Math.max(0, remain) * base[i] + prevs[i]));
-  rotRow();
-  devRow(base);
 }
 
 // Which member's account a cost is debited from — the basis for who owes whom
 function buildPayers() {
   const host = $("f-payer");
   if (!host) return;
-  host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
-    `<button type="button" class="${draft.payer === m.id ? 'active' : ''}"
-      onclick="pickPayer('${m.id}')">${esc(m.name)}</button>`).join('');
+  host.innerHTML = [{ id: '', name: 'Offen' }, ...hhAccounts()].map(a =>
+    `<button type="button" class="${draft.payer === a.id ? 'active' : ''}"
+      onclick="pickPayer('${a.id}')">${esc(a.id ? accLabel(a.id) : a.name)}</button>`).join('');
 }
 function pickPayer(id) { draft.payer = id; buildPayers(); }
 
@@ -4826,9 +4902,9 @@ let onePayer = '';
 function buildOnePayers() {
   const host = $("o-payer");
   if (!host) return;
-  host.innerHTML = [{ id: '', name: 'Offen' }, ...household.members].map(m =>
-    `<button type="button" class="${onePayer === m.id ? 'active' : ''}"
-      onclick="pickOnePayer('${m.id}')">${esc(m.name)}</button>`).join('');
+  host.innerHTML = [{ id: '', name: 'Offen' }, ...hhAccounts()].map(a =>
+    `<button type="button" class="${onePayer === a.id ? 'active' : ''}"
+      onclick="pickOnePayer('${a.id}')">${esc(a.id ? accLabel(a.id) : a.name)}</button>`).join('');
 }
 function pickOnePayer(id) { onePayer = id; buildOnePayers(); }
 
@@ -5098,7 +5174,7 @@ function render() {
       const mk = oneMk(o);
       const when = mk === null ? '–'
         : mf.format(new Date(Math.floor(mk / 12), mk % 12, 1));
-      const who = o.payer && household.members.find(m => m.id === o.payer);
+      const who = o.payer && hhAccounts().find(a => a.id === o.payer);
       return `<button class="one-item" onclick="openOneSheet('${o.id}')">
         <span class="one-l">${esc(o.name)}
           <span class="one-sub">${esc(when)}${who ? ` · ${esc(who.name)}` : ' · Konto offen'}${splitTag(o)}</span></span>
@@ -5382,11 +5458,6 @@ function renderForecast() {
     const b = baseAt(new Date().getFullYear() * 12 + new Date().getMonth());
     return ` · ${(b[i] * 100).toFixed(0)} %`;
   };
-  const devBlock = hasOwnSplit() && M.length > 1
-    ? sepRow('Ausgleich · + trägt mehr')
-      + M.map(m => iRow('rot-net', esc(m.name), calcCells('dev_' + m.id))).join('')
-    : '';
-
   const incRows = hhIncome() === 'own'
     ? sepRow(head0)
       + (needsWages
@@ -5400,34 +5471,32 @@ function renderForecast() {
           : `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
       + balanceRows(M, iRow, calcCells)
 
-    : hhPot() === 'separate'
-    ? sepRow('Gemeinsames Einkommen')
-      + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
+    : (() => {
+      const budget = hhSurplus() === 'budget' && hhHasJoint();
+      const acc    = hhHasJoint();
+      return sepRow('Gemeinsames Einkommen')
+      + M.map(m => iRow('inc-input',
+          `${esc(m.name)} Lohn${acc ? ' → ' + esc(accShort(payTo(m))) : ''}`,
+          inputCells(m.id))).join('')
+      + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
       + iRow('inc-calc', 'Gesamteinkommen', calcCells('inctot'))
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + iRow('inc-calc', 'Überschuss',      calcCells('surp'))
+      + (budget
+          ? M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
+            + iRow('inc-input', 'Sockel / Person', inputCells('sockel'))
+          : iRow('inc-input', 'Sparen / Monat', inputCells('sparen')))
       + M.map((m, i) => iRow('inc-payout',
-          `${esc(m.name)} steht zu${keyPct(i)}`, calcCells('owed_' + m.id))).join('')
+          `${esc(m.name)} steht zu${budget ? '' : keyPct(i)}`, calcCells('owed_' + m.id))).join('')
+      + M.map(m => iRow('inc-calc muted', `${esc(m.name)} hat selbst`, calcCells('own_' + m.id))).join('')
       + M.map(m => iRow('inc-calc muted', `${esc(m.name)} gezahlt`, calcCells('paid_' + m.id))).join('')
-      + sepRow('Ausgleich · + bekommt')
+      + sepRow(acc ? 'Auszahlung · + bekommt' : 'Ausgleich · + bekommt')
       + M.map(m => iRow('rot-net', esc(m.name), calcCells('bal_' + m.id))).join('')
-
-    : sepRow('Gemeinsame Kasse')
-      + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
-      + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
-      + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
-      + iRow('inc-calc',  'Ausgaben gesamt',    calcCells('exp'))
-      + iRow('inc-calc',  'Überschuss',         calcCells('surp'))
-      + M.map((m, i) => iRow('inc-calc muted',
-          `davon ${esc(m.name)}${keyPct(i)}`, calcCells('share_' + m.id))).join('')
-      + M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
-      + (hhSurplus() === 'budget'
-          ? iRow('inc-input', 'Sockel / Person', inputCells('sockel'))
-            + iRow('inc-calc remain', 'Bleibt auf der Kasse', calcCells('remain'))
-          : iRow('inc-input', 'Sparen / Monat', inputCells('sparen'))
-            + iRow('inc-calc remain', 'Zu verteilen', calcCells('remain')))
-      + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('')
-      + devBlock;
+      + (acc
+          ? iRow('inc-calc muted', 'Eingang gemeinsam', calcCells('jointin'))
+            + iRow('inc-calc remain', 'Bleibt gemeinsam', calcCells('remain'))
+          : '');
+    })();
 
   // Who puts how much into the Rotierkonto every month
   const rotPerPerson = (!hasIrr || M.length < 2) ? '' :
