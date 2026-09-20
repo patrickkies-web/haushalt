@@ -1635,46 +1635,133 @@
     }
     table.fc tr.inc-balance td.cur { background: var(--bg-2, var(--bg)); }
 
-    .wiz {
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: var(--radius); padding: 22px 20px 20px;
+    /* ── Einrichtung ───────────────────────────────────────────────────────
+       Nimmt den ganzen Schirm ein: eine Frage, viel Luft, der Fortschritt
+       oben und die Navigation dort, wo der Daumen ohnehin liegt. */
+    .wz {
+      position: fixed; inset: 0; z-index: 70;
+      background: var(--bg); color: var(--ink);
+      display: flex; flex-direction: column;
+      animation: wz-open .4s cubic-bezier(.2,.75,.25,1) both;
     }
-    .wiz-steps { display: flex; gap: 6px; margin-bottom: 20px; }
-    .wiz-dot {
-      flex: 1; font-size: 9.5px; font-weight: 500; letter-spacing: .05em;
-      text-transform: uppercase; color: var(--faint); text-align: center;
-      padding-bottom: 7px; border-bottom: 2px solid var(--line);
+    @keyframes wz-open { from { opacity: 0; } to { opacity: 1; } }
+    .wz-top { padding: calc(18px + env(safe-area-inset-top)) 20px 0; flex-shrink: 0; }
+    .wz-bar { height: 3px; border-radius: 3px; background: var(--line); overflow: hidden; }
+    .wz-bar i {
+      display: block; height: 100%; border-radius: 3px; background: var(--ink);
+      transition: width .5s cubic-bezier(.35,0,.15,1);
     }
-    .wiz-dot.done { color: var(--muted); border-color: var(--muted); }
-    .wiz-dot.on { color: var(--accent); border-color: var(--accent); }
-    .wiz-h {
-      font-family: inherit;
-      font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 500;
-      letter-spacing: -.02em; margin: 0 0 8px;
+    .wz-meta {
+      display: flex; justify-content: space-between; margin-top: 10px;
+      font-size: 10.5px; font-weight: 500; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--faint);
     }
-    .wiz-p { font-size: 13px; line-height: 1.55; color: var(--muted); margin: 0 0 18px; }
+    .wz-meta b { color: var(--muted); font-weight: 500; }
+    .wz-body {
+      flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      padding: 30px 20px 8px; max-width: 560px; width: 100%; margin: 0 auto;
+    }
+    .wz-body.in-r { animation: wz-r .34s cubic-bezier(.2,.75,.25,1) both; }
+    .wz-body.in-l { animation: wz-l .34s cubic-bezier(.2,.75,.25,1) both; }
+    @keyframes wz-r { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+    @keyframes wz-l { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+    .wz-q {
+      font-size: 27px; font-weight: 500; letter-spacing: -.03em; line-height: 1.2;
+      margin: 0 0 10px;
+    }
+    .wz-s { font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0 0 26px; }
+    .wz-foot {
+      flex-shrink: 0; display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+      max-width: 560px; width: 100%; margin: 0 auto;
+      border-top: 1px solid var(--line-soft); background: var(--bg);
+    }
+    .wz-foot .btn-ghost { padding: 14px 18px; font-size: 14.5px; }
+    .wz-foot .btn-primary {
+      flex: 1; padding: 15px 22px; font-size: 15px; border-radius: 13px;
+    }
+    .wz-opts { display: flex; flex-direction: column; gap: 10px; }
+    .wz-opt {
+      width: 100%; text-align: left; font-family: inherit; cursor: pointer;
+      background: var(--surface); border: 1.5px solid var(--line);
+      border-radius: 15px; padding: 16px 17px;
+      display: flex; flex-direction: column; gap: 5px;
+      transition: border-color .2s ease, background .2s ease, transform .12s ease;
+    }
+    .wz-opt:active { transform: scale(.987); }
+    .wz-opt.on { border-color: var(--accent); background: var(--accent-tint); }
+    .wz-opt[disabled] { opacity: .45; cursor: default; }
+    .wz-opt-t { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .wz-opt-l { font-size: 16px; font-weight: 600; letter-spacing: -.01em; color: var(--ink); }
+    .wz-opt-d { font-size: 13px; line-height: 1.5; color: var(--muted); }
+    .wz-check {
+      flex-shrink: 0; width: 21px; height: 21px; border-radius: 50%;
+      border: 1.5px solid var(--line); position: relative;
+      transition: border-color .2s ease, background .2s ease;
+    }
+    .wz-opt.on .wz-check { border-color: var(--accent); background: var(--accent); }
+    .wz-check::after {
+      content: ""; position: absolute; left: 7px; top: 3.5px;
+      width: 5px; height: 9px; border: solid var(--on-accent);
+      border-width: 0 1.8px 1.8px 0; transform: rotate(45deg) scale(0);
+      transition: transform .22s cubic-bezier(.2,1.5,.4,1);
+    }
+    .wz-opt.on .wz-check::after { transform: rotate(45deg) scale(1); }
     input.wiz-in {
-      width: 100%; font-family: inherit; font-size: 15px; color: var(--ink);
-      background: var(--bg); border: 1px solid var(--line);
-      border-radius: 11px; padding: 13px 14px; margin-bottom: 8px;
+      width: 100%; font-family: inherit; font-size: 19px; font-weight: 500;
+      letter-spacing: -.01em; color: var(--ink);
+      background: transparent; border: none;
+      border-bottom: 1.5px solid var(--line);
+      border-radius: 0; padding: 12px 2px; margin-bottom: 14px;
+      transition: border-color .2s ease;
     }
-    input.wiz-in:focus { outline: none; border-color: var(--accent); }
+    input.wiz-in::placeholder { color: var(--faint); font-weight: 400; }
+    input.wiz-in:focus { outline: none; border-bottom-color: var(--accent); }
     .wiz-count {
-      display: flex; align-items: center; justify-content: center; gap: 14px;
-      margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 14px; margin: 4px 0 26px;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 16px; padding: 10px 12px;
     }
     .wiz-count button {
-      width: 44px; height: 44px; font-size: 21px; font-weight: 500;
-      color: var(--muted); background: var(--bg);
-      border: 1px solid var(--line); border-radius: 12px; cursor: pointer;
+      width: 46px; height: 46px; font-size: 24px; font-weight: 400;
+      color: var(--ink); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 13px; cursor: pointer;
+      transition: transform .12s ease, opacity .2s ease;
     }
-    .wiz-count button:disabled { opacity: .35; cursor: default; }
+    .wiz-count button:active { transform: scale(.92); }
+    .wiz-count button:disabled { opacity: .3; cursor: default; }
     .wiz-count span {
-      font-family: inherit;
-      font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500;
-      min-width: 120px; text-align: center;
+      font-family: inherit; font-variant-numeric: tabular-nums;
+      font-size: 17px; font-weight: 500; flex: 1; text-align: center;
     }
+    .wiz-count span b { font-size: 26px; font-weight: 500; letter-spacing: -.02em; }
     .wiz-names { display: flex; flex-direction: column; }
+    .wiz-names input { animation: wz-r .3s cubic-bezier(.2,.75,.25,1) both; }
+    .wz-hero {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
+    }
+    .wz-hero-mark {
+      width: 54px; height: 54px; border-radius: 16px;
+      display: grid; place-items: center;
+      background: var(--accent-tint); color: var(--accent);
+    }
+    .wz-hero-mark svg { width: 28px; height: 28px; }
+    .wz-list { list-style: none; margin: 4px 0 0; padding: 0; }
+    .wz-list li {
+      display: flex; gap: 11px; align-items: baseline;
+      font-size: 14.5px; line-height: 1.55; color: var(--muted);
+      padding: 9px 0; border-bottom: 1px solid var(--line-soft);
+    }
+    .wz-list li:last-child { border-bottom: none; }
+    .wz-list b {
+      font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--faint);
+      min-width: 16px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .wz, .wz-body.in-r, .wz-body.in-l, .wiz-names input { animation: none; }
+      .wz-bar i { transition: none; }
+    }
     .wiz-modes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
     .wiz-mode {
       width: 100%; text-align: left; font-family: inherit; cursor: pointer;
@@ -3573,6 +3660,7 @@ function ghConflict(remote) {
 // Shown once, before any data exists: name, people, how costs get divided
 let wizStep = 0;
 let wizDraft = null;
+let wizDir   = 1;     // Richtung des Schrittwechsels, steuert die Einblendung
 
 const needsSetup = () => !household.name && subs.length === 0;
 
@@ -3585,13 +3673,26 @@ function wizStart() {
     surplus: 'budget',
     free: 1000,
     smooth: true,
-    members: household.members.map(m => ({ ...m }))
+    members: household.members.map(m => ({ ...m, name: '' }))
   };
   wizStep = 0;
-  render();
+  wizDir  = 1;
+  renderWizard();
+}
+
+// Getipptes einsammeln, bevor der Schritt neu gezeichnet wird — sonst sind
+// die Namen weg, sobald jemand die Personenzahl ändert.
+function wizKeep() {
+  document.querySelectorAll('.wiz-in').forEach(inp => {
+    if (inp.dataset.member !== undefined) {
+      const m = wizDraft.members[+inp.dataset.member];
+      if (m) m.name = inp.value.trim();
+    } else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
+  });
 }
 
 function wizSet(field, value) {
+  wizKeep();
   if (field === 'count') {
     const n = Math.max(1, Math.min(8, value));
     while (wizDraft.members.length < n)
@@ -3604,18 +3705,16 @@ function wizSet(field, value) {
 function wizName(i, v) { wizDraft.members[i].name = v; }
 
 function wizPayTo(i, acc) {
+  wizKeep();
   wizDraft.members[i].payTo = acc;
   renderWizard();
 }
 
 function wizGo(n) {
-  // Carry the typed values over before the step is rebuilt
-  document.querySelectorAll('.wiz-in').forEach(inp => {
-    if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
-    else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
-  });
+  wizKeep();
   // The Überschuss question only exists for a joint account
   const steps = wizSteps();
+  wizDir = n;
   wizStep = Math.max(0, Math.min(steps.length - 1, wizStep + n));
   renderWizard();
 }
@@ -3625,7 +3724,7 @@ function wizGo(n) {
 // vom Gemeinsamen ab. Dafür wird die Kontenfrage zur eigentlichen.
 function wizSteps() {
   const d = wizDraft || {};
-  const s = ['Haushalt', 'Personen', 'Einkommen'];
+  const s = ['Start', 'Haushalt', 'Personen', 'Einkommen'];
   if (d.income === 'shared') {
     s.push('Konten');
     if (d.pot === 'joint' || d.pot === 'mixed') s.push('Überschuss');
@@ -3635,10 +3734,7 @@ function wizSteps() {
 }
 
 async function wizFinish() {
-  document.querySelectorAll('.wiz-in').forEach(inp => {
-    if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
-    else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
-  });
+  wizKeep();
   household.name    = wizDraft.name || 'Haushalt';
   household.income  = wizDraft.income;
   household.pot     = wizDraft.pot;
@@ -3651,6 +3747,7 @@ async function wizFinish() {
     payTo: wizDraft.pot === 'joint' ? JOINT : (m.payTo || m.id)
   }));
   wizDraft = null;
+  wizClose();
   await persistHousehold();
   render();
   showToast('Eingerichtet — jetzt die wiederkehrenden Kosten anlegen');
@@ -3659,64 +3756,74 @@ async function wizFinish() {
 function renderWizard() {
   const d = wizDraft;
   const steps = wizSteps();
-  const dots = steps.map((t, i) =>
-    `<span class="wiz-dot ${i === wizStep ? 'on' : ''} ${i < wizStep ? 'done' : ''}">${esc(t)}</span>`).join('');
+  const name = steps[wizStep];
+  const last = wizStep === steps.length - 1;
 
-  let body = '';
-  if (wizStep === 0) {
-    body = `
-      <h2 class="wiz-h">Wie heißt euer Haushalt?</h2>
-      <p class="wiz-p">Ein Name, unter dem ihr die gemeinsamen Kosten führt — WG Hauptstraße,
-        Familie Kies, Projekt Umbau. Kannst du später ändern.</p>
-      <input class="wiz-in" id="wiz-hhname" type="text" value="${esc(d.name)}"
-        placeholder="z. B. WG Hauptstraße" autofocus>
-      <div class="wiz-nav"><span></span>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
-  } else if (wizStep === 1) {
-    body = `
-      <h2 class="wiz-h">Wer teilt sich die Kosten?</h2>
-      <p class="wiz-p">Für jede Person entsteht eine eigene Zeile in der Prognose.</p>
-      <div class="wiz-count">
+  // Eine Antwortkarte: Titel, Erklärung, Haken — und optional etwas darunter
+  const opt = (on, call, label, desc, extra, off) =>
+    `<button class="wz-opt${on ? ' on' : ''}" ${off ? 'disabled' : `onclick="${call}"`}>
+      <span class="wz-opt-t"><span class="wz-opt-l">${esc(label)}</span>
+        <span class="wz-check"></span></span>
+      ${desc ? `<span class="wz-opt-d">${esc(desc)}</span>` : ''}
+      ${extra || ''}
+    </button>`;
+  const opts = (list, sel, field) => `<div class="wz-opts">${list.map(o =>
+    opt(sel === o.v, `wizSet('${field}',${typeof o.v === 'string' ? `'${o.v}'` : o.v})`,
+        o.l, o.d, field === 'smooth' ? settleFig(!!o.v) : '')).join('')}</div>`;
+
+  let q = '', sub = '', ans = '';
+
+  if (name === 'Start') {
+    q = `Willkommen bei togethr`;
+    sub = `Ein paar kurze Fragen, dann rechnet togethr eure gemeinsamen Kosten
+      auf den Cent aus — und sagt euch jeden Monat, wer wem was überweist.`;
+    ans = `<div class="wz-hero">
+      <span class="wz-hero-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M12 12V3M12 12l5.2 7.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg></span>
+      <ul class="wz-list">
+        <li><b>1</b><span>Wie euer Haushalt heißt und wer dazugehört</span></li>
+        <li><b>2</b><span>Wem das Einkommen gehört und wo es ankommt</span></li>
+        <li><b>3</b><span>Nach welchem Verhältnis ihr tragt</span></li>
+        <li><b>4</b><span>Ob teure Monate teuer bleiben</span></li>
+      </ul></div>`;
+
+  } else if (name === 'Haushalt') {
+    q = `Wie heißt euer Haushalt?`;
+    sub = `Ein Name, unter dem ihr die gemeinsamen Kosten führt — WG Hauptstraße,
+      Familie Kies, Projekt Umbau. Kannst du später ändern.`;
+    ans = `<input class="wiz-in" id="wiz-hhname" type="text" value="${esc(d.name)}"
+      placeholder="WG Hauptstraße" autocomplete="off">`;
+
+  } else if (name === 'Personen') {
+    q = `Wer teilt sich die Kosten?`;
+    sub = `Für jede Person entsteht eine eigene Zeile in der Prognose.`;
+    ans = `<div class="wiz-count">
         <button onclick="wizSet('count',${d.members.length - 1})" ${d.members.length <= 1 ? 'disabled' : ''}>−</button>
-        <span>${d.members.length} ${d.members.length === 1 ? 'Person' : 'Personen'}</span>
+        <span><b>${d.members.length}</b> ${d.members.length === 1 ? 'Person' : 'Personen'}</span>
         <button onclick="wizSet('count',${d.members.length + 1})" ${d.members.length >= 8 ? 'disabled' : ''}>+</button>
       </div>
       <div class="wiz-names">${d.members.map((m, i) =>
         `<input class="wiz-in" data-member="${i}" type="text" value="${esc(m.name)}"
-           placeholder="Name der ${i + 1}. Person">`).join('')}</div>
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
-  } else if (steps[wizStep] === 'Einkommen') {
-    body = `
-      <h2 class="wiz-h">Wem gehört das Einkommen?</h2>
-      <p class="wiz-p">Die Grundfrage, an der alles Weitere hängt — und sie hat nichts
-        damit zu tun, auf welchem Konto das Geld ankommt. Rechnet ihr jedes Gehalt
-        dem zu, der es verdient, oder gilt es euch beiden, egal wer es nach Hause bringt?</p>
-      <div class="wiz-modes">${INCOMES.map(p => `
-        <button class="wiz-mode ${d.income === p.v ? 'on' : ''}" onclick="wizSet('income','${p.v}')">
-          <span class="wiz-mode-l">${esc(p.l)}</span>
-          <span class="wiz-mode-d">${esc(p.d)}</span>
-        </button>`).join('')}</div>
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+           style="animation-delay:${i * 45}ms" autocomplete="off"
+           placeholder="Name der ${i + 1}. Person">`).join('')}</div>`;
 
-  } else if (steps[wizStep] === 'Konten') {
+  } else if (name === 'Einkommen') {
+    q = `Wem gehört das Einkommen?`;
+    sub = `Die Grundfrage, an der alles Weitere hängt — und sie hat nichts damit zu
+      tun, auf welchem Konto das Geld ankommt. Rechnet ihr jedes Gehalt dem zu,
+      der es verdient, oder gilt es euch beiden, egal wer es nach Hause bringt?`;
+    ans = opts(INCOMES, d.income, 'income');
+
+  } else if (name === 'Konten') {
     const own = d.income !== 'shared';
-    body = `
-      <h2 class="wiz-h">${own ? 'Gibt es ein gemeinsames Konto?' : 'Wie läuft das Geld?'}</h2>
-      <p class="wiz-p">${own
-        ? 'Viele haben neben ihren eigenen Konten noch eines für den täglichen Bedarf, auf das beide einzahlen.'
-        : 'Das entscheidet, wer am Monatsende wohin überweist.'}
-        Jede Ausgabe ordnest du später einem dieser Konten zu — dann weiß togethr,
-        wo das Geld tatsächlich abgegangen ist.</p>
-      <div class="wiz-modes">${(own ? OWNPOTS : POTS).map(p => `
-        <button class="wiz-mode ${d.pot === p.v ? 'on' : ''}" onclick="wizSet('pot','${p.v}')">
-          <span class="wiz-mode-l">${esc(p.l)}</span>
-          <span class="wiz-mode-d">${esc(p.d)}</span>
-        </button>`).join('')}</div>
-      ${d.pot === 'mixed' && !own ? `
+    q = own ? `Gibt es ein gemeinsames Konto?` : `Wie läuft das Geld?`;
+    sub = (own
+      ? `Viele haben neben ihren eigenen Konten noch eines für den täglichen Bedarf, auf das beide einzahlen.`
+      : `Das entscheidet, wer am Monatsende wohin überweist.`) +
+      ` Jede Ausgabe ordnest du später einem dieser Konten zu.`;
+    ans = opts(own ? OWNPOTS : POTS, d.pot, 'pot') + (d.pot === 'mixed' && !own ? `
       <label class="hh-lbl">Wessen Gehalt geht wohin?</label>
       <div class="acc-map">${d.members.map((m, i) => `
         <div class="acc-row"><span>${esc(m.name || 'Person ' + (i + 1))}</span>
@@ -3725,68 +3832,78 @@ function renderWizard() {
               onclick="wizPayTo(${i},'${m.id}')">eigenes</button>
             <button type="button" class="${(m.payTo || m.id) === JOINT ? 'active' : ''}"
               onclick="wizPayTo(${i},'${JOINT}')">gemeinsam</button>
-          </div></div>`).join('')}</div>` : ''}
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+          </div></div>`).join('')}</div>` : '');
 
-  } else if (steps[wizStep] === 'Schlüssel') {
+  } else if (name === 'Schlüssel') {
     const shared = d.income === 'shared';
-    body = `
-      <h2 class="wiz-h">${shared ? 'In welchem Verhältnis gehört es euch?' : 'Wer trägt wie viel?'}</h2>
-      <p class="wiz-p">${shared
-        ? 'Meistens hälftig — wer weniger verdient, weil er dafür anderes trägt, kommt damit auf dasselbe heraus. Ihr könnt aber auch ein anderes Verhältnis festlegen.'
-        : 'Nach welchem Verhältnis die gemeinsamen Kosten auf euch fallen.'}
-        Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.</p>
-      <div class="wiz-modes">${MODES.map(m => `
-        <button class="wiz-mode ${d.mode === m.v ? 'on' : ''}" onclick="wizSet('mode','${m.v}')">
-          <span class="wiz-mode-l">${esc(m.l)}</span>
-          <span class="wiz-mode-d">${esc(m.d)}</span>
-        </button>`).join('')}</div>
-      ${d.mode === 'incomefree' ? `
+    q = shared ? `In welchem Verhältnis gehört es euch?` : `Wer trägt wie viel?`;
+    sub = (shared
+      ? `Meistens hälftig — wer weniger verdient, weil er dafür anderes trägt, kommt damit auf dasselbe heraus.`
+      : `Nach welchem Verhältnis die gemeinsamen Kosten auf euch fallen.`) +
+      ` Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.`;
+    ans = opts(MODES, d.mode, 'mode') + (d.mode === 'incomefree' ? `
       <label class="hh-lbl">Freibetrag je Person · monatlich</label>
       <input class="wiz-in" type="number" min="0" step="50" inputmode="numeric"
-        value="${d.free}" oninput="wizDraft.free = Math.max(0, +this.value || 0)">` : ''}
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+        value="${d.free}" oninput="wizDraft.free = Math.max(0, +this.value || 0)">` : '');
 
-  } else if (steps[wizStep] === 'Überschuss') {
-    body = `
-      <h2 class="wiz-h">Und was passiert mit dem Rest?</h2>
-      <p class="wiz-p">Am Monatsende liegt auf der Kasse, was nach allen Kosten übrig ist.
-        Entweder holt sich jeder ein festes Budget und der Rest wächst als Polster —
-        oder ihr legt einen Sparbetrag fest und teilt, was darüber hinausgeht.</p>
-      <div class="wiz-modes">${SURPLUS.map(s => `
-        <button class="wiz-mode ${d.surplus === s.v ? 'on' : ''}" onclick="wizSet('surplus','${s.v}')">
-          <span class="wiz-mode-l">${esc(s.l)}</span>
-          <span class="wiz-mode-d">${esc(s.d)}</span>
-        </button>`).join('')}</div>
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+  } else if (name === 'Überschuss') {
+    q = `Und was passiert mit dem Rest?`;
+    sub = `Am Monatsende liegt auf der Kasse, was nach allen Kosten übrig ist.
+      Entweder holt sich jeder ein festes Budget und der Rest wächst als Polster —
+      oder ihr legt einen Sparbetrag fest und teilt, was darüber hinausgeht.`;
+    ans = opts(SURPLUS, d.surplus, 'surplus');
 
   } else {
-    body = `
-      <h2 class="wiz-h">Und die teuren Monate?</h2>
-      <p class="wiz-p">Versicherungen, Abos, Steuern — manches kommt einmal im Jahr und
-        reißt den Monat auf. Ihr könnt das nehmen, wie es fällt, oder jeden Monat
-        denselben Betrag zahlen und die Spitzen von einem zweiten Konto decken lassen.</p>
-      <div class="wiz-modes">${SMOOTHS.map(s => `
-        <button class="wiz-mode ${(d.smooth ? 1 : 0) === s.v ? 'on' : ''}"
-          onclick="wizSet('smooth',${s.v})">
-          <span class="wiz-mode-l">${esc(s.l)}</span>
-          <span class="wiz-mode-d">${esc(s.d)}</span>
-          ${settleFig(!!s.v)}
-        </button>`).join('')}</div>
-      <div class="wiz-nav">
-        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
-        <button class="btn-primary" onclick="wizFinish()">Fertig</button></div>`;
+    q = `Und die teuren Monate?`;
+    sub = `Versicherungen, Abos, Steuern — manches kommt einmal im Jahr und reißt
+      den Monat auf.`;
+    ans = opts(SMOOTHS, d.smooth ? 1 : 0, 'smooth');
   }
 
-  $("list").innerHTML = `<div class="wiz"><div class="wiz-steps">${dots}</div>${body}</div>`;
-  const f = document.querySelector('.wiz-in');
-  if (f && wizStep === 0) f.focus();
+  // Die Hülle steht nur einmal, damit der Fortschrittsbalken wirklich läuft
+  let root = $("wizroot");
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'wizroot';
+    root.className = 'wz';
+    root.innerHTML = `<div class="wz-top">
+        <div class="wz-bar"><i id="wz-fill" style="width:0"></i></div>
+        <div class="wz-meta"><span id="wz-step"></span><b id="wz-name"></b></div>
+      </div>
+      <div class="wz-body" id="wz-body"></div>
+      <div class="wz-foot">
+        <button class="btn btn-ghost" id="wz-back">Zurück</button>
+        <button class="btn btn-primary" id="wz-next">Weiter</button>
+      </div>`;
+    document.body.appendChild(root);
+    $("wz-back").onclick = () => wizGo(-1);
+    $("wz-next").onclick = () => (wizStep === wizSteps().length - 1 ? wizFinish() : wizGo(1));
+    root.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); $("wz-next").click(); }
+    });
+  }
+
+  $("wz-fill").style.width = `${(wizStep + 1) / steps.length * 100}%`;
+  $("wz-step").textContent = `Schritt ${wizStep + 1} von ${steps.length}`;
+  $("wz-name").textContent = name;
+  $("wz-back").style.display = wizStep === 0 ? 'none' : '';
+  $("wz-next").textContent = last ? 'Fertig' : (name === 'Start' ? "Los geht's" : 'Weiter');
+
+  const body = $("wz-body");
+  body.innerHTML = `<h1 class="wz-q">${q}</h1>
+    <p class="wz-s">${sub}</p>${ans}`;
+  body.className = 'wz-body';
+  void body.offsetWidth;                       // Neustart der Einblendung erzwingen
+  body.classList.add(wizDir < 0 ? 'in-l' : 'in-r');
+  body.scrollTop = 0;
+
+  const f = body.querySelector('.wiz-in');
+  if (f && name === 'Haushalt') setTimeout(() => f.focus(), 340);
+}
+
+function wizClose() {
+  const root = $("wizroot");
+  if (root) root.remove();
 }
 
 // One place for everything that is configured rather than entered
@@ -5172,9 +5289,11 @@ function render() {
     $("toolbar").style.display = "none";
     $("fab").style.display = "none";
     $("summary").style.display = "none";
+    $("list").innerHTML = "";
     if (!wizDraft) wizStart(); else renderWizard();
     return;
   }
+  wizClose();   // etwa nach einem Import, der den Haushalt mitbringt
   const hasData = subs.length > 0;
   $("summary").style.display = "";
   $("toolbar").style.display = hasData ? "flex" : "none";
