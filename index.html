@@ -1626,6 +1626,41 @@
       transition: border-color .18s ease, background .18s ease;
     }
     .set-opt.on { border-color: var(--ink); background: var(--bg-2); }
+    .set-opt-wrap { margin-bottom: 7px; }
+    .set-opt-wrap .set-opt { margin-bottom: 0; }
+    .mp {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line);
+      font-size: 11.5px; color: var(--muted); line-height: 1.5;
+    }
+    .mp-p {
+      display: inline-flex; gap: 5px; align-items: baseline;
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 7px; padding: 4px 8px;
+      font-variant-numeric: tabular-nums; color: var(--ink); font-size: 11.5px;
+    }
+    .mp-p b { font-weight: 500; color: var(--muted); }
+    .mp-n { font-size: 10.5px; color: var(--faint); width: 100%; }
+
+    .shares {
+      border: 1px solid var(--line); border-top: none;
+      border-radius: 0 0 11px 11px; padding: 12px 15px 13px;
+      background: var(--surface);
+    }
+    .share-row {
+      display: grid; grid-template-columns: 1fr 74px auto;
+      align-items: center; gap: 8px; margin-bottom: 7px; font-size: 13px;
+    }
+    .share-row input {
+      font-family: inherit; font-size: 14px; font-variant-numeric: tabular-nums;
+      color: var(--ink); background: var(--sunken);
+      border: 1px solid transparent; border-radius: 8px; padding: 9px 10px;
+      text-align: right; width: 100%;
+    }
+    .share-row input:focus { outline: none; border-color: var(--accent); }
+    .share-pct { font-size: 12px; color: var(--faint); }
+    .share-sum { font-size: 11px; color: var(--faint); margin-top: 9px; }
+    .share-sum.off { color: var(--danger); }
     .set-opt-l { font-size: 14px; font-weight: 500; color: var(--ink); }
     .set-opt-d { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
     .set-row {
@@ -2913,8 +2948,17 @@ const MODES = [
   { v: 'equal', l: '50 : 50',
     d: 'Die Ausgaben werden zu gleichen Teilen auf alle umgelegt — unabhängig vom Einkommen.' },
   { v: 'income', l: 'Nach Einkommen',
-    d: 'Jeder zahlt denselben Prozentsatz seines Einkommens. Wer mehr verdient, zahlt mehr — die Belastung ist für alle gleich.' }
+    d: 'Jeder zahlt denselben Prozentsatz seines Einkommens. Wer mehr verdient, zahlt mehr — die Belastung ist für alle gleich.' },
+  { v: 'fixed', l: 'Feste Anteile',
+    d: 'Ihr legt die Prozentsätze selbst fest — etwa 60 zu 40, weil einer das größere Zimmer hat oder seltener da ist.' }
 ];
+// Falls noch keine Anteile gesetzt sind, teilt sich alles gleichmäßig
+const hhShares = () => {
+  const M = household.members;
+  const raw = M.map(m => typeof m.share === 'number' && m.share >= 0 ? m.share : 100 / M.length);
+  const sum = raw.reduce((a, v) => a + v, 0);
+  return sum > 0 ? raw.map(v => v / sum) : M.map(() => 1 / M.length);
+};
 const hhMode = () => household.mode || 'rotation';
 
 const $ = id => document.getElementById(id);
@@ -3408,6 +3452,69 @@ function renderWizard() {
 }
 
 // One place for everything that is configured rather than entered
+// Shows what each rule would actually do with the household's own numbers,
+// which answers "what does this mean for us" better than any description.
+function modePreview(mode) {
+  const M = household.members;
+  if (!M.length) return '';
+  const exp = (typeof lastStartIdx === 'number' && lastTotals.length)
+    ? (lastTotals[(new Date().getFullYear() * 12 + new Date().getMonth()) - lastStartIdx] || 0) : 0;
+  const sample = exp > 0;
+  const base = sample ? exp : 1000;
+  const pill = (n, v) => `<span class="mp-p"><b>${esc(n)}</b>${esc(eur.format(v))}</span>`;
+
+  if (mode === 'rotation') {
+    return `<div class="mp">Ein Konto trägt alles, der Rest wird über den Überschuss ausgeglichen —
+      keine feste Quote je Person.</div>`;
+  }
+  if (mode === 'equal') {
+    return `<div class="mp">${M.map(m => pill(m.name, base / M.length)).join('')}
+      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+  }
+  if (mode === 'fixed') {
+    const f = hhShares();
+    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (f[i] * 100).toFixed(0) + ' %', base * f[i])).join('')}
+      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+  }
+  if (mode === 'income') {
+    const mk = new Date().getFullYear() * 12 + new Date().getMonth();
+    const w = M.map(m => getInc(mk, m.id));
+    const sum = w.reduce((a, v) => a + v, 0);
+    if (sum <= 0) return `<div class="mp"><span class="mp-n">Sobald die Löhne in der Prognose
+      stehen, siehst du hier, wer wie viel zahlt.</span></div>`;
+    return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (w[i] / sum * 100).toFixed(0) + ' %', base * w[i] / sum)).join('')}
+      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten und Löhnen' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+  }
+  return '';
+}
+
+function shareEditor() {
+  const M = household.members;
+  const f = hhShares();
+  const rawSum = M.reduce((a, m) => a + (typeof m.share === 'number' ? m.share : 100 / M.length), 0);
+  return `<div class="shares">
+    ${M.map((m, i) => `<label class="share-row">
+      <span>${esc(m.name)}</span>
+      <input type="number" min="0" max="100" step="1" inputmode="numeric"
+        value="${Math.round((typeof m.share === 'number' ? m.share : 100 / M.length) * 10) / 10}"
+        onchange="setShare(${i}, this.value)">
+      <span class="share-pct">%</span>
+    </label>`).join('')}
+    <div class="share-sum ${Math.abs(rawSum - 100) < 0.5 ? '' : 'off'}">
+      Summe ${rawSum.toFixed(0)} %${Math.abs(rawSum - 100) < 0.5 ? '' :
+        ` — wird auf 100 % umgerechnet (${M.map((m, i) => (f[i] * 100).toFixed(0) + ' %').join(' / ')})`}
+    </div>
+  </div>`;
+}
+
+async function setShare(i, v) {
+  const n = parseFloat(String(v).replace(',', '.'));
+  household.members[i].share = isNaN(n) || n < 0 ? 0 : n;
+  await persistHousehold();
+  renderForecast();
+  openSettings();
+}
+
 function openSettings() {
   document.querySelectorAll(".gh-popup,.settings-sheet,[data-scrim]").forEach(p => p.remove());
   const scrim = document.createElement("div");
@@ -3415,11 +3522,17 @@ function openSettings() {
   const box = document.createElement("div");
   box.className = "sheet on gh-popup settings-sheet";
 
-  const modeRows = MODES.map(m => `
-    <button class="set-opt ${hhMode() === m.v ? 'on' : ''}" onclick="setMode('${m.v}')">
-      <span class="set-opt-l">${esc(m.l)}</span>
-      <span class="set-opt-d">${esc(m.d)}</span>
-    </button>`).join('');
+  const modeRows = MODES.map(m => {
+    const on = hhMode() === m.v;
+    return `<div class="set-opt-wrap">
+      <button class="set-opt ${on ? 'on' : ''}" onclick="setMode('${m.v}')">
+        <span class="set-opt-l">${esc(m.l)}</span>
+        <span class="set-opt-d">${esc(m.d)}</span>
+        ${on ? modePreview(m.v) : ''}
+      </button>
+      ${on && m.v === 'fixed' ? shareEditor() : ''}
+    </div>`;
+  }).join('');
 
   const THEMES = [
     { v: 'auto',  l: 'Automatisch', d: 'Folgt der Einstellung deines Geräts.' },
@@ -3948,6 +4061,14 @@ function updateIncomeCol(mk) {
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
     M.forEach(m => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(per) : '–'));
     balance(M.map(() => per));
+    return;
+  }
+
+  if (hhMode() === 'fixed') {
+    const f = hhShares();
+    put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(exp * f[i]) : '–'));
+    balance(M.map((m, i) => exp * f[i]));
     return;
   }
 
@@ -4550,6 +4671,12 @@ function renderForecast() {
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
       + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
       + balanceRows(M, iRow, calcCells)
+    : hhMode() === 'fixed'
+    ? (() => { const f = hhShares(); return sepRow('Aufteilung · feste Anteile')
+      + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
+      + M.map((m, i) => iRow('inc-payout',
+          `${esc(m.name)} zahlt · ${(f[i] * 100).toFixed(0)} %`, calcCells('pay_' + m.id))).join('')
+      + balanceRows(M, iRow, calcCells); })()
     : hhMode() === 'income'
     ? sepRow('Aufteilung · nach Einkommen')
       + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
