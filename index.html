@@ -3514,38 +3514,49 @@ function openHousehold() {
       if (n) household.members[+inp.dataset.i].name = n;
     });
     await persistHousehold();
-    close(); render();
+    close(); render(); renderForecast();
     showToast(`Haushalt: ${household.members.length} ${household.members.length === 1 ? 'Person' : 'Personen'}`);
   };
 }
 
-function hhMode2(v) {
+async function hhMode2(v) {
+  hhKeepTyped();
   household.mode = v;
-  // Keep what is typed before the sheet rebuilds
+  await hhApply();
+}
+
+// Names typed but not yet saved would be lost when the sheet rebuilds
+function hhKeepTyped() {
   document.querySelectorAll("#hh-list input").forEach(inp => {
     const n = inp.value.trim();
     if (n) household.members[+inp.dataset.i].name = n;
   });
   const nm = document.querySelector("#hh-name");
   if (nm && nm.value.trim()) household.name = nm.value.trim();
+}
+
+// Adding and removing take effect at once. Waiting for a separate save left
+// the table showing a person who was already gone from the list, and dropped
+// the change entirely if the sheet was closed instead of saved.
+async function hhApply() {
+  await persistHousehold();
+  render();
+  renderForecast();
   openHousehold();
 }
 
-function hhAdd() {
-  // Keep unsaved names while the sheet rebuilds
-  document.querySelectorAll("#hh-list input").forEach(inp => {
-    const n = inp.value.trim();
-    if (n) household.members[+inp.dataset.i].name = n;
-  });
-  household.members.push({ id: 'm' + Date.now().toString(36), name: '' });
-  openHousehold();
+async function hhAdd() {
+  hhKeepTyped();
+  household.members.push({ id: 'm' + Date.now().toString(36), name: `Person ${household.members.length + 1}` });
+  await hhApply();
 }
 
-function hhRemove(i) {
+async function hhRemove(i) {
   const m = household.members[i];
   if (!confirm(`„${m.name || 'Person'}" entfernen? Die eingetragenen Löhne dieser Person bleiben gespeichert, werden aber nicht mehr angezeigt.`)) return;
+  hhKeepTyped();
   household.members.splice(i, 1);
-  openHousehold();
+  await hhApply();
 }
 
 function openSyncConfig() {
