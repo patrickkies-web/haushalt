@@ -627,16 +627,13 @@
       animation-duration: 7s; animation-timing-function: cubic-bezier(.45,0,.35,1);
       animation-iteration-count: infinite;
     }
-    .sfig .sf-back {
-      fill: var(--accent); opacity: .45;
-      animation: sf-back 7s cubic-bezier(.45,0,.35,1) infinite;
-    }
-    /* Die Lücke, die der Topf füllt */
-    .sfig .sf-slot {
-      fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 2.5;
+    /* Die Jahresrechnung in voller Höhe — teuer ist sie hier genauso */
+    .sfig .sf-bill {
+      fill: var(--ch-bad); fill-opacity: .15;
+      stroke: var(--ch-bad); stroke-opacity: .5; stroke-width: 1;
     }
     .sfig .sf-cover {
-      fill: var(--accent); opacity: .45;
+      fill: var(--accent);
       transform-origin: 50% 100%;
       animation: sf-cover 7s cubic-bezier(.3,0,.3,1) infinite;
     }
@@ -651,9 +648,9 @@
     }
     @keyframes sf-rise { from { transform: scaleY(.03); } to { transform: none; } }
     @media (prefers-reduced-motion: reduce) {
-      .sfig .sf-b, .sfig .sf-ring, .sfig .sf-pay, .sfig .sf-back, .sfig .sf-fill { animation: none; }
-      .sfig .sf-back, .sfig .sf-ring { opacity: 0; }
-      .sfig .sf-cover { animation: none; }
+      .sfig .sf-b, .sfig .sf-ring, .sfig .sf-pay, .sfig .sf-fill { animation: none; }
+      .sfig .sf-ring  { opacity: 0; }
+      .sfig .sf-cover { animation: none; opacity: .5; }
       .sfig .sf-fill  { transform: scaleX(.62); }
     }
 
@@ -3898,18 +3895,17 @@ function settleFig(smooth) {
     pot += `${DRAIN + 9}%,100%{transform:scaleX(${lvl(0)})}`;
     kf.push(`@keyframes sf-pot{${pot}}`);
 
-    // Der Block startet unten im Topf und fährt genau in die Lücke hinauf
-    const RISE = r2(POT - (BASE - HIGH));
-    kf.push(`@keyframes sf-back{` +
-      `0%,${DRAIN}%{opacity:0;transform:translateY(${RISE}px)}` +
-      `${DRAIN + 2}%{opacity:1;transform:translateY(${RISE}px)}` +
-      `${DRAIN + 10}%{opacity:1;transform:translateY(0)}` +
-      `${DRAIN + 13}%,100%{opacity:0;transform:translateY(0)}}`);
-
-    kf.push(`@keyframes sf-cover{` +
-      `0%,${DRAIN + 9}%{transform:scaleY(.02);opacity:1}` +
-      `${DRAIN + 15}%,94%{transform:scaleY(1);opacity:1}` +
-      `99%,100%{transform:scaleY(1);opacity:0}}`);
+    // Die Lücke in der Jahresrechnung füllt sich im selben Takt: jede
+    // Einzahlung deckt ein Fünftel davon. Beim Fälligwerden wird aus dem
+    // zurückgelegten Geld die bezahlte Rechnung — dieselbe Fläche, satt.
+    let cov = `0%,${PAY[0] + 8}%{transform:scaleY(.001);opacity:.5}`;
+    PAY.forEach((t, i) => {
+      const to = PAY[i + 1] !== undefined ? PAY[i + 1] + 8 : DRAIN;
+      cov += `${t + 12}%,${to}%{transform:scaleY(${r2((i + 1) / PAY.length)});opacity:.5}`;
+    });
+    cov += `${DRAIN + 9}%,94%{transform:scaleY(1);opacity:.95}` +
+           `99%,100%{transform:scaleY(1);opacity:0}`;
+    kf.push(`@keyframes sf-cover{${cov}}`);
   } else {
     kf.push(`@keyframes sf-hit{` +
       `0%,${DRAIN}%{transform:scaleY(1)}` +
@@ -3935,11 +3931,13 @@ function settleFig(smooth) {
       continue;
     }
     if (i === SPIKE) {
-      // Der eigene Beitrag steht, der Rest wächst aus dem Topf nach
+      // Die Rechnung steht von Anfang an in voller Höhe da — teuer ist sie
+      // hier genauso, nur gedeckt. Der eigene Beitrag trägt den Sockel,
+      // darüber füllt sich, was aus dem Topf schon zurückgelegt ist.
+      g += `<rect class="sf-bill" x="${x}" y="${r2(BASE - HIGH)}"
+        width="${W}" height="${HIGH}" rx="3"/>`;
       g += `<rect class="sf-b" style="animation-delay:${i * 55}ms"
         x="${x}" y="${r2(BASE - flat)}" width="${W}" height="${r2(flat)}" rx="3"/>`;
-      g += `<rect class="sf-slot" x="${x}" y="${r2(BASE - HIGH)}"
-        width="${W}" height="${r2(need)}" rx="3"/>`;
       g += `<rect class="sf-cover" x="${x}" y="${r2(BASE - HIGH)}"
         width="${W}" height="${r2(need)}" rx="3"/>`;
     } else {
@@ -3954,11 +3952,6 @@ function settleFig(smooth) {
     }
   }
 
-  if (smooth) {
-    g += `<rect class="sf-back" x="${X(SPIKE)}" y="${r2(BASE - HIGH)}"
-      width="${W}" height="${r2(need)}" rx="2"/>`;
-  }
-
   const ticks = Array.from({ length: N }, (_, i) =>
     `<line class="sf-tick" x1="${X(i) + W / 2}" y1="${BASE + 2}" x2="${X(i) + W / 2}" y2="${BASE + 5}"/>`).join('');
 
@@ -3970,7 +3963,7 @@ function settleFig(smooth) {
 
   return `<svg class="sfig" viewBox="0 -6 ${right + 8} ${POT + POTH + 10}" role="img"
     aria-label="${smooth
-      ? 'Sechs gleich hohe Monatssäulen. In fünf Monaten wandert der überschüssige Teil ins Rotierkonto, im sechsten deckt das Rotierkonto die Jahresrechnung.'
+      ? 'Fünf gleich hohe Monatssäulen und die hohe Jahresrechnung im sechsten Monat. Was in den fünf Monaten übrig bleibt, wandert ins Rotierkonto und füllt die Rechnung Stück für Stück, bis sie gedeckt ist.'
       : 'Fünf niedrige Monatssäulen und eine hohe im sechsten Monat, in dem die Jahresrechnung fällig wird.'}">
     <style>${kf.join('')}</style>
     ${g}
