@@ -3022,7 +3022,8 @@ let daylog        = {};
 // Income keys stay the member id, so the two original people keep their data
 let household     = {
   name: '',
-  mode: 'rotation',
+  pot: 'separate',
+  mode: 'equal',
   members: [
     { id: 'patrick', name: 'Patrick' },
     { id: 'sara',    name: 'Sara' }
@@ -3031,15 +3032,36 @@ let household     = {
 
 // How the monthly costs get divided. The maths differs per mode, so the
 // bottom block of the forecast is built from whichever one is active.
+// Three questions, each independent of the other two:
+//   1. wo das Geld liegt   — getrennte Konten oder eine gemeinsame Kasse
+//   2. nach welchem Schlüssel — gleich, nach Einkommen, fest
+//   3. wann gezahlt wird   — Monat für Monat oder geglättet (siehe SMOOTHS)
+// Das Rotationskonto war früher eine Antwort auf 1 und 3 zugleich; es ist in
+// Wahrheit die geglättete Abrechnung, nicht die Art, das Geld zu führen.
+const POTS = [
+  { v: 'separate', l: 'Getrennte Konten',
+    d: 'Jeder behält sein Konto und sein Einkommen. Geteilt werden nur die gemeinsamen Kosten — wer zu viel gezahlt hat, bekommt den Rest ausgeglichen.' },
+  { v: 'joint', l: 'Gemeinsame Kasse',
+    d: 'Alle Einkommen gehen auf ein Konto, davon laufen sämtliche Kosten. Was am Monatsende übrig ist, wird verteilt oder bleibt liegen.' }
+];
+
 const MODES = [
-  { v: 'rotation', l: 'Rotationskonto',
-    d: 'Ein Konto trägt alle Kosten. Der Überschuss wird geteilt, mit Sockel und Vormonats-Ausgleich.' },
-  { v: 'equal', l: '50 : 50',
-    d: 'Die Ausgaben werden zu gleichen Teilen auf alle umgelegt — unabhängig vom Einkommen.' },
+  { v: 'equal', l: 'Zu gleichen Teilen',
+    d: 'Jeder trägt denselben Betrag — unabhängig davon, wer wie viel verdient.' },
   { v: 'income', l: 'Nach Einkommen',
-    d: 'Jeder zahlt denselben Prozentsatz seines Einkommens. Wer mehr verdient, zahlt mehr — die Belastung ist für alle gleich.' },
+    d: 'Jeder trägt denselben Prozentsatz seines Einkommens. Wer mehr verdient, trägt mehr — die Belastung ist für alle gleich schwer.' },
+  { v: 'incomefree', l: 'Nach Einkommen, mit Freibetrag',
+    d: 'Bei jedem bleibt zuerst ein fester Betrag zum Leben unangetastet. Erst was darüber liegt, zählt für den Schlüssel — das schont den, der deutlich weniger verdient.' },
   { v: 'fixed', l: 'Feste Anteile',
     d: 'Ihr legt die Prozentsätze selbst fest — etwa 60 zu 40, weil einer das größere Zimmer hat oder seltener da ist.' }
+];
+
+// Nur bei gemeinsamer Kasse: was mit dem Überschuss passiert
+const SURPLUS = [
+  { v: 'budget', l: 'Jeder bekommt ein festes Budget',
+    d: 'Ein fester Betrag pro Person geht aufs eigene Konto. Was danach noch übrig ist, bleibt auf der Kasse liegen und wird zum Polster.' },
+  { v: 'share', l: 'Erst sparen, Rest verteilen',
+    d: 'Ein fester Sparbetrag bleibt jeden Monat stehen. Alles darüber wird nach eurem Schlüssel ausgezahlt.' }
 ];
 // The other half of the question: do the expensive months hit as they come,
 // or does everyone pay the same every month and a Rotierkonto carries the peaks?
@@ -3057,7 +3079,22 @@ const hhShares = () => {
   const sum = raw.reduce((a, v) => a + v, 0);
   return sum > 0 ? raw.map(v => v / sum) : M.map(() => 1 / M.length);
 };
-const hhMode = () => household.mode || 'rotation';
+const hhMode    = () => household.mode || 'equal';
+const hhPot     = () => household.pot || 'separate';
+const hhSurplus = () => household.surplus || 'budget';
+// Was bei jedem unangetastet bleibt, bevor der Einkommensschlüssel greift
+const hhFree    = () => typeof household.free === 'number' && household.free >= 0 ? household.free : 0;
+
+// 'rotation' was both a way of holding the money and a way of settling it.
+// It becomes what it always was: one joint account, split equally, smoothed.
+function hhMigrate() {
+  if (household.mode === 'rotation') {
+    household.pot    = 'joint';
+    household.mode   = 'equal';
+    household.smooth = true;
+  }
+  if (!household.pot) household.pot = 'separate';
+}
 
 const $ = id => document.getElementById(id);
 
@@ -3159,6 +3196,7 @@ async function load() {
       if (d && Array.isArray(d.members) && d.members.length) household = d;
     }
   } catch (e) {}
+  hhMigrate();
   // 'prevSara' / 'prevPatrick' predate per-member keys
   Object.values(income).forEach(m => {
     if (!m || typeof m !== 'object') return;
@@ -3454,7 +3492,10 @@ const needsSetup = () => !household.name && subs.length === 0;
 function wizStart() {
   wizDraft = {
     name: '',
-    mode: 'rotation',
+    pot: 'separate',
+    mode: 'equal',
+    surplus: 'budget',
+    free: 1000,
     smooth: true,
     members: household.members.map(m => ({ ...m }))
   };
@@ -3480,8 +3521,18 @@ function wizGo(n) {
     if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
     else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
   });
-  wizStep = Math.max(0, Math.min(3, wizStep + n));
+  // The Überschuss question only exists for a joint account
+  const steps = wizSteps();
+  wizStep = Math.max(0, Math.min(steps.length - 1, wizStep + n));
   renderWizard();
+}
+
+// Which questions this household actually has to answer
+function wizSteps() {
+  const s = ['Haushalt', 'Personen', 'Kasse', 'Schlüssel'];
+  if (wizDraft && wizDraft.pot === 'joint') s.push('Überschuss');
+  s.push('Abrechnung');
+  return s;
 }
 
 async function wizFinish() {
@@ -3489,9 +3540,12 @@ async function wizFinish() {
     if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
     else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
   });
-  household.name = wizDraft.name || 'Haushalt';
-  household.mode = wizDraft.mode;
-  household.smooth = wizDraft.mode === 'rotation' ? true : !!wizDraft.smooth;
+  household.name    = wizDraft.name || 'Haushalt';
+  household.pot     = wizDraft.pot;
+  household.mode    = wizDraft.mode;
+  household.surplus = wizDraft.surplus;
+  household.free    = wizDraft.free;
+  household.smooth  = !!wizDraft.smooth;
   household.members = wizDraft.members.map((m, i) => ({
     id: m.id, name: m.name || `Person ${i + 1}`
   }));
@@ -3503,7 +3557,7 @@ async function wizFinish() {
 
 function renderWizard() {
   const d = wizDraft;
-  const steps = ['Haushalt', 'Personen', 'Aufteilung', 'Abrechnung'];
+  const steps = wizSteps();
   const dots = steps.map((t, i) =>
     `<span class="wiz-dot ${i === wizStep ? 'on' : ''} ${i < wizStep ? 'done' : ''}">${esc(t)}</span>`).join('');
 
@@ -3532,34 +3586,69 @@ function renderWizard() {
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
-  } else if (wizStep === 2) {
+  } else if (steps[wizStep] === 'Kasse') {
     body = `
-      <h2 class="wiz-h">Wie teilt ihr auf?</h2>
-      <p class="wiz-p">Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.</p>
+      <h2 class="wiz-h">Wie führt ihr euer Geld?</h2>
+      <p class="wiz-p">Die Grundfrage, an der alles Weitere hängt: bleibt jedes Einkommen
+        dort, wo es ankommt, oder landet alles in einem Topf?</p>
+      <div class="wiz-modes">${POTS.map(p => `
+        <button class="wiz-mode ${d.pot === p.v ? 'on' : ''}" onclick="wizSet('pot','${p.v}')">
+          <span class="wiz-mode-l">${esc(p.l)}</span>
+          <span class="wiz-mode-d">${esc(p.d)}</span>
+        </button>`).join('')}</div>
+      <div class="wiz-nav">
+        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
+        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+
+  } else if (steps[wizStep] === 'Schlüssel') {
+    const joint = d.pot === 'joint';
+    body = `
+      <h2 class="wiz-h">${joint ? 'Wie teilt ihr, was übrig bleibt?' : 'Wer trägt wie viel?'}</h2>
+      <p class="wiz-p">${joint
+        ? 'Nach allen Kosten bleibt ein Überschuss. Nach welchem Verhältnis gehört der euch?'
+        : 'Nach welchem Verhältnis die gemeinsamen Kosten auf euch fallen.'}
+        Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.</p>
       <div class="wiz-modes">${MODES.map(m => `
         <button class="wiz-mode ${d.mode === m.v ? 'on' : ''}" onclick="wizSet('mode','${m.v}')">
           <span class="wiz-mode-l">${esc(m.l)}</span>
           <span class="wiz-mode-d">${esc(m.d)}</span>
         </button>`).join('')}</div>
+      ${d.mode === 'incomefree' ? `
+      <label class="hh-lbl">Freibetrag je Person · monatlich</label>
+      <input class="wiz-in" type="number" min="0" step="50" inputmode="numeric"
+        value="${d.free}" oninput="wizDraft.free = Math.max(0, +this.value || 0)">` : ''}
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+
+  } else if (steps[wizStep] === 'Überschuss') {
+    body = `
+      <h2 class="wiz-h">Und was passiert mit dem Rest?</h2>
+      <p class="wiz-p">Am Monatsende liegt auf der Kasse, was nach allen Kosten übrig ist.
+        Entweder holt sich jeder ein festes Budget und der Rest wächst als Polster —
+        oder ihr legt einen Sparbetrag fest und teilt, was darüber hinausgeht.</p>
+      <div class="wiz-modes">${SURPLUS.map(s => `
+        <button class="wiz-mode ${d.surplus === s.v ? 'on' : ''}" onclick="wizSet('surplus','${s.v}')">
+          <span class="wiz-mode-l">${esc(s.l)}</span>
+          <span class="wiz-mode-d">${esc(s.d)}</span>
+        </button>`).join('')}</div>
+      <div class="wiz-nav">
+        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
+        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+
   } else {
-    const locked = d.mode === 'rotation';
     body = `
       <h2 class="wiz-h">Und die teuren Monate?</h2>
       <p class="wiz-p">Versicherungen, Abos, Steuern — manches kommt einmal im Jahr und
         reißt den Monat auf. Ihr könnt das nehmen, wie es fällt, oder jeden Monat
         denselben Betrag zahlen und die Spitzen von einem zweiten Konto decken lassen.</p>
       <div class="wiz-modes">${SMOOTHS.map(s => `
-        <button class="wiz-mode ${(locked ? 1 : d.smooth ? 1 : 0) === s.v ? 'on' : ''}"
-          ${locked ? 'disabled style="opacity:.5"' : `onclick="wizSet('smooth',${s.v})"`}>
+        <button class="wiz-mode ${(d.smooth ? 1 : 0) === s.v ? 'on' : ''}"
+          onclick="wizSet('smooth',${s.v})">
           <span class="wiz-mode-l">${esc(s.l)}</span>
           <span class="wiz-mode-d">${esc(s.d)}</span>
           ${settleFig(!!s.v)}
         </button>`).join('')}</div>
-      ${locked ? `<p class="wiz-p">Das Rotationskonto glättet von sich aus — deshalb ist die
-        Wahl hier festgelegt. In den anderen Aufteilungen könnt ihr frei entscheiden.</p>` : ''}
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizFinish()">Fertig</button></div>`;
@@ -3582,11 +3671,6 @@ function modePreview(mode) {
   const base = sample ? exp : 1000;
   const pill = (n, v) => `<span class="mp-p"><b>${esc(n)}</b>${esc(eur.format(v))}</span>`;
 
-  if (mode === 'rotation') {
-    return `<div class="mp">Ein Konto trägt alles, der Rest wird über den Überschuss ausgeglichen —
-      keine feste Quote je Person. Die teuren Monate sind darin schon geglättet.${
-      hasOwnSplit() ? ' Posten mit eigenen Prozenten erscheinen unten als Ausgleich zwischen euch.' : ''}</div>`;
-  }
   // With real costs the preview goes through the same maths as the table, so
   // an expense with its own percentages shows up here too.
   const mkNow = new Date().getFullYear() * 12 + new Date().getMonth();
@@ -3604,17 +3688,41 @@ function modePreview(mode) {
     return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (f[i] * 100).toFixed(0) + ' %', v[i])).join('')}
       <span class="mp-n">${note}</span></div>`;
   }
-  if (mode === 'income') {
-    const mk = new Date().getFullYear() * 12 + new Date().getMonth();
-    const w = M.map(m => getInc(mk, m.id));
+  if (mode === 'income' || mode === 'incomefree') {
+    const free = mode === 'incomefree' ? hhFree() : 0;
+    const w   = M.map(m => Math.max(0, getInc(mkNow, m.id) - free));
     const sum = w.reduce((a, v) => a + v, 0);
-    if (sum <= 0) return `<div class="mp"><span class="mp-n">Sobald die Löhne in der Prognose
-      stehen, siehst du hier, wer wie viel zahlt.</span></div>`;
+    if (sum <= 0) return `<div class="mp"><span class="mp-n">${free
+      ? 'Über dem Freibetrag liegt noch nichts — trag die Löhne in der Prognose ein.'
+      : 'Sobald die Löhne in der Prognose stehen, siehst du hier, wer wie viel zahlt.'}</span></div>`;
     const v = real(w.map(x => x / sum));
     return `<div class="mp">${M.map((m, i) => pill(m.name + ' · ' + (w[i] / sum * 100).toFixed(0) + ' %', v[i])).join('')}
-      <span class="mp-n">${sample ? 'bei euren aktuellen Kosten und Löhnen' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
+      <span class="mp-n">${free
+        ? `je ${eur.format(free)} bleiben unangetastet${sample ? ', bei euren aktuellen Kosten' : ''}`
+        : (sample ? 'bei euren aktuellen Kosten und Löhnen' : 'Beispiel: 1.000 € Kosten')}</span></div>`;
   }
   return '';
+}
+
+// The Freibetrag is the whole point of that rule, so it is set where it is chosen
+function freeEditor() {
+  return `<div class="shares">
+    <label class="share-row">
+      <span>Freibetrag je Person</span>
+      <input type="number" min="0" step="50" inputmode="numeric" value="${hhFree()}"
+        onchange="setFree(this.value)">
+      <span class="share-pct">€</span>
+    </label>
+    <div class="share-sum">Monatlich, für jede Person gleich. Nur was darüber liegt, bestimmt den Schlüssel.</div>
+  </div>`;
+}
+
+async function setFree(v) {
+  const n = parseFloat(String(v).replace(',', '.'));
+  household.free = isNaN(n) || n < 0 ? 0 : n;
+  await persistHousehold();
+  renderForecast();
+  openSettings();
 }
 
 // The same six months, drawn twice. Without smoothing the yearly bill sticks
@@ -3717,21 +3825,34 @@ function openSettings() {
         ${on ? modePreview(m.v) : ''}
       </button>
       ${on && m.v === 'fixed' ? shareEditor() : ''}
+      ${on && m.v === 'incomefree' ? freeEditor() : ''}
     </div>`;
   }).join('');
 
-  const smoothRows = hhMode() === 'rotation'
-    ? `<p class="set-hint">Das Rotationskonto glättet die teuren Monate von sich aus —
-        die Wahl hast du in den anderen Aufteilungen.</p>`
-    : SMOOTHS.map(s => {
-        const on = (household.smooth === true ? 1 : 0) === s.v;
-        return `<button class="set-opt ${on ? 'on' : ''}" onclick="setSmooth(${s.v})">
-          <span class="set-opt-l">${esc(s.l)}</span>
-          <span class="set-opt-d">${esc(s.d)}</span>
-          ${settleFig(!!s.v)}
-          ${on ? smoothPreview(!!s.v) : ''}
-        </button>`;
-      }).join('');
+  const potRows = POTS.map(p => `
+    <button class="set-opt ${hhPot() === p.v ? 'on' : ''}" onclick="setPot('${p.v}')">
+      <span class="set-opt-l">${esc(p.l)}</span>
+      <span class="set-opt-d">${esc(p.d)}</span>
+    </button>`).join('');
+
+  const surplusRows = hhPot() !== 'joint' ? '' : `
+    <div class="set-sec">Überschuss</div>
+    <p class="set-hint">Was am Monatsende mit dem passiert, was nach allen Kosten übrig ist.</p>
+    ${SURPLUS.map(s => `
+      <button class="set-opt ${hhSurplus() === s.v ? 'on' : ''}" onclick="setSurplus('${s.v}')">
+        <span class="set-opt-l">${esc(s.l)}</span>
+        <span class="set-opt-d">${esc(s.d)}</span>
+      </button>`).join('')}`;
+
+  const smoothRows = SMOOTHS.map(s => {
+    const on = (household.smooth === true ? 1 : 0) === s.v;
+    return `<button class="set-opt ${on ? 'on' : ''}" onclick="setSmooth(${s.v})">
+      <span class="set-opt-l">${esc(s.l)}</span>
+      <span class="set-opt-d">${esc(s.d)}</span>
+      ${settleFig(!!s.v)}
+      ${on ? smoothPreview(!!s.v) : ''}
+    </button>`;
+  }).join('');
 
   const THEMES = [
     { v: 'auto',  l: 'Automatisch', d: 'Folgt der Einstellung deines Geräts.' },
@@ -3748,15 +3869,23 @@ function openSettings() {
     <div class="grab"></div>
     <h2>Einstellungen</h2>
 
-    <div class="set-sec">Aufteilung</div>
-    <p class="set-hint">Wie die gemeinsamen Kosten auf euch verteilt werden. Wirkt sofort,
-      ohne dass Daten verloren gehen.</p>
+    <div class="set-sec">Kassenmodell</div>
+    <p class="set-hint">Wo euer Geld liegt. Das ist die Grundfrage — alles andere
+      hängt daran. Wirkt sofort, ohne dass Daten verloren gehen.</p>
+    ${potRows}
+
+    <div class="set-sec">Schlüssel</div>
+    <p class="set-hint">${hhPot() === 'joint'
+      ? 'Nach welchem Verhältnis der Überschuss verteilt wird.'
+      : 'Nach welchem Verhältnis die gemeinsamen Kosten getragen werden.'}</p>
     ${modeRows}
+    ${surplusRows}
 
     <div class="set-sec">Abrechnung</div>
     <p class="set-hint">Ob teure Monate teuer bleiben oder ihr jeden Monat denselben
-      Betrag zahlt. An der Aufteilung ändert das nichts — nur daran, wann ihr zahlt.
-      Für die geglättete Variante braucht ihr ein zweites Konto.</p>
+      Betrag zahlt. Am Schlüssel ändert das nichts — nur daran, wann ihr zahlt.
+      Für die geglättete Variante braucht ihr ein zweites Konto.${hhPot() === 'separate'
+        ? ' Mit getrennten Konten wird daraus die klassische Haushaltskasse: jeder überweist monatlich seinen festen Betrag dorthin, die Rechnungen gehen davon ab.' : ''}</p>
     ${smoothRows}
 
     <div class="set-sec">Haushalt</div>
@@ -3791,7 +3920,25 @@ async function setMode(v) {
   render();
   renderForecast();
   openSettings();
-  showToast('Aufteilung: ' + (MODES.find(m => m.v === v) || {}).l);
+  showToast('Schlüssel: ' + (MODES.find(m => m.v === v) || {}).l);
+}
+
+async function setPot(v) {
+  household.pot = v;
+  await persistHousehold();
+  render();
+  renderForecast();
+  openSettings();
+  showToast('Kassenmodell: ' + (POTS.find(p => p.v === v) || {}).l);
+}
+
+async function setSurplus(v) {
+  household.surplus = v;
+  await persistHousehold();
+  render();
+  renderForecast();
+  openSettings();
+  showToast('Überschuss: ' + (SURPLUS.find(s => s.v === v) || {}).l);
 }
 
 async function setSmooth(v) {
@@ -3823,7 +3970,7 @@ function openHousehold() {
     <label class="hh-lbl">Personen</label>
     <div class="hh-list" id="hh-list">${rows}</div>
     <button class="btn-ghost hh-add" onclick="hhAdd()">+ Person hinzufügen</button>
-    <label class="hh-lbl">Aufteilung</label>
+    <label class="hh-lbl">Schlüssel</label>
     <div class="wiz-modes">${MODES.map(m => `
       <button class="wiz-mode ${hhMode() === m.v ? 'on' : ''}" onclick="hhMode2('${m.v}')">
         <span class="wiz-mode-l">${esc(m.l)}</span>
@@ -4303,12 +4450,13 @@ function baseSharesNow() {
 
 function splitRuleLabel() {
   const M = household.members;
-  if (hhMode() === 'equal')  return 'Es gilt die Haushaltsregel: alle zu gleichen Teilen.';
-  if (hhMode() === 'fixed')  return 'Es gilt die Haushaltsregel: ' +
-    M.map((m, i) => `${m.name} ${fmtPct(hhShares()[i] * 100)} %`).join(', ') + '.';
-  if (hhMode() === 'income') return 'Es gilt die Haushaltsregel: Anteil nach Einkommen.';
-  return 'Es gilt die Haushaltsregel: im Rotationskonto trägt jeder gleich viel. ' +
-         'Eigene Prozente erscheinen unten als Ausgleich zwischen euch.';
+  const rule = hhMode() === 'fixed'
+    ? M.map((m, i) => `${m.name} ${fmtPct(hhShares()[i] * 100)} %`).join(', ')
+    : hhMode() === 'income' ? 'Anteil nach Einkommen'
+    : hhMode() === 'incomefree' ? `Anteil nach Einkommen über ${eur.format(hhFree())}`
+    : 'alle zu gleichen Teilen';
+  return 'Es gilt der Haushaltsschlüssel: ' + rule + '.' + (hhPot() === 'joint'
+    ? ' Bei gemeinsamer Kasse erscheinen eigene Prozente unten als Ausgleich zwischen euch.' : '');
 }
 
 function splitAmount(pfx) {
@@ -4420,19 +4568,23 @@ function duePartsByMember(mk, base) {
 // its own, so it is measured against equal parts.
 function baseAt(mk) {
   const M = household.members, n = M.length || 1;
+  const even = M.map(() => 1 / n);
   if (hhMode() === 'fixed') return hhShares();
-  if (hhMode() === 'income') {
-    const w = M.map(m => getInc(mk, m.id));
+  if (hhMode() === 'income' || hhMode() === 'incomefree') {
+    // With a Freibetrag only the income above it counts, so the one earning
+    // 2.000 next to 10.000 is not measured on money they need to live.
+    const free = hhMode() === 'incomefree' ? hhFree() : 0;
+    const w = M.map(m => Math.max(0, getInc(mk, m.id) - free));
     const s = w.reduce((a, v) => a + v, 0);
     if (s > 0) return w.map(v => v / s);
   }
-  return M.map(() => 1 / n);
+  return even;
 }
 
 // Smoothing is a question of its own: take the expensive months as they come,
 // or pay the same amount every month and let the Rotierkonto carry the peaks.
 // The Rotationskonto-Modus has it built in.
-const smoothOn = () => hhMode() === 'rotation' || household.smooth === true;
+const smoothOn = () => household.smooth === true;
 
 // Ø irregular due per member over the smoothing window — each person's
 // standing transfer to the Rotierkonto.
@@ -4449,11 +4601,23 @@ function avgIrrByMember(fromMk, len) {
 
 // What each member pays this month: the recurring part as it falls, plus the
 // standing rate for everything the Rotierkonto smooths.
-function sollByMember(mk, base) {
+// plain ignores the per-cost percentages, which is how the Ausgleich is read
+// off: the difference between what the key alone says and what they do.
+function sollByMember(mk, base, plain) {
+  const M = household.members;
+  const flat = () => {
+    const tot = costsInMonth(mk).reduce((a, c) => a + c.amount, 0);
+    return base.map(v => tot * v);
+  };
   if (!smoothOn() || !lastAvgIrrBy || mk < lastWinFromMk)
-    return dueByMember(mk, base);
-  const { reg } = duePartsByMember(mk, base);
-  return reg.map((v, i) => v + (lastAvgIrrBy[i] || 0));
+    return plain ? flat() : dueByMember(mk, base);
+  const parts = duePartsByMember(mk, base);
+  if (plain) {
+    const reg = costsInMonth(mk).filter(c => !c.irr).reduce((a, c) => a + c.amount, 0);
+    const avg = lastAvgIrrBy.reduce((a, v) => a + v, 0);
+    return base.map(v => reg * v + avg * v);
+  }
+  return parts.reg.map((v, i) => v + (lastAvgIrrBy[i] || 0));
 }
 
 function updateIncomeCol(mk) {
@@ -4480,78 +4644,71 @@ function updateIncomeCol(mk) {
       mk >= lastWinFromMk && lastAvgIrrBy[i] > 0.005 ? eur.format(lastAvgIrrBy[i]) : '–'));
   };
 
-  if (hhMode() === 'equal') {
-    const soll = sollByMember(mk, M.map(() => 1 / (M.length || 1)));
-    put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
-    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
-    rotRow();
-    balance(soll);
-    return;
-  }
+  // What the per-cost percentages move between you, measured against the
+  // household key alone: the same sum, only carried by someone else.
+  const devRow = (base) => {
+    const plain = sollByMember(mk, base, true);
+    const mine  = sollByMember(mk, base);
+    M.forEach((m, i) => {
+      const el = document.getElementById(`cc-dev_${m.id}-${mk}`);
+      if (!el) return;
+      const d = mine[i] - plain[i];
+      el.textContent = Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
+      el.classList.toggle('rot-net-neg', d < -0.005);
+      el.classList.toggle('rot-net-pos', d > 0.005);
+    });
+  };
 
-  if (hhMode() === 'fixed') {
-    const soll = sollByMember(mk, hhShares());
-    put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
-    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
-    rotRow();
-    balance(soll);
-    return;
-  }
+  const base = baseAt(mk);
 
-  if (hhMode() === 'income') {
+  // ── Getrennte Konten: jeder trägt seinen Anteil, der Rest wird ausgeglichen
+  if (hhPot() === 'separate') {
     const wages = M.map(m => getInc(mk, m.id));
     const sum   = wages.reduce((a, v) => a + v, 0);
-    // The rate that covers the costs exactly: p = Ausgaben / Gesamteinkommen
-    const p = sum > 0 ? exp / sum : 0;
-    put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
-    put(`cc-exp-${mk}`,    exp ? eur.format(exp) : '–');
-    put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
-    const soll = sum ? sollByMember(mk, wages.map(w => w / sum)) : M.map(() => 0);
-    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, sum ? eur.format(soll[i]) : '–'));
+    if (hhMode() === 'income' || hhMode() === 'incomefree') {
+      // Der Satz, der die Kosten genau deckt: p = Ausgaben / Gesamteinkommen
+      const p = sum > 0 ? exp / sum : 0;
+      put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
+      put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
+    }
+    const soll = sollByMember(mk, base);
+    put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
     rotRow();
     balance(soll);
     return;
   }
 
+  // ── Gemeinsame Kasse: alles läuft über ein Konto, der Überschuss wird verteilt
   const wages = M.map(m => getInc(mk, m.id));
   const prevs = M.map(m => getInc(mk, 'prev_' + m.id));
   const o     = getInc(mk, 'other');
   const sock  = getInc(mk, 'sockel');
+  const save  = getInc(mk, 'sparen');
 
-  const tot    = wages.reduce((a, v) => a + v, 0) + o;
-  const surp   = tot - (lastTotals[mk - lastStartIdx] || 0);
-  const share  = M.length ? surp / M.length : 0;
-  const remain = surp - sock * M.length - prevs.reduce((a, v) => a + v, 0);
-  const hasData = wages.some(v => v) || o || sock || prevs.some(v => v);
+  const tot   = wages.reduce((a, v) => a + v, 0) + o;
+  const surp  = tot - exp;
+  const budget = hhSurplus() === 'budget';
+  const remain = budget
+    ? surp - sock * M.length - prevs.reduce((a, v) => a + v, 0)
+    : surp - save;
+  const hasData = wages.some(v => v) || o || sock || save || prevs.some(v => v);
 
   const set = (id, v) => {
     const el = document.getElementById(id);
     if (el) el.textContent = hasData ? eur.format(v) : '–';
   };
 
+  put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');   // costs stand without wages
   set(`cc-total-${mk}`,  tot);
   set(`cc-surp-${mk}`,   surp);
-  set(`cc-share-${mk}`,  share);
   set(`cc-remain-${mk}`, remain);
-  M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`, sock + prevs[i]));
-
-  // Rotation runs on equal parts. Where a single cost carries its own
-  // percentages, one of you owes more than half — that difference is a
-  // transfer between you, on top of the account.
-  const n    = M.length || 1;
-  const even = M.map(() => 1 / n);
-  const { reg, irr } = duePartsByMember(mk, even);
-  const smoothed = lastAvgIrrBy && mk >= lastWinFromMk ? lastAvgIrrBy : irr;
-  const mine = reg.map((v, i) => v + smoothed[i]);
-  const avg  = mine.reduce((a, v) => a + v, 0) / n;
-  M.forEach((m, i) => {
-    const el = document.getElementById(`cc-dev_${m.id}-${mk}`);
-    if (!el) return;
-    const d = mine[i] - avg;
-    el.textContent = Math.abs(d) < 0.005 ? '0,00 €' : (d > 0 ? '+' : '−') + eur.format(Math.abs(d));
-    el.classList.toggle('rot-net-neg', d < -0.005);
-    el.classList.toggle('rot-net-pos', d > 0.005);
-  });
+  // Der Überschuss nach eurem Schlüssel — die Zeile über der Auszahlung
+  M.forEach((m, i) => set(`cc-share_${m.id}-${mk}`, surp * base[i]));
+  M.forEach((m, i) => set(`cc-pay_${m.id}-${mk}`,
+    budget ? sock + prevs[i] : Math.max(0, remain) * base[i] + prevs[i]));
+  rotRow();
+  devRow(base);
 }
 
 // Which member's account a cost is debited from — the basis for who owes whom
@@ -5125,43 +5282,45 @@ function renderForecast() {
   // the Rotierkonto, not in the column.
   const head0 = smoothOn() ? 'Geglättet' : 'Aufteilung';
 
-  const incRows = hhMode() === 'equal'
-    ? sepRow(head0 + ' · 50 : 50')
+  const keyLbl = { equal: 'zu gleichen Teilen', income: 'nach Einkommen',
+                   incomefree: 'nach Einkommen · Freibetrag', fixed: 'feste Anteile' }[hhMode()] || '';
+  const needsWages = hhMode() === 'income' || hhMode() === 'incomefree';
+  const devBlock = hasOwnSplit() && M.length > 1
+    ? sepRow('Ausgleich · + trägt mehr, − weniger')
+      + M.map(m => iRow('rot-net', esc(m.name), calcCells('dev_' + m.id))).join('')
+    : '';
+
+  const incRows = hhPot() === 'separate'
+    ? sepRow(head0 + ' · ' + keyLbl)
+      + (needsWages
+          ? M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
+            + iRow('inc-calc', 'Gesamteinkommen', calcCells('inctot'))
+          : '')
       + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
-      + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
+      + (needsWages ? iRow('inc-calc muted', 'Anteil vom Einkommen', calcCells('pct')) : '')
+      + M.map((m, i) => iRow('inc-payout', hhMode() === 'fixed'
+          ? `${esc(m.name)} zahlt · ${(hhShares()[i] * 100).toFixed(0)} %`
+          : `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
       + balanceRows(M, iRow, calcCells)
-    : hhMode() === 'fixed'
-    ? (() => { const f = hhShares(); return sepRow(head0 + ' · feste Anteile')
-      + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
-      + M.map((m, i) => iRow('inc-payout',
-          `${esc(m.name)} zahlt · ${(f[i] * 100).toFixed(0)} %`, calcCells('pay_' + m.id))).join('')
-      + balanceRows(M, iRow, calcCells); })()
-    : hhMode() === 'income'
-    ? sepRow(head0 + ' · nach Einkommen')
+
+    : sepRow('Gemeinsame Kasse · Verteilung ' + keyLbl)
       + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
-      + iRow('inc-calc', 'Gesamteinkommen', calcCells('inctot'))
-      + iRow('inc-calc', 'Ausgaben gesamt', calcCells('exp'))
-      + iRow('inc-calc muted', 'Anteil vom Einkommen', calcCells('pct'))
-      + M.map(m => iRow('inc-payout', `${esc(m.name)} zahlt`, calcCells('pay_' + m.id))).join('')
-      + balanceRows(M, iRow, calcCells)
-    :
-    sepRow('Einnahmen &amp; Auszahlung')
-    + M.map(m => iRow('inc-input', `${esc(m.name)} Lohn`, inputCells(m.id))).join('')
-    + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
-    + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
-    + iRow('inc-calc',  'Überschuss',         calcCells('surp'))
-    + iRow('inc-calc muted', `Überschuss / ${M.length}`, calcCells('share'))
-    + M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
-    + iRow('inc-input', 'Sockel / Person',    inputCells('sockel'))
-    + iRow('inc-calc remain', 'Verbleibend',  calcCells('remain'))
-    + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('')
-    + (hasOwnSplit() && M.length > 1
-        ? sepRow('Ausgleich · + zahlt, − bekommt')
-          + M.map(m => iRow('rot-net', esc(m.name), calcCells('dev_' + m.id))).join('')
-        : '');
+      + iRow('inc-input', 'Sonstige Einnahmen', inputCells('other'))
+      + iRow('inc-calc',  'Gesamteinnahmen',    calcCells('total'))
+      + iRow('inc-calc',  'Ausgaben gesamt',    calcCells('exp'))
+      + iRow('inc-calc',  'Überschuss',         calcCells('surp'))
+      + M.map(m => iRow('inc-calc muted', `davon ${esc(m.name)}`, calcCells('share_' + m.id))).join('')
+      + M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
+      + (hhSurplus() === 'budget'
+          ? iRow('inc-input', 'Sockel / Person', inputCells('sockel'))
+            + iRow('inc-calc remain', 'Bleibt auf der Kasse', calcCells('remain'))
+          : iRow('inc-input', 'Sparen / Monat', inputCells('sparen'))
+            + iRow('inc-calc remain', 'Zu verteilen', calcCells('remain')))
+      + M.map(m => iRow('inc-payout', `${esc(m.name)} erhält`, calcCells('pay_' + m.id))).join('')
+      + devBlock;
 
   // Who puts how much into the Rotierkonto every month
-  const rotPerPerson = (!hasIrr || M.length < 2 || hhMode() === 'rotation') ? '' :
+  const rotPerPerson = (!hasIrr || M.length < 2) ? '' :
     M.map(m => iRow('inc-calc muted', `davon ${esc(m.name)}`, calcCells('rot_' + m.id))).join('');
 
   lastTotals   = totals;    // all months so past-column lookups work
