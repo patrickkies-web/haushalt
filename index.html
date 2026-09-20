@@ -600,6 +600,46 @@
     }
     .split-sum { font-size: 12.5px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
 
+    /* A year of costs, drawn twice: as the months hand it over, and levelled */
+    .sfig { display: block; width: 100%; height: auto; margin: 14px 0 6px; }
+    .sfig .sf-b     { fill: var(--accent); }
+    .sfig .sf-b.hot { fill: var(--ch-bad); }
+    .sfig .sf-b, .sfig .sf-x, .sfig .sf-fill {
+      transform-box: fill-box;
+    }
+    .sfig .sf-b {
+      transform-origin: 50% 100%;
+      animation: sf-rise .5s cubic-bezier(.2,.75,.25,1) both;
+    }
+    .sfig .sf-x {
+      fill: var(--accent-tint);
+      stroke: var(--accent);
+      stroke-width: 1;
+      stroke-dasharray: 3 2.5;
+      animation: sf-drop .6s cubic-bezier(.2,.75,.25,1) both .55s;
+    }
+    .sfig .sf-base  { stroke: var(--line); stroke-width: 1; }
+    .sfig .sf-t     { fill: var(--faint); font-size: 7.5px; letter-spacing: .04em; }
+    .sfig .sf-track { fill: var(--sunken); }
+    .sfig .sf-fill  {
+      fill: var(--accent);
+      opacity: .5;
+      transform-origin: 0% 50%;
+      animation: sf-pot 5s cubic-bezier(.4,0,.5,1) infinite;
+    }
+    @keyframes sf-rise { from { transform: scaleY(.03); } to { transform: none; } }
+    @keyframes sf-drop { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+    @keyframes sf-pot {
+      0%, 4%  { transform: scaleX(.12); }
+      44%     { transform: scaleX(.94); }
+      56%     { transform: scaleX(.18); }
+      100%    { transform: scaleX(.12); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sfig .sf-b, .sfig .sf-x { animation: none; }
+      .sfig .sf-fill { animation: none; transform: scaleX(.6); }
+    }
+
     .chips {
       display: flex;
       flex-wrap: wrap;
@@ -3005,9 +3045,9 @@ const MODES = [
 // or does everyone pay the same every month and a Rotierkonto carries the peaks?
 const SMOOTHS = [
   { v: 0, l: 'Monat für Monat',
-    d: 'Ihr zahlt, was gerade anfällt. Ein Monat mit Jahresrechnung wird spürbar teurer als der davor.' },
+    d: 'Ihr zahlt, was gerade anfällt. Der Monat mit der Jahresrechnung wird spürbar teurer als der davor — dafür genügt euer normales Konto.' },
   { v: 1, l: 'Geglättet · Rotierkonto',
-    d: 'Jeder zahlt jeden Monat denselben Betrag. Quartals- und Jahresrechnungen liegen längst auf dem Rotierkonto, wenn sie fällig werden.' }
+    d: 'Jeder zahlt jeden Monat denselben Betrag. Was zu viel ist, sammelt sich an, bis die Quartals- oder Jahresrechnung kommt. Dafür braucht ihr ein zweites Konto — ein Unter- oder Tagesgeldkonto reicht.' }
 ];
 
 // Falls noch keine Anteile gesetzt sind, teilt sich alles gleichmäßig
@@ -3440,7 +3480,7 @@ function wizGo(n) {
     if (inp.dataset.member !== undefined) wizDraft.members[+inp.dataset.member].name = inp.value.trim();
     else if (inp.id === 'wiz-hhname') wizDraft.name = inp.value.trim();
   });
-  wizStep = Math.max(0, Math.min(2, wizStep + n));
+  wizStep = Math.max(0, Math.min(3, wizStep + n));
   renderWizard();
 }
 
@@ -3451,7 +3491,7 @@ async function wizFinish() {
   });
   household.name = wizDraft.name || 'Haushalt';
   household.mode = wizDraft.mode;
-  household.smooth = !!wizDraft.smooth;
+  household.smooth = wizDraft.mode === 'rotation' ? true : !!wizDraft.smooth;
   household.members = wizDraft.members.map((m, i) => ({
     id: m.id, name: m.name || `Person ${i + 1}`
   }));
@@ -3463,7 +3503,7 @@ async function wizFinish() {
 
 function renderWizard() {
   const d = wizDraft;
-  const steps = ['Haushalt', 'Personen', 'Aufteilung'];
+  const steps = ['Haushalt', 'Personen', 'Aufteilung', 'Abrechnung'];
   const dots = steps.map((t, i) =>
     `<span class="wiz-dot ${i === wizStep ? 'on' : ''} ${i < wizStep ? 'done' : ''}">${esc(t)}</span>`).join('');
 
@@ -3492,7 +3532,7 @@ function renderWizard() {
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
-  } else {
+  } else if (wizStep === 2) {
     body = `
       <h2 class="wiz-h">Wie teilt ihr auf?</h2>
       <p class="wiz-p">Lässt sich jederzeit umstellen, ohne dass Daten verloren gehen.</p>
@@ -3501,15 +3541,25 @@ function renderWizard() {
           <span class="wiz-mode-l">${esc(m.l)}</span>
           <span class="wiz-mode-d">${esc(m.d)}</span>
         </button>`).join('')}</div>
-      ${d.mode === 'rotation' ? '' : `
-      <h2 class="wiz-h" style="margin-top:26px">Und die teuren Monate?</h2>
-      <p class="wiz-p">Jahres- und Quartalsrechnungen fallen geballt an. Ihr könnt sie
-        nehmen, wie sie kommen — oder jeden Monat denselben Betrag zahlen.</p>
+      <div class="wiz-nav">
+        <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
+        <button class="btn-primary" onclick="wizGo(1)">Weiter</button></div>`;
+  } else {
+    const locked = d.mode === 'rotation';
+    body = `
+      <h2 class="wiz-h">Und die teuren Monate?</h2>
+      <p class="wiz-p">Versicherungen, Abos, Steuern — manches kommt einmal im Jahr und
+        reißt den Monat auf. Ihr könnt das nehmen, wie es fällt, oder jeden Monat
+        denselben Betrag zahlen und die Spitzen von einem zweiten Konto decken lassen.</p>
       <div class="wiz-modes">${SMOOTHS.map(s => `
-        <button class="wiz-mode ${(d.smooth ? 1 : 0) === s.v ? 'on' : ''}" onclick="wizSet('smooth',${s.v})">
+        <button class="wiz-mode ${(locked ? 1 : d.smooth ? 1 : 0) === s.v ? 'on' : ''}"
+          ${locked ? 'disabled style="opacity:.5"' : `onclick="wizSet('smooth',${s.v})"`}>
           <span class="wiz-mode-l">${esc(s.l)}</span>
           <span class="wiz-mode-d">${esc(s.d)}</span>
-        </button>`).join('')}</div>`}
+          ${settleFig(!!s.v)}
+        </button>`).join('')}</div>
+      ${locked ? `<p class="wiz-p">Das Rotationskonto glättet von sich aus — deshalb ist die
+        Wahl hier festgelegt. In den anderen Aufteilungen könnt ihr frei entscheiden.</p>` : ''}
       <div class="wiz-nav">
         <button class="btn-ghost" onclick="wizGo(-1)">Zurück</button>
         <button class="btn-primary" onclick="wizFinish()">Fertig</button></div>`;
@@ -3565,6 +3615,44 @@ function modePreview(mode) {
       <span class="mp-n">${sample ? 'bei euren aktuellen Kosten und Löhnen' : 'Beispiel: 1.000 € Kosten'}</span></div>`;
   }
   return '';
+}
+
+// The same six months, drawn twice. Without smoothing the yearly bill sticks
+// out of the fourth column; with it, every column is the same height and the
+// difference comes out of the Rotierkonto — the dashed block on top.
+function settleFig(smooth) {
+  const H    = [22, 22, 22, 56, 22, 22];
+  const flat = Math.round(H.reduce((a, v) => a + v, 0) / H.length);
+  const BASE = 62, W = 26, GAP = 12, X0 = 8;
+  const rightX = X0 + 5 * (W + GAP) + W;
+
+  const bars = H.map((h, i) => {
+    const x  = X0 + i * (W + GAP);
+    const bh = smooth ? flat : h;
+    const hot = !smooth && h > flat ? ' hot' : '';
+    return `<rect class="sf-b${hot}" style="animation-delay:${i * 55}ms"
+        x="${x}" y="${BASE - bh}" width="${W}" height="${bh}" rx="3"/>${
+      smooth && h > flat
+        ? `<rect class="sf-x" x="${x}" y="${BASE - h}" width="${W}" height="${h - flat}" rx="3"/>`
+        : ''}`;
+  }).join('');
+
+  const pot = smooth ? `
+    <text class="sf-t" x="${X0}" y="89">ROTIERKONTO</text>
+    <rect class="sf-track" x="${X0}" y="93" width="${rightX - X0}" height="7" rx="3.5"/>
+    <rect class="sf-fill"  x="${X0}" y="93" width="${rightX - X0}" height="7" rx="3.5"/>` : `
+    <text class="sf-t" x="${X0}" y="93">EIN KONTO GENÜGT</text>`;
+
+  return `<svg class="sfig" viewBox="0 0 ${rightX + 8} 104" role="img"
+    aria-label="${smooth
+      ? 'Sechs gleich hohe Monatssäulen; die Jahresrechnung im vierten Monat wird aus dem Rotierkonto gedeckt.'
+      : 'Fünf niedrige Monatssäulen und eine hohe im vierten Monat, in dem die Jahresrechnung fällig wird.'}">
+    ${bars}
+    <line class="sf-base" x1="${X0 - 4}" y1="${BASE + .5}" x2="${rightX + 4}" y2="${BASE + .5}"/>
+    <text class="sf-t" x="${X0 + 3 * (W + GAP) + W / 2}" y="${BASE + 13}"
+      text-anchor="middle">JAHRESRECHNUNG</text>
+    ${pot}
+  </svg>`;
 }
 
 // What the two settlement options mean in euros, on the household's own costs
@@ -3640,6 +3728,7 @@ function openSettings() {
         return `<button class="set-opt ${on ? 'on' : ''}" onclick="setSmooth(${s.v})">
           <span class="set-opt-l">${esc(s.l)}</span>
           <span class="set-opt-d">${esc(s.d)}</span>
+          ${settleFig(!!s.v)}
           ${on ? smoothPreview(!!s.v) : ''}
         </button>`;
       }).join('');
@@ -3666,7 +3755,8 @@ function openSettings() {
 
     <div class="set-sec">Abrechnung</div>
     <p class="set-hint">Ob teure Monate teuer bleiben oder ihr jeden Monat denselben
-      Betrag zahlt. An der Aufteilung ändert das nichts — nur daran, wann ihr zahlt.</p>
+      Betrag zahlt. An der Aufteilung ändert das nichts — nur daran, wann ihr zahlt.
+      Für die geglättete Variante braucht ihr ein zweites Konto.</p>
     ${smoothRows}
 
     <div class="set-sec">Haushalt</div>
