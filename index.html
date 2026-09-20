@@ -564,6 +564,42 @@
       box-shadow: 0 1px 3px rgba(20,30,25,.1);
     }
 
+    .split-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .split-row:last-of-type { border-bottom: none; }
+    .split-name { flex: 1; font-size: 15px; font-weight: 500; }
+    .split-row input {
+      width: 74px;
+      text-align: right;
+      font-family: inherit;
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      background: var(--sunken);
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 11px 12px;
+    }
+    .split-row input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--surface);
+    }
+    .split-pct { font-size: 14px; color: var(--muted); }
+    .split-eur {
+      width: 82px;
+      text-align: right;
+      font-size: 13.5px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .split-sum { font-size: 12.5px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+
     .chips {
       display: flex;
       flex-wrap: wrap;
@@ -2749,6 +2785,10 @@
       <div class="chips" id="o-payer"></div>
     </div>
     <div class="field">
+      <label>Aufteilung</label>
+      <div id="o-split"></div>
+    </div>
+    <div class="field">
       <label>Notiz (optional)</label>
       <textarea id="o-note" placeholder="z. B. Farbe fürs Wohnzimmer"></textarea>
     </div>
@@ -2803,6 +2843,13 @@
       </div>
     </div>
     <div class="fstep" data-s="6">
+      <div class="fstep-q">Wie wird geteilt?</div>
+      <div class="fstep-h">Normalerweise gilt die Haushaltsregel. Nutzt eine Ausgabe nur einer teilweise — etwa ein Kombi-Abo — kannst du hier eigene Prozente vergeben.</div>
+      <div class="field">
+        <div id="f-split"></div>
+      </div>
+    </div>
+    <div class="fstep" data-s="7">
       <div class="fstep-q">Wann ist die nächste Zahlung?</div>
       <div class="fstep-h">Optional — ohne Datum wird ab diesem Monat gerechnet.</div>
       <div class="field">
@@ -4018,25 +4065,182 @@ function setInc(mk, field, val) {
 
 // What each member's account actually carries in a given month — the sum of
 // the recurring costs due that month plus the one-offs booked to it.
+// Which costs fall in a given month. One source of truth, matching the rules
+// the forecast table draws with — an undated subscription is anchored to the
+// current month, not to whichever month is being asked about.
+function costsInMonth(mk) {
+  const stepOf = { monthly: 1, quarterly: 3, yearly: 12 };
+  const now = new Date();
+  const curMk = now.getFullYear() * 12 + now.getMonth();
+  const out = [];
+  subs.forEach(s => {
+    const step = stepOf[s.cycle] || 1;
+    const d = s.date ? new Date(s.date + "T00:00:00") : now;
+    const bi = d.getFullYear() * 12 + d.getMonth();
+    const phase = (((mk - bi) % step) + step) % step === 0;
+    if (phase && (bi <= curMk || mk >= bi) && mk < subDeactMk(s))
+      out.push({ amount: s.amount, payer: s.payer, split: s.split });
+  });
+  oneoffs.forEach(o => {
+    if (oneMk(o) === mk) out.push({ amount: o.amount, payer: o.payer, split: o.split });
+  });
+  return out;
+}
+
+// A per-cost split overrides the household rule for that one item. Returns a
+// share per member summing to 1, or null when the household rule applies.
+function splitOf(item) {
+  const sp = item.split;
+  if (!sp || typeof sp !== 'object') return null;
+  const vals = household.members.map(m => {
+    const v = sp[m.id];
+    return typeof v === 'number' && v >= 0 ? v : 0;
+  });
+  const sum = vals.reduce((a, v) => a + v, 0);
+  return sum > 0 ? vals.map(v => v / sum) : null;
+}
+
 function paidByMember(mk) {
   const out = {};
   household.members.forEach(m => { out[m.id] = 0; });
-  const stepOf = { monthly: 1, quarterly: 3, yearly: 12 };
-  subs.forEach(s => {
-    if (!s.payer || !(s.payer in out)) return;
-    const step = stepOf[s.cycle] || 1;
-    const d = s.date ? new Date(s.date + "T00:00:00") : null;
-    const bi = d ? d.getFullYear() * 12 + d.getMonth() : mk;
-    if ((((mk - bi) % step) + step) % step !== 0) return;
-    const deact = subDeactMk(s);
-    if (mk >= deact) return;
-    out[s.payer] += s.amount;
-  });
-  oneoffs.forEach(o => {
-    if (!o.payer || !(o.payer in out)) return;
-    if (oneMk(o) === mk) out[o.payer] += o.amount;
+  costsInMonth(mk).forEach(c => {
+    if (c.payer && c.payer in out) out[c.payer] += c.amount;
   });
   return out;
+}
+
+// What each member owes: per-cost split where one is set, household rule
+// otherwise. base is the household share per member, summing to 1.
+function dueByMember(mk, base) {
+  const M = household.members;
+  const out = M.map(() => 0);
+  costsInMonth(mk).forEach(c => {
+    const sp = splitOf(c);
+    M.forEach((m, i) => { out[i] += c.amount * (sp ? sp[i] : base[i]); });
+  });
+  return out;
+}
+
+// ── Split editor ───────────────────────────────────────────────────────────
+// One expense can carry its own percentages — a combo subscription that only
+// one of you fully uses. 'f' is the subscription sheet, 'o' the one-off sheet.
+const splitDraft = { f: null, o: null };
+
+const fmtPct = v => String(Math.round((v || 0) * 10) / 10).replace('.', ',');
+
+// The household's own shares right now — the sensible starting point when
+// someone switches an expense to its own percentages.
+function baseSharesNow() {
+  const M = household.members, n = M.length || 1;
+  if (hhMode() === 'fixed') return hhShares();
+  if (hhMode() === 'income') {
+    const now = new Date();
+    const mk  = now.getFullYear() * 12 + now.getMonth();
+    const w   = M.map(m => getInc(mk, m.id));
+    const s   = w.reduce((a, v) => a + v, 0);
+    if (s > 0) return w.map(v => v / s);
+  }
+  return M.map(() => 1 / n);
+}
+
+function splitRuleLabel() {
+  const M = household.members;
+  if (hhMode() === 'equal')  return 'Es gilt die Haushaltsregel: alle zu gleichen Teilen.';
+  if (hhMode() === 'fixed')  return 'Es gilt die Haushaltsregel: ' +
+    M.map((m, i) => `${m.name} ${fmtPct(hhShares()[i] * 100)} %`).join(', ') + '.';
+  if (hhMode() === 'income') return 'Es gilt die Haushaltsregel: Anteil nach Einkommen.';
+  return 'Es gilt die Haushaltsregel. Im Rotationskonto wird nicht pro Person aufgeteilt — ' +
+         'eigene Prozente wirken erst in den Modi 50:50, feste Anteile oder nach Einkommen.';
+}
+
+function splitAmount(pfx) {
+  const el = $(pfx + '-amount');
+  const a  = el ? parseAmount(el.value) : NaN;
+  return isNaN(a) || a < 0 ? 0 : a;
+}
+
+function buildSplit(pfx) {
+  const host = $(pfx + '-split');
+  if (!host) return;
+  const cur = splitDraft[pfx];
+  const on  = !!cur;
+  let html = `<div class="seg">
+      <button type="button" class="${on ? '' : 'active'}" onclick="setSplitMode('${pfx}',0)">Wie im Haushalt</button>
+      <button type="button" class="${on ? 'active' : ''}" onclick="setSplitMode('${pfx}',1)">Eigene Prozente</button>
+    </div>`;
+  if (on) {
+    html += '<div style="margin-top:14px">' + household.members.map((m, i) =>
+      `<div class="split-row">
+        <span class="split-name">${esc(m.name)}</span>
+        <input type="text" inputmode="decimal" value="${fmtPct(cur[m.id])}"
+          oninput="setSplitVal('${pfx}',${i},this.value)">
+        <span class="split-pct">%</span>
+        <span class="split-eur" id="${pfx}-split-eur-${i}"></span>
+      </div>`).join('') +
+      `<div class="split-sum" id="${pfx}-split-sum"></div></div>`;
+  } else {
+    html += `<div class="split-sum">${esc(splitRuleLabel())}</div>`;
+  }
+  host.innerHTML = html;
+  if (on) paintSplitSum(pfx);
+}
+
+// Only the derived parts are repainted while typing — rebuilding the rows
+// would take the focus out of the field mid-number.
+function paintSplitSum(pfx) {
+  const cur = splitDraft[pfx];
+  if (!cur) return;
+  const M    = household.members;
+  const vals = M.map(m => cur[m.id] || 0);
+  const sum  = vals.reduce((a, v) => a + v, 0);
+  const amt  = splitAmount(pfx);
+  M.forEach((m, i) => {
+    const el = document.getElementById(`${pfx}-split-eur-${i}`);
+    if (el) el.textContent = (sum > 0 && amt) ? eur.format(amt * vals[i] / sum) : '';
+  });
+  const box = document.getElementById(`${pfx}-split-sum`);
+  if (!box) return;
+  if (sum <= 0)
+    box.textContent = 'Noch kein Anteil über 0 — so gilt weiter die Haushaltsregel.';
+  else if (Math.abs(sum - 100) < 0.05)
+    box.textContent = 'Summe 100 %.';
+  else
+    box.textContent = `Summe ${fmtPct(sum)} % — wird auf 100 % umgerechnet.`;
+}
+
+function setSplitMode(pfx, on) {
+  if (!on) {
+    splitDraft[pfx] = null;
+  } else if (!splitDraft[pfx]) {
+    const base = baseSharesNow();
+    const o = {};
+    household.members.forEach((m, i) => { o[m.id] = Math.round(base[i] * 1000) / 10; });
+    splitDraft[pfx] = o;
+  }
+  buildSplit(pfx);
+}
+
+function setSplitVal(pfx, i, v) {
+  const cur = splitDraft[pfx];
+  const m   = household.members[i];
+  if (!cur || !m) return;
+  const n = parseFloat(String(v).replace(',', '.'));
+  cur[m.id] = isFinite(n) && n >= 0 ? n : 0;
+  paintSplitSum(pfx);
+}
+
+// Shown on a cost row so an own split is visible without opening it.
+function splitTag(item) {
+  const sp = splitOf(item);
+  return sp ? ` · ${sp.map(v => Math.round(v * 100)).join('/')} %` : '';
+}
+
+// null when nothing meaningful was entered — the household rule then applies.
+function splitValue(pfx) {
+  const cur = splitDraft[pfx];
+  if (!cur) return null;
+  const vals = household.members.map(m => cur[m.id] || 0);
+  return vals.some(v => v > 0) ? { ...cur } : null;
 }
 
 function updateIncomeCol(mk) {
@@ -4057,18 +4261,18 @@ function updateIncomeCol(mk) {
   });
 
   if (hhMode() === 'equal') {
-    const per = M.length ? exp / M.length : 0;
+    const soll = dueByMember(mk, M.map(() => 1 / (M.length || 1)));
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
-    M.forEach(m => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(per) : '–'));
-    balance(M.map(() => per));
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
+    balance(soll);
     return;
   }
 
   if (hhMode() === 'fixed') {
-    const f = hhShares();
+    const soll = dueByMember(mk, hhShares());
     put(`cc-exp-${mk}`, exp ? eur.format(exp) : '–');
-    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(exp * f[i]) : '–'));
-    balance(M.map((m, i) => exp * f[i]));
+    M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, exp ? eur.format(soll[i]) : '–'));
+    balance(soll);
     return;
   }
 
@@ -4080,7 +4284,7 @@ function updateIncomeCol(mk) {
     put(`cc-inctot-${mk}`, sum ? eur.format(sum) : '–');
     put(`cc-exp-${mk}`,    exp ? eur.format(exp) : '–');
     put(`cc-pct-${mk}`,    sum ? (p * 100).toFixed(1).replace('.', ',') + ' %' : '–');
-    const soll = M.map((m, i) => sum ? exp * wages[i] / sum : 0);
+    const soll = sum ? dueByMember(mk, wages.map(w => w / sum)) : M.map(() => 0);
     M.forEach((m, i) => put(`cc-pay_${m.id}-${mk}`, sum ? eur.format(soll[i]) : '–'));
     balance(soll);
     return;
@@ -4148,7 +4352,9 @@ function openOneSheet(id) {
   $("o-month").value  = o ? oneMonth(o) : thisMonth;
   $("o-note").value   = o ? (o.note || "") : "";
   onePayer = o ? (o.payer || "") : "";
+  splitDraft.o = o && o.split ? { ...o.split } : null;
   buildOnePayers();
+  buildSplit('o');
   $("one-del").style.display = o ? "block" : "none";
   $("err-o-name").classList.remove("on");
   $("err-o-amount").classList.remove("on");
@@ -4175,6 +4381,7 @@ async function saveOne() {
     date: $("o-date").value || null,
     month: $("o-month").value || null,
     payer: onePayer || null,
+    split: splitValue('o'),
     note: $("o-note").value.trim()
   };
   if (editingOne) {
@@ -4365,7 +4572,7 @@ function render() {
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
       <div class="row-main">
         <div class="row-name">${esc(s.name)}</div>
-        <div class="row-sub">${esc(s.cat)}${norm}</div>
+        <div class="row-sub">${esc(s.cat)}${norm}${splitTag(s)}</div>
         ${deactTag}
       </div>
       <div class="row-amt">
@@ -4402,7 +4609,7 @@ function render() {
       const who = o.payer && household.members.find(m => m.id === o.payer);
       return `<button class="one-item" onclick="openOneSheet('${o.id}')">
         <span class="one-l">${esc(o.name)}
-          <span class="one-sub">${esc(when)}${who ? ` · ${esc(who.name)}` : ' · Konto offen'}</span></span>
+          <span class="one-sub">${esc(when)}${who ? ` · ${esc(who.name)}` : ' · Konto offen'}${splitTag(o)}</span></span>
         <span class="one-amt">${eur.format(o.amount)}</span>
       </button>`;
     }).join('');
@@ -6573,8 +6780,8 @@ function txSetCatCustom(id) {
 // ── Sheet ──────────────────────────────────────────────────────────────────
 // New entries walk through one question per screen; editing shows everything
 // at once, since you usually come back to change a single field.
-const FSTEPS = 6;
-const FTITLES = ['Name', 'Betrag', 'Rhythmus', 'Kategorie', 'Konto', 'Fälligkeit'];
+const FSTEPS = 7;
+const FTITLES = ['Name', 'Betrag', 'Rhythmus', 'Kategorie', 'Konto', 'Aufteilung', 'Fälligkeit'];
 let sheetStep = 1;
 let wizardMode = false;
 
@@ -6613,6 +6820,7 @@ function stepGo(d) {
   if (d > 0 && sheetStep === FSTEPS) { save(); return; }
   sheetStep = Math.max(1, Math.min(FSTEPS, sheetStep + d));
   paintSteps();
+  paintSplitSum('f');   // the amount may have changed since the shares were shown
   const f = document.querySelector('.fstep.on input:not([type=date]), .fstep.on textarea');
   if (f) setTimeout(() => f.focus(), 60);
 }
@@ -6629,9 +6837,11 @@ function openSheet(id) {
   draft.cat   = s ? s.cat   : "Sonstiges";
   $("f-cycle").querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.c === draft.cycle));
   draft.payer = s ? (s.payer || "") : "";
+  splitDraft.f = s && s.split ? { ...s.split } : null;
   addingCat = false;
   buildCats();
   buildPayers();
+  buildSplit('f');
   $("delete-btn").style.display = s ? "block" : "none";
   wizardMode = !s;
   sheetStep = 1;
@@ -6734,6 +6944,7 @@ async function save() {
     date:   $("f-date").value || null,
     note:   $("f-note").value.trim(),
     payer:  draft.payer || null,
+    split:  splitValue('f'),
     deactivatedFrom: (deactEl && deactEl.value) ? deactEl.value : null,
   };
 
@@ -6852,6 +7063,8 @@ $("sheet").addEventListener('keydown', e => {
   }
 });
 $("one-scrim").onclick = () => closeOneSheet();
+$("f-amount").addEventListener("input", () => paintSplitSum('f'));
+$("o-amount").addEventListener("input", () => paintSplitSum('o'));
 // Pick up changes made on another device when the tab comes back into focus
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && ghReady()) ghPull({ silent: true });
