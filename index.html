@@ -1887,6 +1887,9 @@
       text-transform: uppercase; color: var(--ch-good);
     }
     .tr-svg .tr-ctx { opacity: .5; }
+    .tr-tblwrap { overflow-x: auto; -webkit-overflow-scrolling: touch;
+      margin: 0 -16px 16px; padding: 0 16px; }
+    .tr-tblwrap > .tr-tbl { margin-bottom: 0; min-width: 100%; }
     .tr-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px; padding: 0 16px; }
     .tr-wide { border-collapse: collapse; font-size: 11.5px; white-space: nowrap; }
     .tr-wide th {
@@ -4280,6 +4283,13 @@ function trReport() {
       return series.map(s => ({ ziel: s.name, festesRR: s.fix, einstiege: s.n,
         treffer: s.hits, quote: s.quote, expectancy: s.exp, summeR: s.sum }));
     })(),
+    konto: (() => {
+      const { series } = trSim(list);
+      const a = trAccount(series, trStart(), trRisk());
+      return { startkapital: trStart(), risikoProzent: trRisk(),
+        varianten: a.map(x => ({ ziel: x.name, endstand: x.end,
+          veraenderung: x.end - trStart(), maxRuecksetzerProzent: x.maxDD })) };
+    })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
     aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f) }))
       .filter(d => d.gruppen.length >= 2),
@@ -4413,7 +4423,7 @@ function trGoalsCard(list) {
     <div class="tr-h"><span>Ziele im Vergleich</span></div>
     <div class="tr-sub">„Ø erreichtes RR“ ist die Erwartung je Einstieg: das geplante RR bei
       Treffer, sonst −1. Über null heißt, das Ziel trägt sich.</div>
-    <table class="tr-tbl">
+    <div class="tr-tblwrap"><table class="tr-tbl">
       <tr><th>Ziel</th><th class="num">gesetzt</th><th>Erreichquote</th><th class="num">Ø geplant</th><th class="num">Ø erreicht</th></tr>
       ${rows.map(([l, z], i) => `<tr>
         <td>${l}</td>
@@ -4422,7 +4432,7 @@ function trGoalsCard(list) {
         <td class="num">${trFx(z.planned)}</td>
         <td class="num" style="color:${z.achieved >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(z.achieved)}</td>
       </tr>`).join('')}
-    </table>
+    </table></div>
   </div>`;
 }
 
@@ -4552,7 +4562,7 @@ function trSimCard(list) {
       <input type="text" inputmode="decimal" value="${x === null ? '' : trRrLbl(x)}"
         placeholder="aus" onchange="trSetRR(${i}, this.value)"></div>`).join('')}</div>
 
-    <table class="tr-tbl" style="margin-bottom:16px">
+    <div class="tr-tblwrap"><table class="tr-tbl">
       <tr><th>Ziel</th><th class="num">Treffer</th><th class="num">Quote</th>
           <th class="num">Ø erreicht</th><th class="num">Summe</th></tr>
       ${series.map((s, i) => `<tr>
@@ -4563,7 +4573,7 @@ function trSimCard(list) {
         <td class="num" style="color:${s.exp >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(s.exp)}</td>
         <td class="num">${trSign(s.sum)} R</td>
       </tr>`).join('')}
-    </table>
+    </table></div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
       aria-label="Verlauf des aufsummierten R für ${series.length} Zielvarianten über ${n} Einstiege; hervorgehoben ${esc(series[trPick].name)}">
@@ -4609,6 +4619,148 @@ function trSimHover(ev, svg) {
 function trTipOff2() {
   trTipOff();
   const c = document.getElementById('tr-cross2');
+  if (c) c.setAttribute('opacity', '0');
+}
+
+// ── Kontoverlauf ───────────────────────────────────────────────────────────
+// Dieselben Zielvarianten, aber in Geld statt in R: je Einstieg wird ein fester
+// Prozentsatz des AKTUELLEN Kontos riskiert, das Ergebnis darauf verrechnet.
+// Dadurch wächst der Einsatz mit dem Konto und schrumpft nach Verlusten.
+const trStart = () => (typeof trMeta.start === 'number' && trMeta.start > 0) ? trMeta.start : 10000;
+const trRisk  = () => (typeof trMeta.risk === 'number' && trMeta.risk > 0) ? Math.min(100, trMeta.risk) : 1;
+const trNum0  = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+const trNum2  = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function trAccount(series, start, riskPct) {
+  return series.map(s => {
+    let bal = start, peak = start, maxDD = 0;
+    const pts = s.vals.map(v => {
+      bal = Math.max(0, bal * (1 + riskPct / 100 * v));
+      if (bal > peak) peak = bal;
+      const dd = peak > 0 ? (peak - bal) / peak * 100 : 0;
+      if (dd > maxDD) maxDD = dd;
+      return bal;
+    });
+    return { name: s.name, id: s.id, pts, end: bal, maxDD };
+  });
+}
+
+async function trSetAcc(field, v) {
+  const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
+  if (field === 'start') trMeta.start = (isNaN(n) || n <= 0) ? 10000 : n;
+  else trMeta.risk = (isNaN(n) || n <= 0) ? 1 : Math.min(100, n);
+  await persistTrades();
+  renderTrades();
+}
+
+function trAccCard(list) {
+  const { base, series } = trSim(list);
+  if (!base.length || !series.length) return '';
+  if (trPick >= series.length) trPick = 0;
+  const start = trStart(), risk = trRisk();
+  const acc = trAccount(series, start, risk);
+
+  const all = acc.flatMap(a => a.pts).concat([start]);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (hi === lo) { hi = lo + 1; }
+  const pad = (hi - lo) * .09; lo = Math.max(0, lo - pad); hi += pad;
+
+  const W = 520, Hh = 236, PL = 52, PR = 66, PT = 12, PB = 26;
+  const iw = W - PL - PR, ih = Hh - PT - PB;
+  const n = base.length;
+  const X = i => PL + iw * i / Math.max(1, n - 1);
+  const Y = v => PT + ih * (hi - v) / (hi - lo);
+  // Startkapital steht links vor dem ersten Einstieg
+  const path = pts => `M${(PL - 6).toFixed(1)} ${Y(start).toFixed(1)} ` +
+    pts.map((v, k) => 'L' + X(k).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+
+  const ticks = [];
+  const raw = (hi - lo) / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
+  const step = Math.ceil(raw / mag) * mag;
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+
+  const ends = acc.map((a, i) => ({ i, y: Y(a.pts[a.pts.length - 1]), v: a.end }))
+    .sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++)
+    if (ends[k].y - ends[k - 1].y < 12) ends[k].y = ends[k - 1].y + 12;
+
+  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts }));
+  trAccN = n;
+
+  return `<div class="tr-card">
+    <div class="tr-h"><span>Kontoverlauf</span></div>
+    <div class="tr-sub">Dieselben Zielvarianten in Geld. Je Einstieg wird der eingestellte
+      Prozentsatz des <b>aktuellen</b> Kontos riskiert — der Einsatz wächst also mit und
+      schrumpft nach Verlusten. Bei Treffer kommt das Vielfache zurück, sonst ist der Einsatz weg.</div>
+
+    <div class="tr-rrs">
+      <div class="tr-f"><label>Startkapital</label>
+        <input type="text" inputmode="decimal" style="width:108px" value="${trNum0.format(start)}"
+          onchange="trSetAcc('start', this.value)"></div>
+      <div class="tr-f"><label>Risiko je Trade</label>
+        <input type="text" inputmode="decimal" style="width:76px" value="${trNum2.format(risk).replace(',00','')} %"
+          onchange="trSetAcc('risk', this.value)"></div>
+    </div>
+
+    <div class="tr-tblwrap"><table class="tr-tbl">
+      <tr><th>Ziel</th><th class="num">Konto am Ende</th><th class="num">Veränderung</th><th class="num">max. Rücksetzer</th></tr>
+      ${acc.map((a, i) => `<tr>
+        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+          <i></i>${esc(a.name)}</button></td>
+        <td class="num">${trNum0.format(Math.round(a.end))}</td>
+        <td class="num" style="color:${a.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${
+          (a.end >= start ? '+' : '−') + trNum0.format(Math.round(Math.abs(a.end - start)))}</td>
+        <td class="num">${a.maxDD.toFixed(1)} %</td>
+      </tr>`).join('')}
+    </table></div>
+
+    <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
+      aria-label="Kontoverlauf für ${acc.length} Zielvarianten ab ${trNum0.format(start)} bei ${trNum2.format(risk)} Prozent Risiko je Einstieg; hervorgehoben ${esc(acc[trPick].name)}">
+      ${ticks.map(v => `<line class="grid" x1="${PL - 6}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
+        <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${trNum0.format(v)}</text>`).join('')}
+      <line class="zero" x1="${PL - 6}" y1="${Y(start).toFixed(1)}" x2="${W - PR}" y2="${Y(start).toFixed(1)}" stroke-dasharray="3 3"/>
+      ${acc.map((a, i) => i === trPick ? '' :
+        `<path class="tr-line tr-ctx" d="${path(a.pts)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
+      <path class="tr-line" d="${path(acc[trPick].pts)}" stroke="var(--ch-good)"
+        style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
+      ${ends.map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}"
+          style="${e.i === trPick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(acc[e.i].name)}</text>`).join('')}
+      <line id="tr-cross3" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+      <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
+        onmousemove="trAccHover(event,this.ownerSVGElement)" onmouseleave="trTipOff3()"
+        ontouchmove="trAccHover(event,this.ownerSVGElement)" ontouchend="trTipOff3()"/>
+      <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
+      <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
+    </svg>
+    <div class="tr-legend">
+      <span><i style="background:var(--ch-good)"></i>${esc(acc[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
+      <span>gestrichelt: Startkapital</span>
+    </div>
+  </div>`;
+}
+
+let trAccPts = [], trAccN = 0;
+function trAccHover(ev, svg) {
+  if (!trAccPts.length) return;
+  const r = svg.getBoundingClientRect();
+  const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  const W = 520, PL = 52, PR = 66, iw = W - PL - PR;
+  const rel = ((cx - r.left) / r.width * W - PL) / iw;
+  const k = Math.max(0, Math.min(trAccN - 1, Math.round(rel * (trAccN - 1))));
+  const cross = document.getElementById('tr-cross3');
+  if (cross) {
+    const x = PL + iw * k / Math.max(1, trAccN - 1);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+    cross.setAttribute('opacity', '.4');
+  }
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
+    `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trNum0.format(Math.round(s.pts[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
+}
+function trTipOff3() {
+  trTipOff();
+  const c = document.getElementById('tr-cross3');
   if (c) c.setAttribute('opacity', '0');
 }
 
@@ -4739,6 +4891,7 @@ function renderTrades() {
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trEquity(list)
     + trSimCard(list)
+    + trAccCard(list)
     + trHist(list)
     + trGoalsCard(list)
     + TR_DIMS.map(([l, f]) => trDimCard(list, l, f, false)).join('')
