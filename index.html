@@ -1870,6 +1870,23 @@
     .tr-tbl td, .tr-tbl th { white-space: nowrap; }
     .tr-h span:last-child { white-space: nowrap; }
 
+
+    .tr-rrs { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 14px; }
+    .tr-rrs .tr-f input { width: 72px; text-align: right; }
+    .tr-pick {
+      font-family: inherit; font-size: 13px; color: var(--ink); cursor: pointer;
+      background: transparent; border: 1px solid var(--line); border-radius: 9px;
+      padding: 5px 10px; display: inline-flex; align-items: center; gap: 7px;
+      transition: border-color .18s ease, background .18s ease;
+    }
+    .tr-pick i { width: 9px; height: 9px; border-radius: 50%; background: var(--ch-mute); }
+    .tr-pick.on { border-color: var(--ch-good); background: var(--accent-tint); font-weight: 600; }
+    .tr-pick.on i { background: var(--ch-good); }
+    .tr-best {
+      margin-left: 7px; font-size: 10px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--ch-good);
+    }
+    .tr-svg .tr-ctx { opacity: .5; }
     .tr-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -16px; padding: 0 16px; }
     .tr-wide { border-collapse: collapse; font-size: 11.5px; white-space: nowrap; }
     .tr-wide th {
@@ -4258,6 +4275,11 @@ function trReport() {
       medianDauerMin: trMed(list.map(t => t.dauerMin)),
       summeRBox: list.filter(t => t.hasTgt).reduce((s, t) => s + t.tgtRR, 0)
     },
+    simulation: (() => {
+      const { series } = trSim(list);
+      return series.map(s => ({ ziel: s.name, festesRR: s.fix, einstiege: s.n,
+        treffer: s.hits, quote: s.quote, expectancy: s.exp, summeR: s.sum }));
+    })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
     aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f) }))
       .filter(d => d.gruppen.length >= 2),
@@ -4424,6 +4446,172 @@ function trDimCard(list, title, fn, open) {
   </details>`;
 }
 
+// ── Simulation: was wäre mit festem RR gewesen? ────────────────────────────
+// Für jeden Einstieg steht mit dem Max-Profit fest, wie weit der Preis zu
+// seinen Gunsten lief, bevor der SL kam — gemessen in Vielfachen des eigenen
+// Risikos. Ein festes Ziel von X R wäre also genau dann erreicht worden, wenn
+// dieser Wert mindestens X beträgt. Verfehlt heißt −1, wie beim Box-Ziel.
+const TR_RR_DEF = [1, 1.5, 2, 3];
+const trRRs = () => {
+  const a = Array.isArray(trMeta.rrs) ? trMeta.rrs : TR_RR_DEF;
+  return a.map(v => (typeof v === 'number' && v > 0 ? v : null));
+};
+const trRrOut = (t, x) => (!isNaN(t.mfeR) && t.mfeR >= x) ? x : -1;
+
+// Alle Varianten über denselben Einstiegen, damit die Kurven vergleichbar sind
+function trSim(list) {
+  const base = list.filter(t => !isNaN(t.mfeR));
+  const series = [];
+  trRRs().forEach((x, i) => {
+    if (x === null) return;
+    const vals = base.map(t => trRrOut(t, x));
+    const hits = base.filter(t => t.mfeR >= x).length;
+    series.push({
+      id: 'rr' + i, name: trRrLbl(x) + ' R', fix: x, n: base.length, hits,
+      quote: base.length ? 100 * hits / base.length : NaN,
+      exp: base.length ? vals.reduce((s, v) => s + v, 0) / base.length : NaN,
+      sum: vals.reduce((s, v) => s + v, 0),
+      vals
+    });
+  });
+  // Box-Ziel im selben Raster: wo keines gesetzt war, wurde nicht gehandelt
+  const bx = base.filter(t => t.hasTgt);
+  if (bx.length) {
+    const vals = base.map(t => t.hasTgt ? t.tgtRR : 0);
+    const hits = bx.filter(t => t.reached).length;
+    series.push({
+      id: 'box', name: 'Box-Ziel', fix: null, n: bx.length, hits,
+      quote: 100 * hits / bx.length,
+      exp: bx.reduce((s, t) => s + t.tgtRR, 0) / bx.length,
+      sum: vals.reduce((s, v) => s + v, 0),
+      planned: bx.reduce((s, t) => s + t.tgtR, 0) / bx.length,
+      vals
+    });
+  }
+  return { base, series };
+}
+const trRrLbl = x => Number.isInteger(x) ? String(x) : String(x).replace('.', ',');
+
+let trPick = 0;                                  // hervorgehobene Kurve
+async function trSetRR(i, v) {
+  const a = trRRs().slice();
+  const n = parseFloat(String(v).replace(',', '.'));
+  a[i] = (isNaN(n) || n <= 0) ? null : n;
+  trMeta.rrs = a;
+  await persistTrades();
+  renderTrades();
+}
+async function trSetPick(i) {
+  trPick = i;
+  renderTrades();
+}
+
+// Betonungs-Form: die gewählte Kurve farbig, die übrigen als grauer Kontext.
+// Fünf gleichrangige Farben wären nebeneinander nicht sicher unterscheidbar.
+function trSimCard(list) {
+  const { base, series } = trSim(list);
+  if (!base.length || !series.length) return '';
+  if (trPick >= series.length) trPick = 0;
+  const best = series.reduce((b, s) => (isNaN(s.exp) ? b : (b === null || s.exp > b.exp ? s : b)), null);
+
+  const cum = s => { let c = 0; return s.vals.map(v => (c += v)); };
+  const curves = series.map(s => ({ s, pts: cum(s) }));
+  const all = curves.flatMap(c => c.pts);
+  let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * .09; lo -= pad; hi += pad;
+
+  const W = 520, Hh = 236, PL = 38, PR = 62, PT = 12, PB = 26;
+  const iw = W - PL - PR, ih = Hh - PT - PB;
+  const n = base.length;
+  const X = i => PL + iw * i / Math.max(1, n - 1);
+  const Y = v => PT + ih * (hi - v) / (hi - lo);
+  const path = pts => pts.map((v, k) => (k ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+
+  const step = Math.max(1, Math.ceil((hi - lo) / 4));
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+
+  // Endbeschriftungen auseinanderschieben, damit sie sich nicht überlagern
+  const ends = curves.map((c, i) => ({ i, y: Y(c.pts[c.pts.length - 1]), v: c.pts[c.pts.length - 1] }))
+    .sort((a, b) => a.y - b.y);
+  for (let k = 1; k < ends.length; k++)
+    if (ends[k].y - ends[k - 1].y < 12) ends[k].y = ends[k - 1].y + 12;
+
+  trSimPts = curves.map(c => ({ name: c.s.name, pts: c.pts }));
+  trSimN = n;
+
+  return `<div class="tr-card">
+    <div class="tr-h"><span>Was wäre mit festem Ziel?</span></div>
+    <div class="tr-sub">Der Max-Profit sagt, wie weit jeder Einstieg lief, bevor der SL kam.
+      Ein festes Ziel von X R wäre also erreicht worden, wenn dieser Wert mindestens X war —
+      sonst zählt der Einstieg wie beim Box-Ziel als voller Verlust (−1).</div>
+
+    <div class="tr-rrs">${trRRs().map((x, i) => `<div class="tr-f">
+      <label>Ziel ${i + 1}</label>
+      <input type="text" inputmode="decimal" value="${x === null ? '' : trRrLbl(x)}"
+        placeholder="aus" onchange="trSetRR(${i}, this.value)"></div>`).join('')}</div>
+
+    <table class="tr-tbl" style="margin-bottom:16px">
+      <tr><th>Ziel</th><th class="num">Treffer</th><th class="num">Quote</th>
+          <th class="num">Ø erreicht</th><th class="num">Summe</th></tr>
+      ${series.map((s, i) => `<tr>
+        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+          <i></i>${esc(s.name)}</button>${best && s.id === best.id ? '<span class="tr-best">beste</span>' : ''}</td>
+        <td class="num">${s.hits} / ${s.n}</td>
+        <td class="num">${Math.round(s.quote)} %</td>
+        <td class="num" style="color:${s.exp >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(s.exp)}</td>
+        <td class="num">${trSign(s.sum)} R</td>
+      </tr>`).join('')}
+    </table>
+
+    <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
+      aria-label="Verlauf des aufsummierten R für ${series.length} Zielvarianten über ${n} Einstiege; hervorgehoben ${esc(series[trPick].name)}">
+      ${ticks.map(v => `<line class="${Math.abs(v) < 1e-9 ? 'zero' : 'grid'}" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
+        <text class="ax" x="${PL - 7}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${v > 0 ? '+' : ''}${v}</text>`).join('')}
+      ${curves.map((c, i) => i === trPick ? '' :
+        `<path class="tr-line tr-ctx" d="${path(c.pts)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
+      <path class="tr-line" d="${path(curves[trPick].pts)}" stroke="var(--ch-good)"
+        style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
+      ${ends.map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}"
+          style="${e.i === trPick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(curves[e.i].s.name)} ${trSign(e.v)}</text>`).join('')}
+      <line id="tr-cross2" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+      <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
+        onmousemove="trSimHover(event,this.ownerSVGElement)" onmouseleave="trTipOff2()"
+        ontouchmove="trSimHover(event,this.ownerSVGElement)" ontouchend="trTipOff2()"/>
+      <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
+      <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
+    </svg>
+    <div class="tr-legend">
+      <span><i style="background:var(--ch-good)"></i>${esc(series[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
+    </div>
+  </div>`;
+}
+
+let trSimPts = [], trSimN = 0;
+function trSimHover(ev, svg) {
+  if (!trSimPts.length) return;
+  const r = svg.getBoundingClientRect();
+  const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  const W = 520, PL = 38, PR = 62, iw = W - PL - PR;
+  const rel = ((cx - r.left) / r.width * W - PL) / iw;
+  const k = Math.max(0, Math.min(trSimN - 1, Math.round(rel * (trSimN - 1))));
+  const cross = document.getElementById('tr-cross2');
+  if (cross) {
+    const x = PL + iw * k / Math.max(1, trSimN - 1);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+    cross.setAttribute('opacity', '.4');
+  }
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` +
+    trSimPts.map((s, i) => `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trSign(s.pts[k])} R${i === trPick ? '</b>' : ''}`).join('<br>'));
+}
+function trTipOff2() {
+  trTipOff();
+  const c = document.getElementById('tr-cross2');
+  if (c) c.setAttribute('opacity', '0');
+}
+
 // ── Tabelle aller Einstiege ────────────────────────────────────────────────
 const TR_COLS = [
   ["Datum", t => t.datum], ["Zeit", t => t.uhrzeit], ["Tag", t => t.wtag],
@@ -4550,6 +4738,7 @@ function renderTrades() {
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trEquity(list)
+    + trSimCard(list)
     + trHist(list)
     + trGoalsCard(list)
     + TR_DIMS.map(([l, f]) => trDimCard(list, l, f, false)).join('')
