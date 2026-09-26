@@ -2040,6 +2040,16 @@
     /* Festes Ziel und Kontoverlauf gehören zusammen: auf breiten Schirmen
        stehen sie nebeneinander, damit man zum Vergleichen nicht scrollen
        muss. Dafür darf der Bereich aus der 560er-Spalte heraustreten. */
+    /* Geld oder Prozent — gilt für Kontoverlauf und Rücksetzer zugleich */
+    .tr-seg { display: inline-flex; background: var(--sunken); border-radius: 9px; padding: 3px; gap: 2px; }
+    .tr-seg button {
+      font: inherit; font-size: 13px; color: var(--muted); cursor: pointer;
+      background: none; border: none; border-radius: 7px; padding: 6px 11px;
+      transition: background .18s ease, color .18s ease;
+    }
+    .tr-seg button.on { background: var(--surface); color: var(--ink); font-weight: 500; }
+    .tr-seg button:not(.on):hover { color: var(--ink); }
+
     .tr-broad { display: grid; gap: 0 14px; align-items: start; }
     .tr-broad > .tr-card { min-width: 0; }   /* Raster-Spalten dürfen schrumpfen */
     @media (min-width: 1000px) {
@@ -4644,6 +4654,7 @@ function trReport() {
       return { startkapital: trStart(), risikoProzent: trRisk(),
         varianten: a.map(x => ({ ziel: x.name, endstand: x.end,
           veraenderung: x.end - trStart(), maxRuecksetzerProzent: x.maxDD,
+          maxRuecksetzerGeld: x.maxDDAbs,
           amStueckUnterWasser: x.ddLen, ruecksetzerVerlauf: x.dd.map(v => +v.toFixed(2)) })) };
     })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
@@ -4996,25 +5007,37 @@ function trTipOff2() {
 // Prozentsatz des AKTUELLEN Kontos riskiert, das Ergebnis darauf verrechnet.
 // Dadurch wächst der Einsatz mit dem Konto und schrumpft nach Verlusten.
 const trStart = () => (typeof trMeta.start === 'number' && trMeta.start > 0) ? trMeta.start : 10000;
+// Konto und Rücksetzer in Geld oder in Prozent — eine Einstellung für beide
+const trUnit = () => trMeta.unit === 'pct' ? 'pct' : 'geld';
+const trPctOn = () => trUnit() === 'pct';
+async function trSetUnit(u) {
+  trMeta.unit = u === 'pct' ? 'pct' : 'geld';
+  await persistTrades();
+  renderTrades();
+}
+const trUnitPick = () => `<div class="tr-seg" role="group" aria-label="Anzeige">
+  ${[['geld', 'in Geld'], ['pct', 'in Prozent']].map(([u, l]) =>
+    `<button class="${trUnit() === u ? 'on' : ''}" aria-pressed="${trUnit() === u}"
+      onclick="trSetUnit('${u}')">${l}</button>`).join('')}</div>`;
 const trRisk  = () => (typeof trMeta.risk === 'number' && trMeta.risk > 0) ? Math.min(100, trMeta.risk) : 1;
 const trNum0  = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
 const trNum2  = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function trAccount(series, start, riskPct) {
   return series.map(s => {
-    let bal = start, peak = start, maxDD = 0, ddIdx = -1, run = 0, ddLen = 0;
-    const dd = [];
+    let bal = start, peak = start, maxDD = 0, maxDDAbs = 0, ddIdx = -1, run = 0, ddLen = 0;
+    const dd = [], ddAbs = [];
     const pts = s.vals.map((v, i) => {
       bal = Math.max(0, bal * (1 + riskPct / 100 * v));
       if (bal > peak) peak = bal;
       const d = peak > 0 ? (peak - bal) / peak * 100 : 0;
-      dd.push(d);
-      if (d > maxDD) { maxDD = d; ddIdx = i; }
+      dd.push(d); ddAbs.push(Math.max(0, peak - bal));
+      if (d > maxDD) { maxDD = d; maxDDAbs = peak - bal; ddIdx = i; }
       // längste Strecke unter Wasser: wie viele Einstiege bis zum neuen Hoch
       if (d > 0) { run++; if (run > ddLen) ddLen = run; } else run = 0;
       return bal;
     });
-    return { name: s.name, id: s.id, pts, dd, end: bal, maxDD, ddIdx, ddLen };
+    return { name: s.name, id: s.id, pts, dd, ddAbs, end: bal, maxDD, maxDDAbs, ddIdx, ddLen };
   });
 }
 
@@ -5026,17 +5049,34 @@ async function trSetAcc(field, v) {
   renderTrades();
 }
 
+// Achsenschritt, der auf runden Zahlen landet: 1, 2, 2,5, 5 oder 10 mal
+// einer Zehnerpotenz — sonst stehen dort Werte wie 9 % oder 3.700 €.
+const trStep = r => {
+  if (!(r > 0)) return 1;
+  const m = Math.pow(10, Math.floor(Math.log10(r))), q = r / m;
+  return (q <= 1 ? 1 : q <= 2 ? 2 : q <= 2.5 ? 2.5 : q <= 5 ? 5 : 10) * m;
+};
+
 function trAccCard(list) {
   const { base, series } = trSim(list);
   if (!base.length || !series.length) return '';
   if (trPick >= series.length) trPick = 0;
   const start = trStart(), risk = trRisk();
   const acc = trAccount(series, start, risk);
+  // In Prozent wird alles auf das Startkapital bezogen: aus 27.658 € werden
+  // +10,6 %. Die Kurven sind dieselben, nur die Achse spricht eine andere
+  // Sprache — und Rücksetzer lassen sich so über Kontogrößen hinweg lesen.
+  const pct = trPctOn();
+  const cv  = v => pct ? (v / start - 1) * 100 : v;
+  const money = v => trNum0.format(Math.round(v));
+  const pctS = v => (v > 0 ? '+' : v < 0 ? '−' : '') +
+    trNum2.format(Math.abs(v)).replace(',00', '') + ' %';
+  const accLbl = v => pct ? pctS(v) : money(v);
 
-  const all = acc.flatMap(a => a.pts).concat([start]);
+  const all = acc.flatMap(a => a.pts).concat([start]).map(cv);
   let lo = Math.min(...all), hi = Math.max(...all);
   if (hi === lo) { hi = lo + 1; }
-  const pad = (hi - lo) * .09; lo = Math.max(0, lo - pad); hi += pad;
+  const pad = (hi - lo) * .09; lo = pct ? lo - pad : Math.max(0, lo - pad); hi += pad;
 
   const W = 520, Hh = 236, PL = 52, PR = 66, PT = 12, PB = 26;
   const iw = W - PL - PR, ih = Hh - PT - PB;
@@ -5044,46 +5084,48 @@ function trAccCard(list) {
   const X = i => PL + iw * i / Math.max(1, n - 1);
   const Y = v => PT + ih * (hi - v) / (hi - lo);
   // Startkapital steht links vor dem ersten Einstieg
-  const path = pts => `M${(PL - 6).toFixed(1)} ${Y(start).toFixed(1)} ` +
-    pts.map((v, k) => 'L' + X(k).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+  const path = pts => `M${(PL - 6).toFixed(1)} ${Y(cv(start)).toFixed(1)} ` +
+    pts.map((v, k) => 'L' + X(k).toFixed(1) + ' ' + Y(cv(v)).toFixed(1)).join(' ');
 
   const ticks = [];
-  const raw = (hi - lo) / 4;
-  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
-  const step = Math.ceil(raw / mag) * mag;
-  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
+  const step = trStep((hi - lo) / 4);
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(6));
 
-  const ends = acc.map((a, i) => ({ i, y: Y(a.pts[a.pts.length - 1]), v: a.end }))
+  const ends = acc.map((a, i) => ({ i, y: Y(cv(a.pts[a.pts.length - 1])), v: a.end }))
     .sort((a, b) => a.y - b.y);
   for (let k = 1; k < ends.length; k++)
     if (ends[k].y - ends[k - 1].y < 12) ends[k].y = ends[k - 1].y + 12;
 
   // Rücksetzer vom jeweiligen Höchststand, dieselbe X-Achse wie das Konto —
   // so lassen sich beide Kurven Einstieg für Einstieg nebeneinander lesen.
-  const ddTop = Math.max(5, Math.ceil(Math.max(...acc.map(a => a.maxDD)) / 5) * 5);
+  const dOf = a => pct ? a.dd : a.ddAbs;
+  const dMaxOf = a => pct ? a.maxDD : a.maxDDAbs;
+  const ddPeak = Math.max(...acc.map(dMaxOf));
+  const ddTop = Math.max(pct ? 5 : 1, trStep(Math.max(ddPeak, pct ? 4 : 1) / 4) * 4);
   const DY = v => PT + ih * v / ddTop;
   const dPath = a => `M${(PL - 6).toFixed(1)} ${DY(0).toFixed(1)} ` +
-    a.dd.map((v, k) => 'L' + X(k).toFixed(1) + ' ' + DY(v).toFixed(1)).join(' ');
+    dOf(a).map((v, k) => 'L' + X(k).toFixed(1) + ' ' + DY(v).toFixed(1)).join(' ');
   const dArea = a => dPath(a) + ` L${X(Math.max(0, n - 1)).toFixed(1)} ${DY(0).toFixed(1)} Z`;
   const dTicks = [0, 1, 2, 3, 4].map(k => ddTop * k / 4);
-  const ddLbl = v => v <= 0 ? '0 %'
-    : '−' + (v % 1 ? v.toFixed(1).replace('.', ',') : v.toFixed(0)) + ' %';
+  const ddLbl = v => v <= 0 ? (pct ? '0 %' : '0')
+    : '−' + (pct ? (v % 1 ? v.toFixed(1).replace('.', ',') : v.toFixed(0)) + ' %' : money(v));
   const worst = acc[trPick];
   const wx = worst.ddIdx >= 0 ? X(worst.ddIdx) : null;
   // Die Marke für den tiefsten Stand schiebt sich mit den Namen auseinander
-  const dEnds = acc.map((a, i) => ({ i, y: DY(a.dd[a.dd.length - 1] || 0) }));
-  if (wx !== null) dEnds.push({ i: -1, y: DY(worst.maxDD) });
+  const dEnds = acc.map((a, i) => ({ i, y: DY(dOf(a)[dOf(a).length - 1] || 0) }));
+  if (wx !== null) dEnds.push({ i: -1, y: DY(dMaxOf(worst)) });
   dEnds.sort((a, b) => a.y - b.y);
   for (let k = 1; k < dEnds.length; k++)
     if (dEnds[k].y - dEnds[k - 1].y < 12) dEnds[k].y = dEnds[k - 1].y + 12;
   const wLbl = dEnds.find(e => e.i === -1);
 
-  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts, dd: a.dd }));
+  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts.map(cv), dd: dOf(a) }));
+  trAccFmt = { pct, start };
   trAccN = n;
 
   return `<div class="tr-card">
     <div class="tr-h"><span>Kontoverlauf</span></div>
-    <div class="tr-sub">Dieselben Zielvarianten in Geld. Je Einstieg wird der eingestellte
+    <div class="tr-sub">Dieselben Zielvarianten als Konto. Je Einstieg wird der eingestellte
       Prozentsatz des <b>aktuellen</b> Kontos riskiert — der Einsatz wächst also mit und
       schrumpft nach Verlusten. Bei Treffer kommt das Vielfache zurück, sonst ist der Einsatz weg.</div>
 
@@ -5094,24 +5136,27 @@ function trAccCard(list) {
       <div class="tr-f"><label>Risiko je Trade</label>
         <input type="text" inputmode="decimal" style="width:76px" value="${trNum2.format(risk).replace(',00','')} %"
           onchange="trSetAcc('risk', this.value)"></div>
+      <div class="tr-f"><label>Anzeige</label>${trUnitPick()}</div>
     </div>
 
     <div class="tr-tblwrap"><table class="tr-tbl">
-      <tr><th>Ziel</th><th class="num">Konto am Ende</th><th class="num">Veränderung</th></tr>
+      <tr><th>Ziel</th><th class="num">${pct ? 'Konto vom Start' : 'Konto am Ende'}</th>
+          <th class="num">Veränderung</th></tr>
       ${acc.map((a, i) => `<tr>
         <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
-        <td class="num">${trNum0.format(Math.round(a.end))}</td>
+        <td class="num">${pct ? trNum2.format(a.end / start * 100).replace(',00', '') + ' %' : money(a.end)}</td>
         <td class="num" style="color:${a.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${
-          (a.end >= start ? '+' : '−') + trNum0.format(Math.round(Math.abs(a.end - start)))}</td>
+          pct ? pctS(cv(a.end))
+              : (a.end >= start ? '+' : '−') + money(Math.abs(a.end - start))}</td>
       </tr>`).join('')}
     </table></div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
       aria-label="Kontoverlauf für ${acc.length} Zielvarianten ab ${trNum0.format(start)} bei ${trNum2.format(risk)} Prozent Risiko je Einstieg; hervorgehoben ${esc(acc[trPick].name)}">
       ${ticks.map(v => `<line class="grid" x1="${PL - 6}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
-        <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${trNum0.format(v)}</text>`).join('')}
-      <line class="zero" x1="${PL - 6}" y1="${Y(start).toFixed(1)}" x2="${W - PR}" y2="${Y(start).toFixed(1)}" stroke-dasharray="3 3"/>
+        <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${accLbl(v)}</text>`).join('')}
+      <line class="zero" x1="${PL - 6}" y1="${Y(cv(start)).toFixed(1)}" x2="${W - PR}" y2="${Y(cv(start)).toFixed(1)}" stroke-dasharray="3 3"/>
       ${acc.map((a, i) => i === trPick ? '' :
         `<path class="tr-line tr-ctx" d="${path(a.pts)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
       <path class="tr-line" d="${path(acc[trPick].pts)}" stroke="var(--ch-good)"
@@ -5139,12 +5184,15 @@ function trAccCard(list) {
       entscheidet, ob eine Variante aushaltbar ist, sondern diese Tiefe und wie lange sie
       am Stück anhielt.</div>
 
+    <div class="tr-rrs"><div class="tr-f"><label>Anzeige</label>${trUnitPick()}</div></div>
+
     <div class="tr-tblwrap"><table class="tr-tbl">
       <tr><th>Ziel</th><th class="num">tiefster Stand</th><th class="num">unter Wasser</th></tr>
       ${acc.map((a, i) => `<tr>
         <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
-        <td class="num" style="${i === trPick ? 'color:var(--ch-bad);font-weight:600' : ''}">${a.maxDD.toFixed(1).replace('.', ',')} %</td>
+        <td class="num" style="${i === trPick ? 'color:var(--ch-bad);font-weight:600' : ''}">${
+          a.maxDD > 0 ? '−' + (pct ? a.maxDD.toFixed(1).replace('.', ',') + ' %' : money(a.maxDDAbs)) : '—'}</td>
         <td class="num">${a.ddLen} ${a.ddLen === 1 ? 'Einstieg' : 'Einstiege'}</td>
       </tr>`).join('')}
     </table></div>
@@ -5158,12 +5206,13 @@ function trAccCard(list) {
         `<path class="tr-line tr-ctx" d="${dPath(a)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
       <path class="tr-line" d="${dPath(worst)}" stroke="var(--ch-good)"
         style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
-      ${wx === null ? '' : `<line class="grid" x1="${PL - 6}" y1="${DY(worst.maxDD).toFixed(1)}" x2="${W - PR}" y2="${DY(worst.maxDD).toFixed(1)}"
+      ${wx === null ? '' : `<line class="grid" x1="${PL - 6}" y1="${DY(dMaxOf(worst)).toFixed(1)}" x2="${W - PR}" y2="${DY(dMaxOf(worst)).toFixed(1)}"
           stroke="var(--ch-bad)" stroke-dasharray="4 3"/>
-        <circle class="tr-dot" cx="${wx.toFixed(1)}" cy="${DY(worst.maxDD).toFixed(1)}" r="4"
+        <circle class="tr-dot" cx="${wx.toFixed(1)}" cy="${DY(dMaxOf(worst)).toFixed(1)}" r="4"
           fill="var(--ch-bad)" stroke="var(--surface)" stroke-width="2"/>
         <text class="lbl" x="${(W - PR + 6)}" y="${((wLbl ? wLbl.y : DY(worst.maxDD)) + 3).toFixed(1)}"
-          style="fill:var(--ch-bad);font-weight:600">max ${worst.maxDD.toFixed(1).replace('.', ',')} %</text>`}
+          style="fill:var(--ch-bad);font-weight:600">${
+            'max −' + (pct ? worst.maxDD.toFixed(1).replace('.', ',') + ' %' : money(worst.maxDDAbs))}</text>`}
       ${dEnds.filter(e => e.i >= 0 && e.i !== trPick).map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}">${esc(acc[e.i].name)}</text>`).join('')}
       <line id="tr-cross4" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
       <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
@@ -5180,7 +5229,7 @@ function trAccCard(list) {
   </div>`;
 }
 
-let trAccPts = [], trAccN = 0;
+let trAccPts = [], trAccN = 0, trAccFmt = { pct: false, start: 0 };
 function trAccHover(ev, svg) {
   if (!trAccPts.length) return;
   const r = svg.getBoundingClientRect();
@@ -5195,7 +5244,9 @@ function trAccHover(ev, svg) {
     cross.setAttribute('opacity', '.4');
   }
   trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
-    `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trNum0.format(Math.round(s.pts[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
+    `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trAccFmt.pct
+      ? (s.pts[k] > 0 ? '+' : s.pts[k] < 0 ? '−' : '') + trNum2.format(Math.abs(s.pts[k])) + ' %'
+      : trNum0.format(Math.round(s.pts[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
 }
 function trTipOff3() {
   trTipOff();
@@ -5216,7 +5267,9 @@ function trDdHover(ev, svg) {
     cross.setAttribute('opacity', '.4');
   }
   trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
-    `${i === trPick ? '<b>' : ''}${esc(s.name)}: −${trFx(s.dd[k]).replace('.', ',')} %${i === trPick ? '</b>' : ''}`).join('<br>'));
+    `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${s.dd[k] > 0 ? '−' : ''}${trAccFmt.pct
+      ? trFx(s.dd[k]).replace('.', ',') + ' %'
+      : trNum0.format(Math.round(s.dd[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
 }
 function trTipOff4() {
   trTipOff();
