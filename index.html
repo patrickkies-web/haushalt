@@ -4306,11 +4306,63 @@ function trEvaluate(raw, opt) {
   return { trades: out, ps };
 }
 
+// Felder, mit denen gerechnet wird. JSON kennt kein NaN — beim Export wird
+// daraus null, beim Einlesen muss es zurück zu NaN, sonst zählt ein fehlender
+// Wert als 0. Text in diesen Feldern wird ebenfalls zu einer Zahl.
+const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct', 'bhi', 'blo',
+  'boxPts', 'tiefe', 'ent', 'sl', 'slPts', 'wickPts', 'mfePts', 'mfeR', 'mfeMin', 'maePts',
+  'maeR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
+  'tpP2', 'tp2R', 'tp2RR', 'ts', 'stunde', 'brk'];
+
+// Eine früher exportierte Auswertung wieder einlesen. Akzeptiert die ganze
+// Datei ({meta, kennzahlen, …, trades}) ebenso wie eine blanke Trade-Liste.
+function trLoadJson(text, append) {
+  let d;
+  try { d = JSON.parse(text); }
+  catch (e) { return { err: 'Das ist kein lesbares JSON: ' + e.message }; }
+  const rows = Array.isArray(d) ? d : (Array.isArray(d.trades) ? d.trades : null);
+  if (!rows) return { err: 'Im JSON steckt keine Liste „trades“.' };
+  const ok = rows.filter(t => t && typeof t === 'object' && !isNaN(trN(t.ent)));
+  if (!ok.length) return { err: 'Die Liste enthält keine auswertbaren Einstiege.' };
+  const seen = new Set(append ? trTrades.map(t => t.id) : []);
+  const stamp = Date.now().toString(36);
+  const clean = ok.map((t, i) => {
+    const r = { ...t, sel: t.sel !== false };
+    TR_NUMKEYS.forEach(k => { if (k in r) r[k] = trN(r[k]); });
+    r.id = (r.id && !seen.has(r.id)) ? r.id : ('j' + stamp + i);
+    seen.add(r.id);
+    return r;
+  });
+  trTrades = append ? trTrades.concat(clean) : clean;
+  // Einstellungen übernehmen, soweit die Datei welche mitbringt
+  const m = d && d.meta || {};
+  if (m.symbol) trMeta.symbol = m.symbol;
+  if (typeof m.ps === 'number') trMeta.ps = m.ps;
+  if (Array.isArray(m.rrs)) trMeta.rrs = m.rrs;
+  if (d && d.konto) {
+    if (typeof d.konto.startkapital === 'number') trMeta.start = d.konto.startkapital;
+    if (typeof d.konto.risikoProzent === 'number') trMeta.risk = d.konto.risikoProzent;
+  }
+  if (Array.isArray(d && d.simulation)) {
+    const rrs = d.simulation.filter(x => typeof x.festesRR === 'number').map(x => x.festesRR);
+    if (rrs.length) trMeta.rrs = rrs.slice(0, 4);
+  }
+  return { n: clean.length };
+}
+
+const trLooksJson = txt => /^\s*[\[{]/.test(txt);
+const trEnt = n => n + (n === 1 ? ' Einstieg' : ' Einstiege');
+
 // ── Kennzahlen ─────────────────────────────────────────────────────────────
 const trOn = () => trTrades.filter(t => t.sel !== false);
-const trFx = v => isNaN(v) || v === null ? "—" : v.toFixed(2);
-const trFi = v => isNaN(v) || v === null ? "—" : String(Math.round(v));
-const trSign = v => isNaN(v) ? "—" : (v > 0 ? "+" : "") + v.toFixed(2);
+// Ein Wert kann aus einer eingelesenen Datei auch als Text oder als null
+// kommen — erst umwandeln, dann formatieren.
+const trN = v => typeof v === 'number' ? v
+  : (typeof v === 'string' && v.trim() !== '' ? Number(v.replace(',', '.')) : NaN);
+const trFx = v => (v = trN(v), isNaN(v) ? "—" : v.toFixed(2));
+const trFi = v => (v = trN(v), isNaN(v) ? "—" : String(Math.round(v)));
+const trSign = v => (v = trN(v), isNaN(v) ? "—" : (v > 0 ? "+" : "") + v.toFixed(2));
+const trPct1 = v => (v = trN(v), isNaN(v) ? "" : v.toFixed(1) + " %");
 
 // Pro Ziel: wie oft gesetzt, Erreichquote, Ø geplantes und Ø erreichtes RR.
 // Ø erreichtes RR ist die Expectancy — Verfehlen zählt als −1 (voller Stop).
@@ -5065,10 +5117,10 @@ const TR_COLS = [
   ["Bruch #", t => isNaN(t.brk) ? "" : t.brk], ["Gegen Trend", t => t.gegenTrend],
   ["Event", t => t.evZeit], ["Touch→Event", t => trFi(t.touchEvMin)], ["Warten (Min)", t => trFi(t.warteMin)],
   ["Zone High", t => trNum(t.zoneHi)], ["Zone Low", t => trNum(t.zoneLo)],
-  ["Eintauchtiefe", t => isNaN(t.zonePenPct) ? "" : t.zonePenPct.toFixed(1) + " %"],
+  ["Eintauchtiefe", t => trPct1(t.zonePenPct)],
   ["durchgedippt", t => t.zoneThrough],
   ["Box High", t => trNum(t.bhi)], ["Box Low", t => trNum(t.blo)],
-  ["Box (Pkt)", t => trFi(t.boxPts)], ["Entry-Tiefe", t => isNaN(t.tiefe) ? "" : t.tiefe.toFixed(1) + " %"],
+  ["Box (Pkt)", t => trFi(t.boxPts)], ["Entry-Tiefe", t => trPct1(t.tiefe)],
   ["Box ⟩ Zone", t => t.boxSweep],
   ["Entry-Level", t => t.entLevel], ["Limit", t => t.limOrder],
   ["Entry", t => trNum(t.ent)], ["SL", t => trNum(t.sl)],
@@ -5091,7 +5143,7 @@ const TR_COLS = [
   ["TP2 erreicht", t => !t.tpHas2 ? "" : t.tpR2 ? '<span class="nein">JA</span>' : '<span class="ja">nein</span>'],
   ["TP2 vor Fill", t => t.preTP2]
 ];
-const trNum = v => isNaN(v) || v === null ? "" : String(+v.toPrecision(10));
+const trNum = v => (v = trN(v), isNaN(v) ? "" : String(+v.toPrecision(10)));
 
 function trTable() {
   if (!trTrades.length) return '';
@@ -5131,14 +5183,15 @@ function renderTrades() {
 
   const input = `<div class="tr-in">
     <div class="tr-drop" id="tr-drop" onclick="$('tr-file').click()">
-      <b>CSV aus TradingView hier ablegen</b>
-      <span>oder tippen zum Auswählen. Das Symbol wird aus dem Dateinamen gelesen.<br>
+      <b>CSV aus TradingView oder gespeichertes JSON hier ablegen</b>
+      <span>oder tippen zum Auswählen. Bei einer CSV wird das Symbol aus dem Dateinamen gelesen,
+        eine JSON-Auswertung kommt samt Einstellungen zurück.<br>
         Alternativ den Inhalt unten einfügen.</span>
-      <input type="file" id="tr-file" accept=".csv,text/csv,text/plain" style="display:none">
+      <input type="file" id="tr-file" accept=".csv,.json,text/csv,application/json,text/plain" style="display:none">
     </div>
     <div class="field" style="margin:12px 0 0">
       <textarea id="tr-raw" style="min-height:64px;font-family:ui-monospace,monospace;font-size:12px"
-        oninput="trRaw = this.value" placeholder="…oder CSV-Inhalt hier einfügen">${esc(trRaw)}</textarea>
+        oninput="trRaw = this.value" placeholder="…oder CSV- bzw. JSON-Inhalt hier einfügen">${esc(trRaw)}</textarea>
     </div>
     <div class="tr-opts">
       <div class="tr-f"><label>Symbol</label><input id="tr-sym" type="text" placeholder="z. B. EURUSD" oninput="trMeta.symbol = this.value" value="${esc(trMeta.symbol || '')}"></div>
@@ -5200,8 +5253,19 @@ function trWire() {
     if (!file) return;
     const sym = trSymFromFile(file.name);
     const r = new FileReader();
-    r.onload = e => {
-      trRaw = e.target.result;
+    r.onload = async e => {
+      const txt = String(e.target.result || '');
+      if (/\.json$/i.test(file.name) || trLooksJson(txt)) {
+        const append = $("tr-app") && $("tr-app").checked;
+        const res = trLoadJson(txt, append);
+        if (res.err) { trMsg = { ok: false, text: res.err }; renderTrades(); return; }
+        trRaw = '';
+        trMsg = { ok: true, text: `${trEnt(res.n)} aus ${file.name} geladen · Sammlung ${trTrades.length}` };
+        await persistTrades();
+        renderTrades();
+        return;
+      }
+      trRaw = txt;
       if (sym) trMeta.symbol = sym;
       trMsg = { ok: true, text: `Datei geladen: ${file.name}${sym ? ' · Symbol ' + sym : ''} — jetzt „Auswerten“.` };
       renderTrades();
@@ -5231,11 +5295,22 @@ async function trRun() {
     cut: $("tr-cut").value
   };
   const append = $("tr-app") && $("tr-app").checked;
+  if (trLooksJson(raw)) {
+    const jr = trLoadJson(raw, append);
+    if (jr.err) { trMsg = { ok: false, text: jr.err }; renderTrades(); return; }
+    trRaw = '';
+    trMsg = { ok: true, text: `${trEnt(jr.n)} aus dem JSON geladen · Sammlung ${trTrades.length}` };
+    await persistTrades();
+    renderTrades();
+    return;
+  }
   const res = trEvaluate(raw, opt);
   if (res.err) { trMsg = { ok: false, text: res.err }; renderTrades(); return; }
   trTrades = append ? trTrades.concat(res.trades) : res.trades;
-  trMeta = { symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
-  trMsg = { ok: true, text: `${res.trades.length} Einstiege ausgewertet · Sammlung ${trTrades.length} · Punktgröße ${res.ps}` };
+  // Kontoeinstellungen und Ziel-RR gehören zur Strategie, nicht zur Datei —
+  // die bleiben beim Einlesen einer neuen CSV stehen.
+  trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
+  trMsg = { ok: true, text: `${trEnt(res.trades.length)} ausgewertet · Sammlung ${trTrades.length} · Punktgröße ${res.ps}` };
   trRaw = '';
   await persistTrades();
   renderTrades();
