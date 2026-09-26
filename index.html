@@ -2014,6 +2014,29 @@
     .tr-wide tr.off td { opacity: .35; }
     .tr-wide .ja   { color: var(--ch-bad); font-weight: 600; }
     .tr-wide .nein { color: var(--ch-good); font-weight: 600; }
+    /* Filter: je Bedingung eine Reihe von Werten zum Abwählen */
+    .tr-fdim { border-top: 1px solid var(--line-soft); padding: 13px 0 3px; }
+    .tr-fdim:first-of-type { border-top: none; padding-top: 0; }
+    .tr-fhead { display: flex; align-items: baseline; justify-content: space-between;
+      gap: 10px; margin-bottom: 9px; }
+    .tr-fhead b { font-size: 12.5px; font-weight: 600; }
+    .tr-flink { background: none; border: none; font: inherit; font-size: 11.5px;
+      color: var(--muted); cursor: pointer; padding: 2px 3px; }
+    .tr-flink:hover { color: var(--accent); }
+    .tr-fvals { display: flex; flex-wrap: wrap; gap: 7px; }
+    .tr-fchk {
+      display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px;
+      background: var(--sunken); border: 1px solid transparent; border-radius: 999px;
+      padding: 5px 11px 5px 9px; cursor: pointer;
+      transition: opacity .18s ease, border-color .18s ease;
+    }
+    .tr-fchk:hover { border-color: var(--line); }
+    .tr-fchk input { accent-color: var(--accent); width: 15px; height: 15px; }
+    .tr-fchk i { font-style: normal; font-size: 11.5px; color: var(--faint);
+      font-variant-numeric: tabular-nums; }
+    .tr-fchk.off { opacity: .45; }
+    .tr-fchk.off span { text-decoration: line-through; }
+
     .tr-fold { margin-bottom: 14px; }
     .tr-fold summary {
       cursor: pointer; font-size: 14px; font-weight: 600; padding: 14px 16px;
@@ -3726,6 +3749,7 @@ async function load() {
       const d = JSON.parse(rt.value);
       if (Array.isArray(d.trades)) trTrades = d.trades;
       if (d.meta) trMeta = { ...trMeta, ...d.meta };
+      if (d.hide && typeof d.hide === 'object') trHide = d.hide;
     }
   } catch (e) {}
   try {
@@ -4043,11 +4067,12 @@ const needsSetup = () => !household.name && subs.length === 0;
 let trTrades = [];                                     // ausgewertete Einstiege
 let trMeta   = { symbol: '', ps: null, cut: '', at: null };
 let trMsg    = null;
+let trHide   = {};                                     // je Bedingung die ausgeblendeten Werte
 let trRaw    = '';                                     // eingelesene CSV, überlebt das Neuzeichnen
 const TR_WD  = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 async function persistTrades() {
-  try { await window.storage.set(TRKEY, JSON.stringify({ trades: trTrades, meta: trMeta })); } catch (e) {}
+  try { await window.storage.set(TRKEY, JSON.stringify({ trades: trTrades, meta: trMeta, hide: trHide })); } catch (e) {}
 }
 
 // ── CSV lesen ──────────────────────────────────────────────────────────────
@@ -4334,6 +4359,7 @@ function trLoadJson(text, append) {
     return r;
   });
   trTrades = append ? trTrades.concat(clean) : clean;
+  if (!append) trHide = {};   // die Filter gehörten zur alten Sammlung
   // Einstellungen übernehmen, soweit die Datei welche mitbringt
   const m = d && d.meta || {};
   if (m.symbol) trMeta.symbol = m.symbol;
@@ -4354,7 +4380,7 @@ const trLooksJson = txt => /^\s*[\[{]/.test(txt);
 const trEnt = n => n + (n === 1 ? ' Einstieg' : ' Einstiege');
 
 // ── Kennzahlen ─────────────────────────────────────────────────────────────
-const trOn = () => trTrades.filter(t => t.sel !== false);
+const trOn = () => trTrades.filter(t => t.sel !== false && trPass(t));
 // Ein Wert kann aus einer eingelesenen Datei auch als Text oder als null
 // kommen — erst umwandeln, dann formatieren.
 const trN = v => typeof v === 'number' ? v
@@ -4390,6 +4416,8 @@ const TR_DIMS = [
   ["Session",            t => t.session],
   ["Wochentag",          t => t.wtag],
   ["Symbol",             t => t.sym || null],
+  ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
+  ["Zone durchgedippt",  t => t.zoneThrough === "JA" ? "durchgedippt" : t.zoneThrough === "nein" ? "nicht durchgedippt" : null],
   ["Box-Ziel vor Fill berührt", t => t.preTouch === "JA" ? "vorher berührt" : t.preTouch === "nein" ? "nicht vorher berührt" : null],
   ["Box überschießt Zone", t => t.boxSweep === "JA" ? "Box überschießt Zone" : t.boxSweep === "nein" ? "Box innerhalb Zone" : null],
   ["TP1 vor Fill erreicht", t => t.preTP1 === "JA" ? "TP1 lief schon" : t.preTP1 === "nein" ? "TP1 lief noch nicht" : null],
@@ -4423,13 +4451,111 @@ function trGroups(list, keyFn) {
   });
 }
 
+// ── Filter: welche Einstiege überhaupt mitzählen ───────────────────────────
+// Jede erfasste Bedingung aus TR_DIMS lässt sich abwählen — das Währungspaar
+// zuerst, dann Richtung, Session, Bruch und der Rest. Gespeichert werden die
+// ausgeblendeten Werte, nicht die sichtbaren: so zählt ein Paar, das später
+// dazukommt, von sich aus mit.
+const TR_NONE = '\u0000leer';
+const TR_NONE_LBL = 'ohne Angabe';
+const TR_FILT_TOP = ['Symbol', 'Richtung', 'Session', 'Wochentag'];
+
+const trDimVal = (fn, t) => {
+  const v = fn(t);
+  return (v === null || v === undefined || v === '') ? TR_NONE : String(v);
+};
+function trPass(t, skip) {
+  for (const [label, fn] of TR_DIMS) {
+    if (label === skip) continue;
+    const h = trHide[label];
+    if (h && h.length && h.includes(trDimVal(fn, t))) return false;
+  }
+  return true;
+}
+
+// Alle Werte einer Bedingung. Die Liste der Werte kommt aus der ganzen
+// Sammlung — ein ausgeblendeter oder gerade weggefilterter Wert bleibt darin
+// stehen, sonst wäre er nicht mehr zurückzuholen. Gezählt wird dagegen nur,
+// was die übrigen Filter durchlassen: die Zahl sagt also, was dieser Haken
+// hier und jetzt noch beiträgt.
+function trDimVals(label, fn, base, facet) {
+  const keys = new Set(base.map(t => trDimVal(fn, t)));
+  (trHide[label] || []).forEach(k => keys.add(k));
+  const c = {};
+  (facet || base).forEach(t => { const k = trDimVal(fn, t); if (keys.has(k)) c[k] = (c[k] || 0) + 1; });
+  const num = k => { const m = String(k).match(/\d+/); return m ? +m[0] : NaN; };
+  return [...keys].sort((a, b) => {
+    if (a === TR_NONE) return 1;
+    if (b === TR_NONE) return -1;
+    const na = num(a), nb = num(b);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), 'de');
+  }).map(k => ({ val: k, n: c[k] || 0, on: !(trHide[label] || []).includes(k) }));
+}
+
+async function trFilt(label, val, on) {
+  const s = new Set(trHide[label] || []);
+  if (on) s.delete(val); else s.add(val);
+  if (s.size) trHide[label] = [...s]; else delete trHide[label];
+  await persistTrades();
+  renderTrades();
+}
+// on = true: alles dieser Bedingung wieder zeigen. Sonst alles ausblenden —
+// dann reicht ein Haken, um genau einen Wert übrig zu lassen.
+async function trFiltAll(label, on) {
+  const dim = TR_DIMS.find(d => d[0] === label);
+  if (!dim) return;
+  if (on) delete trHide[label];
+  else trHide[label] = trDimVals(label, dim[1], trTrades.filter(t => t.sel !== false)).map(v => v.val);
+  await persistTrades();
+  renderTrades();
+}
+async function trFiltReset() {
+  trHide = {};
+  await persistTrades();
+  renderTrades();
+}
+
+function trFilterCard() {
+  const base = trTrades.filter(t => t.sel !== false);
+  if (!base.length) return '';
+  const rank = l => { const i = TR_FILT_TOP.indexOf(l); return i >= 0 ? i : TR_FILT_TOP.length + TR_DIMS.findIndex(d => d[0] === l); };
+  const dims = TR_DIMS
+    .map(([l, f]) => ({ l, vals: trDimVals(l, f, base, base.filter(t => trPass(t, l))) }))
+    .filter(d => d.vals.length >= 2)
+    .sort((a, b) => rank(a.l) - rank(b.l));
+  if (!dims.length) return '';
+  const shown = base.filter(trPass).length;
+  const act = Object.keys(trHide).length > 0;
+  const q = s => esc(JSON.stringify(s));
+
+  return `<details class="tr-fold" ${act ? 'open' : ''}>
+    <summary>Filter · ${shown} von ${base.length} Einstiegen${act ? ' · aktiv' : ''}</summary>
+    <div class="tr-body">
+      <div class="tr-sub">Abgewählte Bedingungen fallen aus Kennzahlen, Grafiken, Simulation und
+        Export heraus. Die Zahl hinter einem Wert sagt, wie viele Einstiege er bei den
+        übrigen Filtern noch beisteuert.
+        ${act ? `<button class="tr-flink" style="display:block;padding-left:0;margin-top:7px"
+          onclick="trFiltReset()">alle Filter zurücksetzen</button>` : ''}</div>
+      ${dims.map(d => `<div class="tr-fdim">
+        <div class="tr-fhead"><b>${esc(d.l)}</b><span>
+          <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, true)">alle</button>
+          <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, false)">keine</button></span></div>
+        <div class="tr-fvals">${d.vals.map(v => `<label class="tr-fchk ${v.on ? '' : 'off'}">
+          <input type="checkbox" ${v.on ? 'checked' : ''} onchange="trFilt(${q(d.l)}, ${q(v.val)}, this.checked)">
+          <span>${esc(v.val === TR_NONE ? TR_NONE_LBL : v.val)}</span><i>${v.n}</i></label>`).join('')}</div>
+      </div>`).join('')}
+    </div></details>`;
+}
+
 // Alles, was sowohl die Anzeige als auch der JSON-Export braucht
 function trReport() {
   const list = trOn();
   const n = list.length;
   const box = trGoal(list, ...TR_GOALS[0].slice(1));
   return {
-    meta: { ...trMeta, erstellt: new Date().toISOString(), einstiege: n, gesamt: trTrades.length },
+    meta: { ...trMeta, erstellt: new Date().toISOString(), einstiege: n, gesamt: trTrades.length,
+      ...(Object.keys(trHide).length ? { ausgeblendet: trHide } : {}) },
     kennzahlen: {
       einstiege: n,
       stopQuote: n ? 100 * list.filter(t => t.stopped).length / n : NaN,
@@ -5149,12 +5275,13 @@ function trTable() {
   if (!trTrades.length) return '';
   return `<details class="tr-fold"><summary>Alle Einstiege · ${trTrades.length}</summary>
     <div class="tr-body">
-      <div class="tr-sub">Abgewählte Zeilen fallen aus Kennzahlen, Grafiken und Export heraus.</div>
+      <div class="tr-sub">Abgewählte Zeilen fallen aus Kennzahlen, Grafiken und Export heraus —
+        blasse Zeilen ohne Haken hat ein Filter ausgeblendet.</div>
       <div class="tr-scroll"><table class="tr-wide">
         <tr><th><input type="checkbox" ${trTrades.every(t => t.sel !== false) ? 'checked' : ''}
           onchange="trSelAll(this.checked)"></th>
           ${TR_COLS.map(c => `<th>${esc(c[0])}</th>`).join('')}</tr>
-        ${trTrades.map((t, i) => `<tr class="${t.sel === false ? 'off' : ''}">
+        ${trTrades.map((t, i) => `<tr class="${t.sel === false || !trPass(t) ? 'off' : ''}">
           <td><input type="checkbox" ${t.sel !== false ? 'checked' : ''} onchange="trSelOne(${i},this.checked)"></td>
           ${TR_COLS.map(c => { const v = c[1](t); return `<td>${v === "" || v === undefined ? '—' : v}</td>`; }).join('')}
         </tr>`).join('')}
@@ -5208,6 +5335,17 @@ function renderTrades() {
     ${trMsg ? `<div class="tr-note ${trMsg.ok ? 'ok' : 'err'}">${esc(trMsg.text)}</div>` : ''}
   </div>`;
 
+  if (trTrades.length && !list.length) {
+    const byFilter = Object.keys(trHide).length > 0;
+    host.innerHTML = input + trFilterCard() + `<div class="tr-empty">
+      ${byFilter ? 'Der Filter lässt gerade keinen Einstieg übrig.'
+                 : 'Gerade ist kein Einstieg ausgewählt.'}
+      ${byFilter ? '<br><button class="tr-flink" onclick="trFiltReset()">alle Filter zurücksetzen</button>' : ''}
+    </div>` + trTable();
+    trWire();
+    return;
+  }
+
   if (!trTrades.length) {
     host.innerHTML = input + `<div class="tr-empty">
       Noch keine Auswertung.<br>
@@ -5219,7 +5357,7 @@ function renderTrades() {
 
   const kpis = [
     { v: k.einstiege, l: 'Einstiege' },
-    { v: Math.round(k.stopQuote) + ' %', l: 'ausgestoppt' },
+    { v: trFi(k.stopQuote) + ' %', l: 'ausgestoppt' },
     { v: trSign(k.expectancyBox), l: 'Ø erreichtes RR<br>am Box-Ziel', cls: k.expectancyBox >= 0 ? 'pos' : 'neg' },
     { v: trSign(k.summeRBox) + ' R', l: 'Summe am Box-Ziel', cls: k.summeRBox >= 0 ? 'pos' : 'neg' },
     { v: trFx(k.medianMaxProfitR), l: 'Median Max-Profit (R)' },
@@ -5234,6 +5372,7 @@ function renderTrades() {
   list.filter(t => t.hasTgt).forEach(t => { cum += t.tgtRR; trEqPts.push({ ...t, cum }); });
 
   host.innerHTML = input
+    + trFilterCard()
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trEquity(list)
@@ -5307,6 +5446,7 @@ async function trRun() {
   const res = trEvaluate(raw, opt);
   if (res.err) { trMsg = { ok: false, text: res.err }; renderTrades(); return; }
   trTrades = append ? trTrades.concat(res.trades) : res.trades;
+  if (!append) trHide = {};
   // Kontoeinstellungen und Ziel-RR gehören zur Strategie, nicht zur Datei —
   // die bleiben beim Einlesen einer neuen CSV stehen.
   trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
@@ -5318,6 +5458,7 @@ async function trRun() {
 
 async function trClear() {
   trTrades = [];
+  trHide = {};
   trMsg = { ok: true, text: 'Sammlung geleert.' };
   await persistTrades();
   renderTrades();
