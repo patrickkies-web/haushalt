@@ -2037,6 +2037,19 @@
     .tr-fchk.off { opacity: .45; }
     .tr-fchk.off span { text-decoration: line-through; }
 
+    /* Festes Ziel und Kontoverlauf gehören zusammen: auf breiten Schirmen
+       stehen sie nebeneinander, damit man zum Vergleichen nicht scrollen
+       muss. Dafür darf der Bereich aus der 560er-Spalte heraustreten. */
+    .tr-broad { display: grid; gap: 0 14px; align-items: start; }
+    .tr-broad > .tr-card { min-width: 0; }   /* Raster-Spalten dürfen schrumpfen */
+    @media (min-width: 1000px) {
+      .tr-broad {
+        width: min(1400px, 94vw); margin-left: 50%; transform: translateX(-50%);
+        grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+      }
+      .tr-broad > .tr-card { margin-bottom: 14px; }
+    }
+
     .tr-fold { margin-bottom: 14px; }
     .tr-fold summary {
       cursor: pointer; font-size: 14px; font-weight: 600; padding: 14px 16px;
@@ -4630,7 +4643,8 @@ function trReport() {
       const a = trAccount(series, trStart(), trRisk());
       return { startkapital: trStart(), risikoProzent: trRisk(),
         varianten: a.map(x => ({ ziel: x.name, endstand: x.end,
-          veraenderung: x.end - trStart(), maxRuecksetzerProzent: x.maxDD })) };
+          veraenderung: x.end - trStart(), maxRuecksetzerProzent: x.maxDD,
+          amStueckUnterWasser: x.ddLen, ruecksetzerVerlauf: x.dd.map(v => +v.toFixed(2)) })) };
     })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
     aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f) }))
@@ -4988,15 +5002,19 @@ const trNum2  = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maxim
 
 function trAccount(series, start, riskPct) {
   return series.map(s => {
-    let bal = start, peak = start, maxDD = 0;
-    const pts = s.vals.map(v => {
+    let bal = start, peak = start, maxDD = 0, ddIdx = -1, run = 0, ddLen = 0;
+    const dd = [];
+    const pts = s.vals.map((v, i) => {
       bal = Math.max(0, bal * (1 + riskPct / 100 * v));
       if (bal > peak) peak = bal;
-      const dd = peak > 0 ? (peak - bal) / peak * 100 : 0;
-      if (dd > maxDD) maxDD = dd;
+      const d = peak > 0 ? (peak - bal) / peak * 100 : 0;
+      dd.push(d);
+      if (d > maxDD) { maxDD = d; ddIdx = i; }
+      // längste Strecke unter Wasser: wie viele Einstiege bis zum neuen Hoch
+      if (d > 0) { run++; if (run > ddLen) ddLen = run; } else run = 0;
       return bal;
     });
-    return { name: s.name, id: s.id, pts, end: bal, maxDD };
+    return { name: s.name, id: s.id, pts, dd, end: bal, maxDD, ddIdx, ddLen };
   });
 }
 
@@ -5040,7 +5058,27 @@ function trAccCard(list) {
   for (let k = 1; k < ends.length; k++)
     if (ends[k].y - ends[k - 1].y < 12) ends[k].y = ends[k - 1].y + 12;
 
-  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts }));
+  // Rücksetzer vom jeweiligen Höchststand, dieselbe X-Achse wie das Konto —
+  // so lassen sich beide Kurven Einstieg für Einstieg nebeneinander lesen.
+  const ddTop = Math.max(5, Math.ceil(Math.max(...acc.map(a => a.maxDD)) / 5) * 5);
+  const DY = v => PT + ih * v / ddTop;
+  const dPath = a => `M${(PL - 6).toFixed(1)} ${DY(0).toFixed(1)} ` +
+    a.dd.map((v, k) => 'L' + X(k).toFixed(1) + ' ' + DY(v).toFixed(1)).join(' ');
+  const dArea = a => dPath(a) + ` L${X(Math.max(0, n - 1)).toFixed(1)} ${DY(0).toFixed(1)} Z`;
+  const dTicks = [0, 1, 2, 3, 4].map(k => ddTop * k / 4);
+  const ddLbl = v => v <= 0 ? '0 %'
+    : '−' + (v % 1 ? v.toFixed(1).replace('.', ',') : v.toFixed(0)) + ' %';
+  const worst = acc[trPick];
+  const wx = worst.ddIdx >= 0 ? X(worst.ddIdx) : null;
+  // Die Marke für den tiefsten Stand schiebt sich mit den Namen auseinander
+  const dEnds = acc.map((a, i) => ({ i, y: DY(a.dd[a.dd.length - 1] || 0) }));
+  if (wx !== null) dEnds.push({ i: -1, y: DY(worst.maxDD) });
+  dEnds.sort((a, b) => a.y - b.y);
+  for (let k = 1; k < dEnds.length; k++)
+    if (dEnds[k].y - dEnds[k - 1].y < 12) dEnds[k].y = dEnds[k - 1].y + 12;
+  const wLbl = dEnds.find(e => e.i === -1);
+
+  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts, dd: a.dd }));
   trAccN = n;
 
   return `<div class="tr-card">
@@ -5059,14 +5097,13 @@ function trAccCard(list) {
     </div>
 
     <div class="tr-tblwrap"><table class="tr-tbl">
-      <tr><th>Ziel</th><th class="num">Konto am Ende</th><th class="num">Veränderung</th><th class="num">max. Rücksetzer</th></tr>
+      <tr><th>Ziel</th><th class="num">Konto am Ende</th><th class="num">Veränderung</th></tr>
       ${acc.map((a, i) => `<tr>
         <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
         <td class="num">${trNum0.format(Math.round(a.end))}</td>
         <td class="num" style="color:${a.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${
           (a.end >= start ? '+' : '−') + trNum0.format(Math.round(Math.abs(a.end - start)))}</td>
-        <td class="num">${a.maxDD.toFixed(1)} %</td>
       </tr>`).join('')}
     </table></div>
 
@@ -5093,6 +5130,53 @@ function trAccCard(list) {
       <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
       <span>gestrichelt: Startkapital</span>
     </div>
+  </div>
+
+  <div class="tr-card">
+    <div class="tr-h"><span>Rücksetzer vom Höchststand</span></div>
+    <div class="tr-sub">Wie weit das Konto jeweils unter seinem eigenen Höchststand lag —
+      dieselben Ziele, dasselbe Startkapital und Risiko wie nebenan. Nicht die Endsumme
+      entscheidet, ob eine Variante aushaltbar ist, sondern diese Tiefe und wie lange sie
+      am Stück anhielt.</div>
+
+    <div class="tr-tblwrap"><table class="tr-tbl">
+      <tr><th>Ziel</th><th class="num">tiefster Stand</th><th class="num">unter Wasser</th></tr>
+      ${acc.map((a, i) => `<tr>
+        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+          <i></i>${esc(a.name)}</button></td>
+        <td class="num" style="${i === trPick ? 'color:var(--ch-bad);font-weight:600' : ''}">${a.maxDD.toFixed(1).replace('.', ',')} %</td>
+        <td class="num">${a.ddLen} ${a.ddLen === 1 ? 'Einstieg' : 'Einstiege'}</td>
+      </tr>`).join('')}
+    </table></div>
+
+    <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
+      aria-label="Rücksetzer vom jeweiligen Höchststand in Prozent für ${acc.length} Zielvarianten, je Einstieg; tiefster Stand der hervorgehobenen Variante ${esc(acc[trPick].name)}: ${worst.maxDD.toFixed(1)} Prozent">
+      ${dTicks.map(v => `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${PL - 6}" y1="${DY(v).toFixed(1)}" x2="${W - PR}" y2="${DY(v).toFixed(1)}"/>
+        <text class="ax" x="${PL - 12}" y="${(DY(v) + 3).toFixed(1)}" text-anchor="end">${ddLbl(v)}</text>`).join('')}
+      <path class="tr-area" d="${dArea(worst)}" fill="var(--ch-good)" style="--op:.13"/>
+      ${acc.map((a, i) => i === trPick ? '' :
+        `<path class="tr-line tr-ctx" d="${dPath(a)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
+      <path class="tr-line" d="${dPath(worst)}" stroke="var(--ch-good)"
+        style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
+      ${wx === null ? '' : `<line class="grid" x1="${PL - 6}" y1="${DY(worst.maxDD).toFixed(1)}" x2="${W - PR}" y2="${DY(worst.maxDD).toFixed(1)}"
+          stroke="var(--ch-bad)" stroke-dasharray="4 3"/>
+        <circle class="tr-dot" cx="${wx.toFixed(1)}" cy="${DY(worst.maxDD).toFixed(1)}" r="4"
+          fill="var(--ch-bad)" stroke="var(--surface)" stroke-width="2"/>
+        <text class="lbl" x="${(W - PR + 6)}" y="${((wLbl ? wLbl.y : DY(worst.maxDD)) + 3).toFixed(1)}"
+          style="fill:var(--ch-bad);font-weight:600">max ${worst.maxDD.toFixed(1).replace('.', ',')} %</text>`}
+      ${dEnds.filter(e => e.i >= 0 && e.i !== trPick).map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}">${esc(acc[e.i].name)}</text>`).join('')}
+      <line id="tr-cross4" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+      <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
+        onmousemove="trDdHover(event,this.ownerSVGElement)" onmouseleave="trTipOff4()"
+        ontouchmove="trDdHover(event,this.ownerSVGElement)" ontouchend="trTipOff4()"/>
+      <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
+      <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
+    </svg>
+    <div class="tr-legend">
+      <span><i style="background:var(--ch-good)"></i>${esc(acc[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
+      <span><i style="background:var(--ch-bad)"></i>tiefster Stand</span>
+    </div>
   </div>`;
 }
 
@@ -5116,6 +5200,27 @@ function trAccHover(ev, svg) {
 function trTipOff3() {
   trTipOff();
   const c = document.getElementById('tr-cross3');
+  if (c) c.setAttribute('opacity', '0');
+}
+function trDdHover(ev, svg) {
+  if (!trAccPts.length) return;
+  const r = svg.getBoundingClientRect();
+  const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  const W = 520, PL = 52, PR = 66, iw = W - PL - PR;
+  const rel = ((cx - r.left) / r.width * W - PL) / iw;
+  const k = Math.max(0, Math.min(trAccN - 1, Math.round(rel * (trAccN - 1))));
+  const cross = document.getElementById('tr-cross4');
+  if (cross) {
+    const x = PL + iw * k / Math.max(1, trAccN - 1);
+    cross.setAttribute('x1', x); cross.setAttribute('x2', x);
+    cross.setAttribute('opacity', '.4');
+  }
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
+    `${i === trPick ? '<b>' : ''}${esc(s.name)}: −${trFx(s.dd[k]).replace('.', ',')} %${i === trPick ? '</b>' : ''}`).join('<br>'));
+}
+function trTipOff4() {
+  trTipOff();
+  const c = document.getElementById('tr-cross4');
   if (c) c.setAttribute('opacity', '0');
 }
 
@@ -5446,8 +5551,7 @@ function renderTrades() {
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trEquity(list)
-    + trSimCard(list)
-    + trAccCard(list)
+    + `<div class="tr-broad">${trSimCard(list)}${trAccCard(list)}</div>`
     + trHist(list)
     + trGoalsCard(list)
     + TR_DIMS.map(([l, f]) => trDimCard(list, l, f, false)).join('')
