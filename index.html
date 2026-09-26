@@ -4124,6 +4124,24 @@ const trSymFromFile = name => {
 
 // Wertet eine TradingView-CSV aus: findet jede Fill-Zeile, ordnet ihr das
 // auslösende Event zu und misst den Verlauf bis Stop, Ziel oder Datenende.
+// Alle R-Werte eines Einstiegs aus einer Risikodistanz. Steht die Distanz
+// erst nach der Schleife fest, rechnet dieselbe Funktion sie noch einmal durch.
+function trSetR(t, sd, toPts) {
+  const d = t._d, r = x => (!isNaN(x) && sd > 0) ? x / sd : NaN;
+  t.slPts = sd > 0 ? toPts(sd) : NaN;
+  t.mfeR  = r(d.mfe);
+  t.maeR  = r(d.mae);
+  t.tgtR  = r(d.tgt);
+  t.tp1R  = r(d.tp1);
+  t.tp2R  = r(d.tp2);
+  // Verfehlt zählt als voller Stop — aber nur, wenn der Einstieg auch
+  // ausgestoppt wurde. Ein noch laufender bleibt unentschieden (NaN).
+  const res = (has, hit, rr) => !has ? NaN : hit ? rr : (t.stopped ? -1 : NaN);
+  t.tgtRR = res(t.hasTgt, t.reached, t.tgtR);
+  t.tp1RR = res(t.tpHas1, t.tpR1, t.tp1R);
+  t.tp2RR = res(t.tpHas2, t.tpR2, t.tp2R);
+}
+
 function trEvaluate(raw, opt) {
   const lines = raw.split(/\r?\n/).filter(l => l.trim() !== "");
   if (!lines.length) return { err: "Die Datei ist leer." };
@@ -4175,6 +4193,7 @@ function trEvaluate(raw, opt) {
     if (cEv >= 0 && parseFloat(c[cEv]) === 1) {
       events.push({ t, e1: cE1 >= 0 ? parseFloat(c[cE1]) : NaN, e2: cE2 >= 0 ? parseFloat(c[cE2]) : NaN,
                     avgW: cAW >= 0 ? parseFloat(c[cAW]) : NaN, touchS: cTo >= 0 ? parseFloat(c[cTo]) : NaN,
+                    slD: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN,
                     tp1: cZ1 >= 0 ? parseFloat(c[cZ1]) : NaN, tp2: cZ2 >= 0 ? parseFloat(c[cZ2]) : NaN });
     }
   }
@@ -4221,26 +4240,37 @@ function trEvaluate(raw, opt) {
     zoneThrough = zonePenPct > 100 ? "JA" : "nein";
   }
 
-  const out = [], doneFills = [];
+  const out = [], doneFills = [], slPool = [];
   for (let i = 0; i < bars.length; i++) {
     const b = bars[i];
     if (b.t > cutMs) break;
     if (b.fill !== 1 || isNaN(b.ent)) continue;
     const dir = b.dir;
-    const slDist = Math.abs(b.ent - b.sl);
     const target = dir === 1 ? b.bhi : b.blo;
-    let evT = null, entLevel = "", touchMs = null, evE1 = NaN, evE2 = NaN, avgW = NaN;
+    let evT = null, entLevel = "", touchMs = null, evE1 = NaN, evE2 = NaN, avgW = NaN, evSlD = NaN;
     for (let k = events.length - 1; k >= 0; k--) {
       const ev = events[k];
       if (ev.t > b.t) continue;
       const m1 = !isNaN(ev.e1) && Math.abs(ev.e1 - b.ent) <= tol;
       const m2 = !isNaN(ev.e2) && Math.abs(ev.e2 - b.ent) <= tol;
       if (m1 || m2) {
-        evT = ev.t; entLevel = m1 ? "1" : "2"; avgW = ev.avgW;
+        evT = ev.t; entLevel = m1 ? "1" : "2"; avgW = ev.avgW; evSlD = ev.slD;
         evE1 = ev.e1; evE2 = ev.e2;
         if (!isNaN(ev.touchS)) touchMs = ev.touchS * 1000;
         break;
       }
+    }
+    // Der SL steht manchmal noch nicht, wenn der Einstieg schon markiert ist.
+    // Ohne Risiko gäbe es kein R zu messen und der Einstieg fiele aus jeder
+    // Kennzahl heraus — dabei kann genau das ein Trade sein, der monatelang
+    // läuft. Ersatzweise zählt die SL-Distanz, die der Indikator ohnehin
+    // ausgibt, sonst der Median der gemessenen Distanzen dieser Datei. Die
+    // Bewegung selbst wird in Punkten gemessen und bleibt davon unberührt.
+    let slDist = Math.abs(b.ent - b.sl), slSrc = 'gesetzt';
+    if (!(slDist > 0)) {
+      const d = b.slDBar > 0 ? b.slDBar : (evSlD > 0 ? evSlD : NaN);
+      if (d > 0) { slDist = d; slSrc = 'SL-Distanz'; }
+      else { slDist = NaN; slSrc = 'geschätzt'; }
     }
     let limOrder = "";
     if (evT !== null) {
@@ -4289,12 +4319,12 @@ function trEvaluate(raw, opt) {
       if (!isNaN(tpP1) && (dir === 1 ? x.hi >= tpP1 : x.lo <= tpP1)) tpR1 = true;
       if (!isNaN(tpP2) && (dir === 1 ? x.hi >= tpP2 : x.lo <= tpP2)) tpR2 = true;
     }
-    const tp1R = (!isNaN(tpP1) && slDist > 0) ? (dir === 1 ? tpP1 - b.ent : b.ent - tpP1) / slDist : NaN;
-    const tp2R = (!isNaN(tpP2) && slDist > 0) ? (dir === 1 ? tpP2 - b.ent : b.ent - tpP2) / slDist : NaN;
-    const mfeR = slDist > 0 ? mfe / slDist : NaN;
-    const maeR = slDist > 0 ? maeBeforePeak / slDist : NaN;
     const tgtDist = isNaN(target) ? NaN : (dir === 1 ? target - b.ent : b.ent - target);
-    const tgtR = (!isNaN(tgtDist) && slDist > 0) ? tgtDist / slDist : NaN;
+    const tp1D = isNaN(tpP1) ? NaN : (dir === 1 ? tpP1 - b.ent : b.ent - tpP1);
+    const tp2D = isNaN(tpP2) ? NaN : (dir === 1 ? tpP2 - b.ent : b.ent - tpP2);
+    // Ein Einstieg, der weder den SL noch sein Ziel gesehen hat, läuft noch —
+    // er ist nicht verloren, sondern unentschieden.
+    const offen = (!stopped && !reached) ? "JA" : "nein";
     const boxH = (isNaN(b.bhi) || isNaN(b.blo)) ? NaN : (b.bhi - b.blo);
     const tiefe = (!isNaN(boxH) && boxH > 0) ? 100 * (dir === 1 ? (b.bhi - b.ent) : (b.ent - b.blo)) / boxH : NaN;
     const d0 = new Date(b.t);
@@ -4312,23 +4342,38 @@ function trEvaluate(raw, opt) {
       evDatum: evT ? trDate(evT) : "", evZeit: evT ? trClock(evT) : "",
       warteMin: evT ? Math.max(0, Math.round((b.t - evT) / 60000)) : NaN,
       touchEvMin: (evT && touchMs) ? Math.max(0, Math.round((evT - touchMs) / 60000)) : NaN,
-      ent: b.ent, sl: b.sl, slPts: isNaN(slDist) ? NaN : toPts(slDist),
+      ent: b.ent, sl: b.sl, slSrc,
       wickPts: isNaN(avgW) ? NaN : toPts(avgW),
-      stopped, mfePts: toPts(mfe), mfeR,
+      stopped, offen, mfePts: toPts(mfe),
       mfeMin: Math.max(0, Math.round((peakT - b.t) / 60000)),
-      maePts: toPts(maeBeforePeak), maeR,
+      maePts: toPts(maeBeforePeak),
       givebackPts: toPts(Math.max(0, mfe - favLast)),
       limOrder, preTouch, preTP1, preTP2,
-      hasTgt, target, tgtR, tgtRR: hasTgt ? (reached ? tgtR : -1) : NaN, reached,
-      tpHas1, tpP1, tp1R, tp1RR: tpHas1 ? (tpR1 ? tp1R : -1) : NaN, tpR1,
-      tpHas2, tpP2, tp2R, tp2RR: tpHas2 ? (tpR2 ? tp2R : -1) : NaN, tpR2,
+      hasTgt, target, reached,
+      tpHas1, tpP1, tpR1,
+      tpHas2, tpP2, tpR2,
       dauerMin: Math.max(0, Math.round((endT - b.t) / 60000)),
-      zonePenPct, zoneThrough, zoneHi: zoneHiVal, zoneLo: zoneLoVal, boxSweep
+      zonePenPct, zoneThrough, zoneHi: zoneHiVal, zoneLo: zoneLoVal, boxSweep,
+      _d: { mfe, mae: maeBeforePeak, tgt: tgtDist, tp1: tp1D, tp2: tp2D }
     });
+    trSetR(out[out.length - 1], slDist, toPts);
+    if (slSrc !== 'geschätzt') slPool.push(slDist);
     if (evT !== null) doneFills.push({ evT, t: b.t });
   }
   if (!out.length) return { err: "Keine Fill-Zeilen (Fill = 1) im Datensatz gefunden." };
-  return { trades: out, ps };
+  // Wo gar nichts zum Messen da war, tritt der Median der übrigen Distanzen
+  // ein. Gibt es auch den nicht, bleibt der Einstieg ohne R — seine Bewegung
+  // in Punkten steht trotzdem in der Tabelle.
+  const medSl = trMed(slPool);
+  let est = 0, noSl = 0;
+  out.forEach(t => {
+    if (t.slSrc === 'geschätzt') {
+      if (medSl > 0) { trSetR(t, medSl, toPts); est++; }
+      else { t.slSrc = 'fehlt'; noSl++; }
+    }
+    delete t._d;
+  });
+  return { trades: out, ps, est, noSl, offen: out.filter(t => t.offen === 'JA').length };
 }
 
 // Felder, mit denen gerechnet wird. JSON kennt kein NaN — beim Export wird
@@ -4392,15 +4437,19 @@ const trPct1 = v => (v = trN(v), isNaN(v) ? "" : v.toFixed(1) + " %");
 
 // Pro Ziel: wie oft gesetzt, Erreichquote, Ø geplantes und Ø erreichtes RR.
 // Ø erreichtes RR ist die Expectancy — Verfehlen zählt als −1 (voller Stop).
+// Einstiege, die weder das Ziel noch den SL gesehen haben, sind offen: sie
+// zählen in keine Quote, werden aber mitgezählt und ausgewiesen.
 function trGoal(list, hasFn, rrFn, rrFullFn, hitFn) {
   const set_ = list.filter(hasFn);
   if (!set_.length) return null;
-  const hits = set_.filter(hitFn).length;
+  const done = set_.filter(t => !isNaN(rrFullFn(t)));
+  if (!done.length) return { n: 0, hits: 0, quote: NaN, planned: NaN, achieved: NaN, offen: set_.length };
+  const hits = done.filter(hitFn).length;
   return {
-    n: set_.length, hits,
-    quote: 100 * hits / set_.length,
-    planned: set_.reduce((s, t) => s + rrFn(t), 0) / set_.length,
-    achieved: set_.reduce((s, t) => s + rrFullFn(t), 0) / set_.length
+    n: done.length, hits, offen: set_.length - done.length,
+    quote: 100 * hits / done.length,
+    planned: done.reduce((s, t) => s + rrFn(t), 0) / done.length,
+    achieved: done.reduce((s, t) => s + rrFullFn(t), 0) / done.length
   };
 }
 const TR_GOALS = [
@@ -4418,6 +4467,9 @@ const TR_DIMS = [
   ["Symbol",             t => t.sym || null],
   ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
   ["Zone durchgedippt",  t => t.zoneThrough === "JA" ? "durchgedippt" : t.zoneThrough === "nein" ? "nicht durchgedippt" : null],
+  ["Stand",              t => t.offen === "JA" ? "läuft noch" : t.offen === "nein" ? "abgeschlossen" : null],
+  ["Risiko",             t => t.slSrc === 'gesetzt' ? "SL stand fest" : t.slSrc === 'SL-Distanz' ? "SL-Distanz vom Indikator"
+                            : t.slSrc === 'geschätzt' ? "Risiko geschätzt" : t.slSrc === 'fehlt' ? "ohne Risiko" : null],
   ["Box-Ziel vor Fill berührt", t => t.preTouch === "JA" ? "vorher berührt" : t.preTouch === "nein" ? "nicht vorher berührt" : null],
   ["Box überschießt Zone", t => t.boxSweep === "JA" ? "Box überschießt Zone" : t.boxSweep === "nein" ? "Box innerhalb Zone" : null],
   ["TP1 vor Fill erreicht", t => t.preTP1 === "JA" ? "TP1 lief schon" : t.preTP1 === "nein" ? "TP1 lief noch nicht" : null],
@@ -4445,8 +4497,9 @@ function trGroups(list, keyFn) {
       medMfeR: trMed(rows.map(t => t.mfeR)),
       medMaeR: trMed(rows.map(t => t.maeR)),
       tgtQuote: 100 * rows.filter(t => t.reached).length / rows.length,
-      expectancy: rows.filter(t => t.hasTgt).length
-        ? rows.filter(t => t.hasTgt).reduce((s, t) => s + t.tgtRR, 0) / rows.filter(t => t.hasTgt).length : NaN
+      offen: rows.filter(t => t.offen === 'JA').length,
+      expectancy: (() => { const d = rows.filter(t => t.hasTgt && !isNaN(t.tgtRR));
+        return d.length ? d.reduce((s, t) => s + t.tgtRR, 0) / d.length : NaN; })()
     };
   });
 }
@@ -4564,7 +4617,8 @@ function trReport() {
       medianMinusR: trMed(list.map(t => t.maeR)),
       medianWartezeitMin: trMed(list.map(t => t.warteMin)),
       medianDauerMin: trMed(list.map(t => t.dauerMin)),
-      summeRBox: list.filter(t => t.hasTgt).reduce((s, t) => s + t.tgtRR, 0)
+      offen: list.filter(t => t.offen === 'JA').length,
+      summeRBox: list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).reduce((s, t) => s + t.tgtRR, 0)
     },
     simulation: (() => {
       const { series } = trSim(list);
@@ -4591,7 +4645,7 @@ function trReport() {
 function trEquity(list) {
   const pts = [];
   let cum = 0;
-  list.filter(t => t.hasTgt).forEach((t, i) => { cum += t.tgtRR; pts.push({ i: i + 1, v: cum, t }); });
+  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).forEach((t, i) => { cum += t.tgtRR; pts.push({ i: i + 1, v: cum, t }); });
   if (pts.length < 2) return '';
   const W = 640, Hh = 210, PL = 42, PR = 14, PT = 12, PB = 26;
   const iw = W - PL - PR, ih = Hh - PT - PB;
@@ -4707,16 +4761,20 @@ function trHist(list) {
 function trGoalsCard(list) {
   const rows = TR_GOALS.map(([l, ...f]) => [l, trGoal(list, ...f)]).filter(([, z]) => z);
   if (!rows.length) return '';
+  const offen = rows.reduce((m, [, z]) => Math.max(m, z.offen || 0), 0);
   return `<div class="tr-card">
     <div class="tr-h"><span>Ziele im Vergleich</span></div>
     <div class="tr-sub">„Ø erreichtes RR“ ist die Erwartung je Einstieg: das geplante RR bei
-      Treffer, sonst −1. Über null heißt, das Ziel trägt sich.</div>
+      Treffer, sonst −1. Über null heißt, das Ziel trägt sich.
+      ${offen ? 'Noch laufende Einstiege stehen unter <b>offen</b> und zählen nicht mit.' : ''}</div>
     <div class="tr-tblwrap"><table class="tr-tbl">
-      <tr><th>Ziel</th><th class="num">gesetzt</th><th>Erreichquote</th><th class="num">Ø geplant</th><th class="num">Ø erreicht</th></tr>
+      <tr><th>Ziel</th><th class="num">${offen ? 'gewertet' : 'gesetzt'}</th>${offen ? '<th class="num">offen</th>' : ''}
+          <th>Erreichquote</th><th class="num">Ø geplant</th><th class="num">Ø erreicht</th></tr>
       ${rows.map(([l, z], i) => `<tr>
         <td>${l}</td>
         <td class="num">${z.n}</td>
-        <td><span class="tr-mini-t"><span class="tr-hbar tr-mini" style="width:${Math.round(z.quote * .4)}px;animation-delay:${i * 80}ms"></span></span>${Math.round(z.quote)} %</td>
+        ${offen ? `<td class="num">${z.offen || 0}</td>` : ''}
+        <td><span class="tr-mini-t"><span class="tr-hbar tr-mini" style="width:${Math.round((z.quote || 0) * .4)}px;animation-delay:${i * 80}ms"></span></span>${trFi(z.quote)} %</td>
         <td class="num">${trFx(z.planned)}</td>
         <td class="num" style="color:${z.achieved >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(z.achieved)}</td>
       </tr>`).join('')}
@@ -4754,7 +4812,9 @@ const trRRs = () => {
   const a = Array.isArray(trMeta.rrs) ? trMeta.rrs : TR_RR_DEF;
   return a.map(v => (typeof v === 'number' && v > 0 ? v : null));
 };
-const trRrOut = (t, x) => (!isNaN(t.mfeR) && t.mfeR >= x) ? x : -1;
+// Erreicht = +X. Verfehlt = −1, aber nur wenn der Einstieg ausgestoppt wurde;
+// ein noch laufender ist unentschieden (null) und zählt in keine Quote.
+const trRrOut = (t, x) => (!isNaN(t.mfeR) && t.mfeR >= x) ? x : (t.stopped ? -1 : null);
 
 // Alle Varianten über denselben Einstiegen, damit die Kurven vergleichbar sind
 function trSim(list) {
@@ -4762,23 +4822,26 @@ function trSim(list) {
   const series = [];
   trRRs().forEach((x, i) => {
     if (x === null) return;
-    const vals = base.map(t => trRrOut(t, x));
+    const res = base.map(t => trRrOut(t, x));
+    const vals = res.map(v => v === null ? 0 : v);   // offen: noch nichts realisiert
+    const done = res.filter(v => v !== null).length;
     const hits = base.filter(t => t.mfeR >= x).length;
     series.push({
-      id: 'rr' + i, name: trRrLbl(x) + ' R', fix: x, n: base.length, hits,
-      quote: base.length ? 100 * hits / base.length : NaN,
-      exp: base.length ? vals.reduce((s, v) => s + v, 0) / base.length : NaN,
+      id: 'rr' + i, name: trRrLbl(x) + ' R', fix: x, n: done, offen: res.length - done, hits,
+      quote: done ? 100 * hits / done : NaN,
+      exp: done ? vals.reduce((s, v) => s + v, 0) / done : NaN,
       sum: vals.reduce((s, v) => s + v, 0),
       vals
     });
   });
   // Box-Ziel im selben Raster: wo keines gesetzt war, wurde nicht gehandelt
-  const bx = base.filter(t => t.hasTgt);
+  const bx = base.filter(t => t.hasTgt && !isNaN(t.tgtRR));
   if (bx.length) {
-    const vals = base.map(t => t.hasTgt ? t.tgtRR : 0);
+    const vals = base.map(t => (t.hasTgt && !isNaN(t.tgtRR)) ? t.tgtRR : 0);
     const hits = bx.filter(t => t.reached).length;
     series.push({
       id: 'box', name: 'Box-Ziel', fix: null, n: bx.length, hits,
+      offen: base.filter(t => t.hasTgt && isNaN(t.tgtRR)).length,
       quote: 100 * hits / bx.length,
       exp: bx.reduce((s, t) => s + t.tgtRR, 0) / bx.length,
       sum: vals.reduce((s, v) => s + v, 0),
@@ -4838,12 +4901,15 @@ function trSimCard(list) {
 
   trSimPts = curves.map(c => ({ name: c.s.name, pts: c.pts }));
   trSimN = n;
+  const offen = series.reduce((m, x) => Math.max(m, x.offen || 0), 0);
 
   return `<div class="tr-card">
     <div class="tr-h"><span>Was wäre mit festem Ziel?</span></div>
     <div class="tr-sub">Der Max-Profit sagt, wie weit jeder Einstieg lief, bevor der SL kam.
       Ein festes Ziel von X R wäre also erreicht worden, wenn dieser Wert mindestens X war —
-      sonst zählt der Einstieg wie beim Box-Ziel als voller Verlust (−1).</div>
+      sonst zählt der Einstieg wie beim Box-Ziel als voller Verlust (−1).
+      ${offen ? `Einstiege, die weder das Ziel noch den SL gesehen haben, laufen noch:
+        sie bleiben in der Spalte <b>offen</b> stehen und zählen in keine Quote.` : ''}</div>
 
     <div class="tr-rrs">${trRRs().map((x, i) => `<div class="tr-f">
       <label>Ziel ${i + 1}</label>
@@ -4851,13 +4917,14 @@ function trSimCard(list) {
         placeholder="aus" onchange="trSetRR(${i}, this.value)"></div>`).join('')}</div>
 
     <div class="tr-tblwrap"><table class="tr-tbl">
-      <tr><th>Ziel</th><th class="num">Treffer</th><th class="num">Quote</th>
-          <th class="num">Ø erreicht</th><th class="num">Summe</th></tr>
+      <tr><th>Ziel</th><th class="num">Treffer</th>${offen ? '<th class="num">offen</th>' : ''}
+          <th class="num">Quote</th><th class="num">Ø erreicht</th><th class="num">Summe</th></tr>
       ${series.map((s, i) => `<tr>
         <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(s.name)}</button>${best && s.id === best.id ? '<span class="tr-best">beste</span>' : ''}</td>
         <td class="num">${s.hits} / ${s.n}</td>
-        <td class="num">${Math.round(s.quote)} %</td>
+        ${offen ? `<td class="num">${s.offen || 0}</td>` : ''}
+        <td class="num">${trFi(s.quote)} %</td>
         <td class="num" style="color:${s.exp >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(s.exp)}</td>
         <td class="num">${trSign(s.sum)} R</td>
       </tr>`).join('')}
@@ -5085,7 +5152,7 @@ function trBestGroup(list, keyFn, minN) {
   }
   let best = null;
   for (const k in g) {
-    const rows = g[k].filter(t => t.hasTgt);
+    const rows = g[k].filter(t => t.hasTgt && !isNaN(t.tgtRR));
     if (rows.length < (minN || 3)) continue;
     const e = rows.reduce((s, t) => s + t.tgtRR, 0) / rows.length;
     if (!best || e > best.exp) best = { key: k, n: rows.length, exp: e };
@@ -5250,8 +5317,10 @@ const TR_COLS = [
   ["Box ⟩ Zone", t => t.boxSweep],
   ["Entry-Level", t => t.entLevel], ["Limit", t => t.limOrder],
   ["Entry", t => trNum(t.ent)], ["SL", t => trNum(t.sl)],
-  ["SL (Pkt)", t => trFi(t.slPts)], ["Ø-Wick (Pkt)", t => trFi(t.wickPts)],
+  ["SL (Pkt)", t => trFi(t.slPts)], ["Risiko aus", t => t.slSrc || ""],
+  ["Ø-Wick (Pkt)", t => trFi(t.wickPts)],
   ["Ausgestoppt", t => t.stopped ? '<span class="ja">JA</span>' : '<span class="nein">nein</span>'],
+  ["läuft noch", t => t.offen || ""],
   ["Max-Profit (Pkt)", t => trFi(t.mfePts)], ["Max-Profit (R)", t => trFx(t.mfeR)],
   ["bis Peak (Min)", t => trFi(t.mfeMin)],
   ["Minus (Pkt)", t => trFi(t.maePts)], ["Minus (R)", t => trFx(t.maeR)],
@@ -5358,6 +5427,7 @@ function renderTrades() {
   const kpis = [
     { v: k.einstiege, l: 'Einstiege' },
     { v: trFi(k.stopQuote) + ' %', l: 'ausgestoppt' },
+    ...(k.offen ? [{ v: k.offen, l: 'läuft noch' }] : []),
     { v: trSign(k.expectancyBox), l: 'Ø erreichtes RR<br>am Box-Ziel', cls: k.expectancyBox >= 0 ? 'pos' : 'neg' },
     { v: trSign(k.summeRBox) + ' R', l: 'Summe am Box-Ziel', cls: k.summeRBox >= 0 ? 'pos' : 'neg' },
     { v: trFx(k.medianMaxProfitR), l: 'Median Max-Profit (R)' },
@@ -5369,7 +5439,7 @@ function renderTrades() {
   // Punkte für den Tooltip der Verlaufskurve mitschreiben
   trEqPts = [];
   let cum = 0;
-  list.filter(t => t.hasTgt).forEach(t => { cum += t.tgtRR; trEqPts.push({ ...t, cum }); });
+  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).forEach(t => { cum += t.tgtRR; trEqPts.push({ ...t, cum }); });
 
   host.innerHTML = input
     + trFilterCard()
@@ -5450,7 +5520,10 @@ async function trRun() {
   // Kontoeinstellungen und Ziel-RR gehören zur Strategie, nicht zur Datei —
   // die bleiben beim Einlesen einer neuen CSV stehen.
   trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
-  trMsg = { ok: true, text: `${trEnt(res.trades.length)} ausgewertet · Sammlung ${trTrades.length} · Punktgröße ${res.ps}` };
+  trMsg = { ok: true, text: `${trEnt(res.trades.length)} ausgewertet · Sammlung ${trTrades.length} · Punktgröße ${res.ps}`
+    + (res.est ? ` · bei ${res.est} fehlte der SL, dafür zählt das mittlere Risiko` : '')
+    + (res.noSl ? ` · ${res.noSl} ganz ohne Risiko — nur in Punkten messbar` : '')
+    + (res.offen ? ` · ${res.offen} ${res.offen === 1 ? 'läuft' : 'laufen'} noch` : '') };
   trRaw = '';
   await persistTrades();
   renderTrades();
