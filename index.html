@@ -2041,6 +2041,12 @@
        stehen sie nebeneinander, damit man zum Vergleichen nicht scrollen
        muss. Dafür darf der Bereich aus der 560er-Spalte heraustreten. */
     /* Geld oder Prozent — gilt für Kontoverlauf und Rücksetzer zugleich */
+    .tr-verdict {
+      background: var(--sunken); border-radius: 12px; padding: 11px 13px;
+      margin-bottom: 14px; font-size: 13px; line-height: 1.65; color: var(--muted);
+    }
+    .tr-verdict b { color: var(--ink); font-weight: 600; }
+
     .tr-seg { display: inline-flex; background: var(--sunken); border-radius: 9px; padding: 3px; gap: 2px; }
     .tr-seg button {
       font: inherit; font-size: 13px; color: var(--muted); cursor: pointer;
@@ -4154,6 +4160,7 @@ function trSetR(t, sd, toPts) {
   t.slPts = sd > 0 ? toPts(sd) : NaN;
   t.mfeR  = r(d.mfe);
   t.maeR  = r(d.mae);
+  t.maeAllR = r(d.maeAll);
   t.tgtR  = r(d.tgt);
   t.tp1R  = r(d.tp1);
   t.tp2R  = r(d.tp2);
@@ -4190,6 +4197,34 @@ function trEvaluate(raw, opt) {
   if (cF < 0 || cFE < 0 || cFS < 0)
     return { err: "Fill-Spalten fehlen — im Indikator die Export-Spalten aktivieren." };
 
+  // ── Einstiegsarten ────────────────────────────────────────────────────────
+  // Der Indikator gibt je Einstiegsart eigene Spalten aus. Der Preis allein
+  // reicht zum Erkennen nicht: TradingView legt selbst eine Spalte „Volume“ an,
+  // die genauso heißt wie eine der Arten. Gesucht wird deshalb hinter der
+  // Spalte „Event“ — dort beginnen die Ausgaben des Indikators — und eine Art
+  // zählt nur, wenn sie auch ihre eigene Fill-Spalte mitbringt.
+  const HL = H.map(h => h.toLowerCase().trim().replace(/^"|"$/g, ""));
+  const colAfter = (from, ...names) => {
+    for (const n of names) {
+      const k = n.toLowerCase();
+      for (let i = HL.length - 1; i > from; i--) if (HL[i] === k) return i;
+    }
+    return -1;
+  };
+  const vars = [
+    ['Kies 1',  '1', 'kies 1', 'entry 1 (cluster)', 'entry 1'],
+    ['Kies 2',  '2', 'kies 2', 'entry 2 (cluster)', 'entry 2'],
+    ['Extreme', '',  'extreme'],
+    ['Hunt 1',  '1', 'hunt 1'],
+    ['Hunt 2',  '2', 'hunt 2'],
+    ['Volume',  '',  'volume']
+  ].map(([name, lvl, ...alias]) => ({
+    name, lvl,
+    fill: trFindCol(H, ...alias.map(a2 => 'fill ' + a2)),
+    ent:  colAfter(Math.max(0, cEv), ...alias),
+    sl:   trFindCol(H, ...alias.map(a2 => 'sl ' + a2))
+  })).filter(v => v.fill >= 0 && v.ent >= 0);
+
   const bars = [], events = [];
   let zoneHiVal = NaN, zoneLoVal = NaN, touchMsGlobal = null;
   const decCount = {};
@@ -4208,7 +4243,9 @@ function trEvaluate(raw, opt) {
       blo: cBL >= 0 ? parseFloat(c[cBL]) : NaN,
       ent: parseFloat(c[cFE]), sl: parseFloat(c[cFS]),
       awBar: cAW >= 0 ? parseFloat(c[cAW]) : NaN,
-      slDBar: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN
+      slDBar: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN,
+      // welche Einstiegsarten in dieser Kerze gefüllt wurden (mehrere möglich)
+      vf: (vars.length && parseFloat(c[cF]) === 1) ? vars.map(v => parseFloat(c[v.fill]) === 1) : null
     });
     if (isNaN(zoneHiVal) && cZoneHi >= 0) { const v = parseFloat(c[cZoneHi]); if (!isNaN(v)) zoneHiVal = v; }
     if (isNaN(zoneLoVal) && cZoneLo >= 0) { const v = parseFloat(c[cZoneLo]); if (!isNaN(v)) zoneLoVal = v; }
@@ -4217,7 +4254,10 @@ function trEvaluate(raw, opt) {
       events.push({ t, e1: cE1 >= 0 ? parseFloat(c[cE1]) : NaN, e2: cE2 >= 0 ? parseFloat(c[cE2]) : NaN,
                     avgW: cAW >= 0 ? parseFloat(c[cAW]) : NaN, touchS: cTo >= 0 ? parseFloat(c[cTo]) : NaN,
                     slD: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN,
-                    tp1: cZ1 >= 0 ? parseFloat(c[cZ1]) : NaN, tp2: cZ2 >= 0 ? parseFloat(c[cZ2]) : NaN });
+                    tp1: cZ1 >= 0 ? parseFloat(c[cZ1]) : NaN, tp2: cZ2 >= 0 ? parseFloat(c[cZ2]) : NaN,
+                    // Preis und SL jeder Einstiegsart dieses Events
+                    vals: vars.map(v => ({ ent: parseFloat(c[v.ent]),
+                                           sl: v.sl >= 0 ? parseFloat(c[v.sl]) : NaN })) });
     }
   }
   bars.sort((a, b) => a.t - b.t);
@@ -4263,130 +4303,175 @@ function trEvaluate(raw, opt) {
     zoneThrough = zonePenPct > 100 ? "JA" : "nein";
   }
 
+  const iK1 = vars.findIndex(v => v.name === 'Kies 1');
+  const iK2 = vars.findIndex(v => v.name === 'Kies 2');
   const out = [], doneFills = [], slPool = [];
   for (let i = 0; i < bars.length; i++) {
     const b = bars[i];
     if (b.t > cutMs) break;
-    if (b.fill !== 1 || isNaN(b.ent)) continue;
-    const dir = b.dir;
-    const target = dir === 1 ? b.bhi : b.blo;
-    let evT = null, entLevel = "", touchMs = null, evE1 = NaN, evE2 = NaN, avgW = NaN, evSlD = NaN;
-    for (let k = events.length - 1; k >= 0; k--) {
-      const ev = events[k];
-      if (ev.t > b.t) continue;
-      const m1 = !isNaN(ev.e1) && Math.abs(ev.e1 - b.ent) <= tol;
-      const m2 = !isNaN(ev.e2) && Math.abs(ev.e2 - b.ent) <= tol;
-      if (m1 || m2) {
-        evT = ev.t; entLevel = m1 ? "1" : "2"; avgW = ev.avgW; evSlD = ev.slD;
-        evE1 = ev.e1; evE2 = ev.e2;
+    if (b.fill !== 1) continue;
+    // Eine Kerze kann mehrere Einstiegsarten zugleich füllen. Jede bekommt
+    // ihren eigenen Datensatz — mit ihrem eigenen Preis und ihrem eigenen SL,
+    // denn die Fill-Spalte der Zeile trägt nur die zuletzt gefüllte Art.
+    const jobs = [];
+    if (b.vf) {
+      let evB = null;
+      for (let k = events.length - 1; k >= 0; k--) if (events[k].t < b.t) { evB = events[k]; break; }
+      b.vf.forEach((on, vi) => {
+        if (!on) return;
+        const val = evB && evB.vals ? evB.vals[vi] : null;
+        const p = (val && !isNaN(val.ent)) ? val.ent : b.ent;
+        if (isNaN(p)) return;
+        jobs.push({ ent: p, sl: (val && !isNaN(val.sl)) ? val.sl : b.sl,
+                    name: vars[vi].name, lvl: vars[vi].lvl, ev: evB });
+      });
+    }
+    if (!jobs.length && !isNaN(b.ent)) jobs.push({ ent: b.ent, sl: b.sl, name: '', lvl: '', ev: null });
+
+    for (const job of jobs) {
+      const ent = job.ent, slP = job.sl;
+      const dir = b.dir;
+      const target = dir === 1 ? b.bhi : b.blo;
+      let evT = null, entLevel = "", touchMs = null, evE1 = NaN, evE2 = NaN, avgW = NaN, evSlD = NaN;
+      if (job.ev) {
+        // Neues Format: die Art steht in der Zeile, das Event ist das letzte
+        // vor dieser Kerze — Preisvergleiche sind nicht mehr nötig.
+        const ev = job.ev;
+        evT = ev.t; avgW = ev.avgW; evSlD = ev.slD;
+        entLevel = job.lvl;
+        if (iK1 >= 0 && ev.vals) evE1 = ev.vals[iK1].ent;
+        if (iK2 >= 0 && ev.vals) evE2 = ev.vals[iK2].ent;
         if (!isNaN(ev.touchS)) touchMs = ev.touchS * 1000;
-        break;
+      } else {
+        for (let k = events.length - 1; k >= 0; k--) {
+          const ev = events[k];
+          if (ev.t > b.t) continue;
+          const m1 = !isNaN(ev.e1) && Math.abs(ev.e1 - ent) <= tol;
+          const m2 = !isNaN(ev.e2) && Math.abs(ev.e2 - ent) <= tol;
+          if (m1 || m2) {
+            evT = ev.t; entLevel = m1 ? "1" : "2"; avgW = ev.avgW; evSlD = ev.slD;
+            evE1 = ev.e1; evE2 = ev.e2;
+            if (!isNaN(ev.touchS)) touchMs = ev.touchS * 1000;
+            break;
+          }
+        }
       }
-    }
-    // Der SL steht manchmal noch nicht, wenn der Einstieg schon markiert ist.
-    // Ohne Risiko gäbe es kein R zu messen und der Einstieg fiele aus jeder
-    // Kennzahl heraus — dabei kann genau das ein Trade sein, der monatelang
-    // läuft. Ersatzweise zählt die SL-Distanz, die der Indikator ohnehin
-    // ausgibt, sonst der Median der gemessenen Distanzen dieser Datei. Die
-    // Bewegung selbst wird in Punkten gemessen und bleibt davon unberührt.
-    let slDist = Math.abs(b.ent - b.sl), slSrc = 'gesetzt';
-    if (!(slDist > 0)) {
-      const d = b.slDBar > 0 ? b.slDBar : (evSlD > 0 ? evSlD : NaN);
-      if (d > 0) { slDist = d; slSrc = 'SL-Distanz'; }
-      else { slDist = NaN; slSrc = 'geschätzt'; }
-    }
-    let limOrder = "";
-    if (evT !== null) {
-      if (isNaN(evE1) || isNaN(evE2)) limOrder = "einzig";
-      else {
-        const naher = dir === 1 ? Math.max(evE1, evE2) : Math.min(evE1, evE2);
-        limOrder = Math.abs(b.ent - naher) <= tol ? "1" : "2";
+      // Der SL steht manchmal noch nicht, wenn der Einstieg schon markiert ist.
+      // Ohne Risiko gäbe es kein R zu messen und der Einstieg fiele aus jeder
+      // Kennzahl heraus — dabei kann genau das ein Trade sein, der monatelang
+      // läuft. Ersatzweise zählt die SL-Distanz, die der Indikator ohnehin
+      // ausgibt, sonst der Median der gemessenen Distanzen dieser Datei. Die
+      // Bewegung selbst wird in Punkten gemessen und bleibt davon unberührt.
+      let slDist = Math.abs(ent - slP), slSrc = 'gesetzt';
+      if (!(slDist > 0)) {
+        const d = b.slDBar > 0 ? b.slDBar : (evSlD > 0 ? evSlD : NaN);
+        if (d > 0) { slDist = d; slSrc = 'SL-Distanz'; }
+        else { slDist = NaN; slSrc = 'geschätzt'; }
       }
-    }
-    let firstFillT = null;
-    if (evT !== null) for (const df of doneFills)
-      if (df.evT === evT && df.t < b.t && (firstFillT === null || df.t < firstFillT)) firstFillT = df.t;
-    const preHitLvl = lvl => {
-      if (evT === null) return "";
-      if (firstFillT === null) return "nein";
-      if (isNaN(lvl)) return "";
-      for (let j = 0; j < i; j++) {
+      // Näheres oder ferneres der beiden Kies-Limits? Bei den abgeleiteten
+      // Arten (Hunt) zählt das Limit, von dem sie stammen; Extreme und Volume
+      // gehören zu keinem der beiden und bleiben leer.
+      let limOrder = "";
+      if (evT !== null) {
+        const own = job.ev ? (job.lvl === "1" ? evE1 : job.lvl === "2" ? evE2 : NaN) : ent;
+        if (job.ev && !job.lvl) limOrder = "";
+        else if (isNaN(evE1) || isNaN(evE2) || isNaN(own)) limOrder = "einzig";
+        else {
+          const naher = dir === 1 ? Math.max(evE1, evE2) : Math.min(evE1, evE2);
+          limOrder = Math.abs(own - naher) <= tol ? "1" : "2";
+        }
+      }
+      let firstFillT = null;
+      if (evT !== null) for (const df of doneFills)
+        if (df.evT === evT && df.t < b.t && (firstFillT === null || df.t < firstFillT)) firstFillT = df.t;
+      const preHitLvl = lvl => {
+        if (evT === null) return "";
+        if (firstFillT === null) return "nein";
+        if (isNaN(lvl)) return "";
+        for (let j = 0; j < i; j++) {
+          const x = bars[j];
+          if (x.t < firstFillT || x.t >= b.t) continue;
+          if (dir === 1 ? x.hi >= lvl : x.lo <= lvl) return "JA";
+        }
+        return "nein";
+      };
+      const preTouch = preHitLvl(target);
+      let tpP1 = NaN, tpP2 = NaN;
+      if (evT !== null) for (const ev of events) if (ev.t === evT) { tpP1 = ev.tp1; tpP2 = ev.tp2; break; }
+      if (isNaN(avgW) && !isNaN(b.awBar)) avgW = b.awBar;
+      const preTP1 = preHitLvl(tpP1), preTP2 = preHitLvl(tpP2);
+      let reached = false, stopped = false, tpR1 = false, tpR2 = false;
+      let mfe = 0, mae = 0, maeBeforePeak = 0, peakT = b.t, favLast = 0, endT = b.t;
+      // Die Fill-Kerze zählt nur als Entstehungspunkt — gemessen wird ab der Folgekerze
+      for (let j = i + 1; j < bars.length; j++) {
         const x = bars[j];
-        if (x.t < firstFillT || x.t >= b.t) continue;
-        if (dir === 1 ? x.hi >= lvl : x.lo <= lvl) return "JA";
+        if (x.t > cutMs) break;
+        endT = x.t;
+        if (!isNaN(slP) && ((dir === 1 && x.lo <= slP) || (dir === -1 && x.hi >= slP))) {
+          mae = Math.max(mae, dir === 1 ? ent - x.lo : x.hi - ent);
+          stopped = true; favLast = -slDist;
+          break;
+        }
+        mae = Math.max(mae, dir === 1 ? ent - x.lo : x.hi - ent);
+        const fav = dir === 1 ? x.hi - ent : ent - x.lo;
+        if (fav > mfe) { mfe = fav; maeBeforePeak = mae; peakT = x.t; }
+        favLast = fav;
+        if (!isNaN(target) && (dir === 1 ? x.hi >= target : x.lo <= target)) reached = true;
+        if (!isNaN(tpP1) && (dir === 1 ? x.hi >= tpP1 : x.lo <= tpP1)) tpR1 = true;
+        if (!isNaN(tpP2) && (dir === 1 ? x.hi >= tpP2 : x.lo <= tpP2)) tpR2 = true;
       }
-      return "nein";
-    };
-    const preTouch = preHitLvl(target);
-    let tpP1 = NaN, tpP2 = NaN;
-    if (evT !== null) for (const ev of events) if (ev.t === evT) { tpP1 = ev.tp1; tpP2 = ev.tp2; break; }
-    if (isNaN(avgW) && !isNaN(b.awBar)) avgW = b.awBar;
-    const preTP1 = preHitLvl(tpP1), preTP2 = preHitLvl(tpP2);
-    let reached = false, stopped = false, tpR1 = false, tpR2 = false;
-    let mfe = 0, mae = 0, maeBeforePeak = 0, peakT = b.t, favLast = 0, endT = b.t;
-    // Die Fill-Kerze zählt nur als Entstehungspunkt — gemessen wird ab der Folgekerze
-    for (let j = i + 1; j < bars.length; j++) {
-      const x = bars[j];
-      if (x.t > cutMs) break;
-      endT = x.t;
-      if (!isNaN(b.sl) && ((dir === 1 && x.lo <= b.sl) || (dir === -1 && x.hi >= b.sl))) {
-        mae = Math.max(mae, dir === 1 ? b.ent - x.lo : x.hi - b.ent);
-        stopped = true; favLast = -slDist;
-        break;
-      }
-      mae = Math.max(mae, dir === 1 ? b.ent - x.lo : x.hi - b.ent);
-      const fav = dir === 1 ? x.hi - b.ent : b.ent - x.lo;
-      if (fav > mfe) { mfe = fav; maeBeforePeak = mae; peakT = x.t; }
-      favLast = fav;
-      if (!isNaN(target) && (dir === 1 ? x.hi >= target : x.lo <= target)) reached = true;
-      if (!isNaN(tpP1) && (dir === 1 ? x.hi >= tpP1 : x.lo <= tpP1)) tpR1 = true;
-      if (!isNaN(tpP2) && (dir === 1 ? x.hi >= tpP2 : x.lo <= tpP2)) tpR2 = true;
+      const tgtDist = isNaN(target) ? NaN : (dir === 1 ? target - ent : ent - target);
+      const tp1D = isNaN(tpP1) ? NaN : (dir === 1 ? tpP1 - ent : ent - tpP1);
+      const tp2D = isNaN(tpP2) ? NaN : (dir === 1 ? tpP2 - ent : ent - tpP2);
+      // Ein Einstieg, der weder den SL noch sein Ziel gesehen hat, läuft noch —
+      // er ist nicht verloren, sondern unentschieden.
+      const offen = (!stopped && !reached) ? "JA" : "nein";
+      const boxH = (isNaN(b.bhi) || isNaN(b.blo)) ? NaN : (b.bhi - b.blo);
+      const tiefe = (!isNaN(boxH) && boxH > 0) ? 100 * (dir === 1 ? (b.bhi - ent) : (ent - b.blo)) / boxH : NaN;
+      const d0 = new Date(b.t);
+      let boxSweep = "";
+      if (!isNaN(zoneHiVal) && !isNaN(zoneLoVal) && !isNaN(b.bhi) && !isNaN(b.blo))
+        boxSweep = (dir === -1 ? (b.bhi > zoneHiVal) : (b.blo < zoneLoVal)) ? "JA" : "nein";
+      const hasTgt = !isNaN(target), tpHas1 = !isNaN(tpP1), tpHas2 = !isNaN(tpP2);
+      out.push({
+        sel: true, id: 't' + b.t + '_' + (out.length),
+        sym, variante: job.name, ts: b.t, datum: trDate(b.t), uhrzeit: trClock(b.t), wtag: TR_WD[d0.getDay()],
+        stunde: d0.getHours(), session: trSession(d0.getHours()),
+        dir, brk: b.brk, entLevel,
+        gegenTrend: isNaN(b.brk) ? "" : (b.brk % 2 === 1 ? "JA" : "nein"),
+        bhi: b.bhi, blo: b.blo, boxPts: isNaN(boxH) ? NaN : toPts(boxH), tiefe,
+        evDatum: evT ? trDate(evT) : "", evZeit: evT ? trClock(evT) : "",
+        warteMin: evT ? Math.max(0, Math.round((b.t - evT) / 60000)) : NaN,
+        touchEvMin: (evT && touchMs) ? Math.max(0, Math.round((evT - touchMs) / 60000)) : NaN,
+        ent: ent, sl: slP, slSrc,
+        wickPts: isNaN(avgW) ? NaN : toPts(avgW),
+        stopped, offen, mfePts: toPts(mfe),
+        mfeMin: Math.max(0, Math.round((peakT - b.t) / 60000)),
+        maePts: toPts(maeBeforePeak), maeAllPts: toPts(mae),
+        givebackPts: toPts(Math.max(0, mfe - favLast)),
+        limOrder, preTouch, preTP1, preTP2,
+        hasTgt, target, reached,
+        tpHas1, tpP1, tpR1,
+        tpHas2, tpP2, tpR2,
+        dauerMin: Math.max(0, Math.round((endT - b.t) / 60000)),
+        zonePenPct, zoneThrough, zoneHi: zoneHiVal, zoneLo: zoneLoVal, boxSweep,
+        _d: { mfe, mae: maeBeforePeak, maeAll: mae, tgt: tgtDist, tp1: tp1D, tp2: tp2D }
+      });
+      trSetR(out[out.length - 1], slDist, toPts);
+      if (slSrc !== 'geschätzt') slPool.push(slDist);
+      if (evT !== null) doneFills.push({ evT, t: b.t });
     }
-    const tgtDist = isNaN(target) ? NaN : (dir === 1 ? target - b.ent : b.ent - target);
-    const tp1D = isNaN(tpP1) ? NaN : (dir === 1 ? tpP1 - b.ent : b.ent - tpP1);
-    const tp2D = isNaN(tpP2) ? NaN : (dir === 1 ? tpP2 - b.ent : b.ent - tpP2);
-    // Ein Einstieg, der weder den SL noch sein Ziel gesehen hat, läuft noch —
-    // er ist nicht verloren, sondern unentschieden.
-    const offen = (!stopped && !reached) ? "JA" : "nein";
-    const boxH = (isNaN(b.bhi) || isNaN(b.blo)) ? NaN : (b.bhi - b.blo);
-    const tiefe = (!isNaN(boxH) && boxH > 0) ? 100 * (dir === 1 ? (b.bhi - b.ent) : (b.ent - b.blo)) / boxH : NaN;
-    const d0 = new Date(b.t);
-    let boxSweep = "";
-    if (!isNaN(zoneHiVal) && !isNaN(zoneLoVal) && !isNaN(b.bhi) && !isNaN(b.blo))
-      boxSweep = (dir === -1 ? (b.bhi > zoneHiVal) : (b.blo < zoneLoVal)) ? "JA" : "nein";
-    const hasTgt = !isNaN(target), tpHas1 = !isNaN(tpP1), tpHas2 = !isNaN(tpP2);
-    out.push({
-      sel: true, id: 't' + b.t + '_' + (out.length),
-      sym, ts: b.t, datum: trDate(b.t), uhrzeit: trClock(b.t), wtag: TR_WD[d0.getDay()],
-      stunde: d0.getHours(), session: trSession(d0.getHours()),
-      dir, brk: b.brk, entLevel,
-      gegenTrend: isNaN(b.brk) ? "" : (b.brk % 2 === 1 ? "JA" : "nein"),
-      bhi: b.bhi, blo: b.blo, boxPts: isNaN(boxH) ? NaN : toPts(boxH), tiefe,
-      evDatum: evT ? trDate(evT) : "", evZeit: evT ? trClock(evT) : "",
-      warteMin: evT ? Math.max(0, Math.round((b.t - evT) / 60000)) : NaN,
-      touchEvMin: (evT && touchMs) ? Math.max(0, Math.round((evT - touchMs) / 60000)) : NaN,
-      ent: b.ent, sl: b.sl, slSrc,
-      wickPts: isNaN(avgW) ? NaN : toPts(avgW),
-      stopped, offen, mfePts: toPts(mfe),
-      mfeMin: Math.max(0, Math.round((peakT - b.t) / 60000)),
-      maePts: toPts(maeBeforePeak),
-      givebackPts: toPts(Math.max(0, mfe - favLast)),
-      limOrder, preTouch, preTP1, preTP2,
-      hasTgt, target, reached,
-      tpHas1, tpP1, tpR1,
-      tpHas2, tpP2, tpR2,
-      dauerMin: Math.max(0, Math.round((endT - b.t) / 60000)),
-      zonePenPct, zoneThrough, zoneHi: zoneHiVal, zoneLo: zoneLoVal, boxSweep,
-      _d: { mfe, mae: maeBeforePeak, tgt: tgtDist, tp1: tp1D, tp2: tp2D }
-    });
-    trSetR(out[out.length - 1], slDist, toPts);
-    if (slSrc !== 'geschätzt') slPool.push(slDist);
-    if (evT !== null) doneFills.push({ evT, t: b.t });
   }
   if (!out.length) return { err: "Keine Fill-Zeilen (Fill = 1) im Datensatz gefunden." };
   // Wo gar nichts zum Messen da war, tritt der Median der übrigen Distanzen
   // ein. Gibt es auch den nicht, bleibt der Einstieg ohne R — seine Bewegung
   // in Punkten steht trotzdem in der Tabelle.
+  // Wie oft jede Einstiegsart überhaupt ein Limit im Markt hatte — ohne das
+  // lässt sich nicht sagen, ob eine Art selten füllt oder nur selten trifft.
+  const limits = {};
+  vars.forEach((v, vi) => {
+    limits[v.name] = events.filter(e => e.t <= cutMs && e.vals && !isNaN(e.vals[vi].ent)).length;
+  });
   const medSl = trMed(slPool);
   let est = 0, noSl = 0;
   out.forEach(t => {
@@ -4396,7 +4481,8 @@ function trEvaluate(raw, opt) {
     }
     delete t._d;
   });
-  return { trades: out, ps, est, noSl, offen: out.filter(t => t.offen === 'JA').length };
+  return { trades: out, ps, est, noSl, limits,
+           offen: out.filter(t => t.offen === 'JA').length };
 }
 
 // Felder, mit denen gerechnet wird. JSON kennt kein NaN — beim Export wird
@@ -4404,7 +4490,7 @@ function trEvaluate(raw, opt) {
 // Wert als 0. Text in diesen Feldern wird ebenfalls zu einer Zahl.
 const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct', 'bhi', 'blo',
   'boxPts', 'tiefe', 'ent', 'sl', 'slPts', 'wickPts', 'mfePts', 'mfeR', 'mfeMin', 'maePts',
-  'maeR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
+  'maeR', 'maeAllPts', 'maeAllR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
   'tpP2', 'tp2R', 'tp2RR', 'ts', 'stunde', 'brk'];
 
 // Eine früher exportierte Auswertung wieder einlesen. Akzeptiert die ganze
@@ -4481,6 +4567,7 @@ const TR_GOALS = [
   ['TP 2',     t => t.tpHas2,  t => t.tp2R, t => t.tp2RR, t => t.tpR2]
 ];
 const TR_DIMS = [
+  ["Einstiegsart",       t => t.variante || null],
   ["Bruch #",            t => isNaN(t.brk) ? null : "Bruch " + t.brk],
   ["Entry-Level",        t => t.entLevel ? "Entry " + t.entLevel : null],
   ["Limit-Reihenfolge",  t => t.limOrder ? (t.limOrder === "einzig" ? "einziges Limit" : "Limit " + t.limOrder + (t.limOrder === "1" ? " (näher)" : " (ferner)")) : null],
@@ -4534,7 +4621,7 @@ function trGroups(list, keyFn) {
 // dazukommt, von sich aus mit.
 const TR_NONE = '\u0000leer';
 const TR_NONE_LBL = 'ohne Angabe';
-const TR_FILT_TOP = ['Symbol', 'Richtung', 'Session', 'Wochentag'];
+const TR_FILT_TOP = ['Einstiegsart', 'Symbol', 'Richtung', 'Session', 'Wochentag'];
 
 const trDimVal = (fn, t) => {
   const v = fn(t);
@@ -4658,6 +4745,7 @@ function trReport() {
           amStueckUnterWasser: x.ddLen, ruecksetzerVerlauf: x.dd.map(v => +v.toFixed(2)) })) };
     })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
+    einstiegsarten: trVarRows(list) || undefined,
     aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f) }))
       .filter(d => d.gruppen.length >= 2),
     trades: list
@@ -4802,6 +4890,103 @@ function trGoalsCard(list) {
         <td><span class="tr-mini-t"><span class="tr-hbar tr-mini" style="width:${Math.round((z.quote || 0) * .4)}px;animation-delay:${i * 80}ms"></span></span>${trFi(z.quote)} %</td>
         <td class="num">${trFx(z.planned)}</td>
         <td class="num" style="color:${z.achieved >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(z.achieved)}</td>
+      </tr>`).join('')}
+    </table></div>
+  </div>`;
+}
+
+// ── Welche Einstiegsart trifft am genauesten? ─────────────────────────────
+// Der Indikator legt je Event mehrere Limits, die sich nur im Preis
+// unterscheiden. Verglichen wird deshalb entlang zweier Fragen, die
+// gegeneinander laufen: Wie oft kommt eine Art überhaupt zum Zug (Fill-Quote)
+// und wie wenig muss man nach dem Einstieg aushalten (Minus vor dem Peak).
+// Ein weit entferntes Limit kauft Genauigkeit mit verpassten Einstiegen.
+const TR_VAR_ORDER = ['Kies 1', 'Kies 2', 'Extreme', 'Hunt 1', 'Hunt 2', 'Volume'];
+const TR_VAR_MIN = 3;   // unter so wenigen Fills wird nichts gekürt
+
+function trVarRows(list) {
+  const names = [...new Set(trTrades.filter(t => t.variante).map(t => t.variante))];
+  if (names.length < 2) return null;
+  const rk = n => { const i = TR_VAR_ORDER.indexOf(n); return i >= 0 ? i : TR_VAR_ORDER.length; };
+  names.sort((a, b) => rk(a) - rk(b) || a.localeCompare(b, 'de'));
+  const lim = trMeta.limits || {};
+  return names.map(name => {
+    const r = list.filter(t => t.variante === name);
+    const done = r.filter(t => t.hasTgt && !isNaN(t.tgtRR));
+    return {
+      name, n: r.length, limits: lim[name] || 0,
+      quote: lim[name] ? 100 * r.length / lim[name] : NaN,
+      stop: r.length ? 100 * r.filter(t => t.stopped).length / r.length : NaN,
+      mae: trMed(r.map(t => t.maeAllR)),
+      maePeak: trMed(r.map(t => t.maeR)),
+      mfe: trMed(r.map(t => t.mfeR)),
+      exp: done.length ? done.reduce((s, t) => s + t.tgtRR, 0) / done.length : NaN,
+      warte: trMed(r.map(t => t.warteMin))
+    };
+  });
+}
+
+function trVarCard(list) {
+  const rows = trVarRows(list);
+  if (!rows) return '';
+  const ok = rows.filter(r => r.n >= TR_VAR_MIN);
+  // Gleichstand kommt vor — dann entscheidet, wer öfter füllt und mehr bringt
+  const pick = (key, dir) => {
+    const val = r => r[key];
+    let b = null;
+    for (const r of ok) {
+      const v = val(r);
+      if (isNaN(v) || v === null) continue;
+      if (!b) { b = r; continue; }
+      const d = dir < 0 ? val(b) - v : v - val(b);
+      if (d > 1e-9) b = r;
+      else if (Math.abs(d) <= 1e-9) {
+        const q = (r.quote || 0) - (b.quote || 0);
+        if (q > 1e-9 || (Math.abs(q) <= 1e-9 && (r.exp || -9) > (b.exp || -9))) b = r;
+      }
+    }
+    return b;
+  };
+  const genau = pick('mae', -1), reich = pick('exp', 1), oft = pick('quote', 1);
+  const mxQ = Math.max(1, ...rows.map(r => isNaN(r.quote) ? 0 : r.quote));
+  const mxM = Math.max(.01, ...rows.map(r => isNaN(r.mae) ? 0 : r.mae));
+  const mark = (r, b, l) => (b && b.name === r.name) ? ` <span class="tr-best">${l}</span>` : '';
+
+  return `<div class="tr-card">
+    <div class="tr-h"><span>Welche Einstiegsart trifft am genauesten?</span></div>
+    <div class="tr-sub">Jedes Event legt mehrere Limits auf denselben Zug — sie unterscheiden
+      sich nur im Preis. Zwei Zahlen ziehen dabei gegeneinander: die <b>Quote</b> sagt, wie viele
+      der gelegten Limits überhaupt gefüllt wurden, das <b>Minus</b>, wie weit es danach noch
+      gegen einen lief (bis zum Ende gemessen — sonst stünde ein sofort ausgestoppter Einstieg
+      als besonders genau da). Ein ferneres Limit kauft ein kleines Minus mit verpassten
+      Einstiegen; was unterm Strich bleibt, steht im Ø erreichten RR.
+      Gekürt wird nur, wer mindestens ${TR_VAR_MIN} Einstiege hat.</div>
+
+    ${genau || reich ? `<div class="tr-verdict">
+      ${genau ? `<div>Am genauesten <b>${esc(genau.name)}</b> — im Mittel nur ${trFx(genau.mae)} R
+        gegen sich, nachdem gefüllt wurde.</div>` : ''}
+      ${oft ? `<div>Am häufigsten gefüllt <b>${esc(oft.name)}</b> — ${trFi(oft.quote)} % der gelegten Limits.</div>` : ''}
+      ${reich ? `<div>Am einträglichsten <b>${esc(reich.name)}</b> — ${trSign(reich.exp)} R je Einstieg am Box-Ziel.</div>` : ''}
+      ${(genau && reich && genau.name !== reich.name) ? `<div>Genauigkeit und Ertrag fallen hier
+        auseinander: <b>${esc(genau.name)}</b> muss weniger aushalten, <b>${esc(reich.name)}</b> bringt mehr —
+        die Entscheidung hängt davon ab, was du durchhältst.</div>` : ''}
+    </div>` : ''}
+
+    <div class="tr-tblwrap"><table class="tr-tbl">
+      <tr><th>Art</th><th class="num">Fills</th><th class="num">Quote</th>
+          <th class="num">Minus (R)</th><th class="num">Max-Profit (R)</th>
+          <th class="num">gestoppt</th><th class="num">Ø erreicht</th><th class="num">Warten (Min)</th></tr>
+      ${rows.map((r, i) => `<tr class="${r.n ? '' : 'off'}">
+        <td>${esc(r.name)}${mark(r, genau, 'genau')}</td>
+        <td class="num">${r.n}${r.limits ? ' / ' + r.limits : ''}</td>
+        <td class="num"><span class="tr-mini-t"><span class="tr-hbar tr-mini"
+          style="width:${Math.max(3, Math.round(40 * (isNaN(r.quote) ? 0 : r.quote) / mxQ))}px;animation-delay:${i * 60}ms"></span></span>${trFi(r.quote)} %</td>
+        <td class="num"><span class="tr-mini-t"><span class="tr-hbar tr-mini"
+          style="width:${Math.max(3, Math.round(40 * (isNaN(r.mae) ? 0 : r.mae) / mxM))}px;background:var(--ch-bad);animation-delay:${i * 60}ms"></span></span>${trFx(r.mae)}</td>
+        <td class="num">${trFx(r.mfe)}</td>
+        <td class="num">${trFi(r.stop)} %</td>
+        <td class="num" style="color:${r.exp >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${trSign(r.exp)}${mark(r, reich, 'beste')}</td>
+        <td class="num">${trFi(r.warte)}</td>
       </tr>`).join('')}
     </table></div>
   </div>`;
@@ -5474,6 +5659,7 @@ const TR_COLS = [
   ["Box (Pkt)", t => trFi(t.boxPts)], ["Entry-Tiefe", t => trPct1(t.tiefe)],
   ["Box ⟩ Zone", t => t.boxSweep],
   ["Entry-Level", t => t.entLevel], ["Limit", t => t.limOrder],
+  ["Einstiegsart", t => t.variante || ""],
   ["Entry", t => trNum(t.ent)], ["SL", t => trNum(t.sl)],
   ["SL (Pkt)", t => trFi(t.slPts)], ["Risiko aus", t => t.slSrc || ""],
   ["Ø-Wick (Pkt)", t => trFi(t.wickPts)],
@@ -5482,6 +5668,7 @@ const TR_COLS = [
   ["Max-Profit (Pkt)", t => trFi(t.mfePts)], ["Max-Profit (R)", t => trFx(t.mfeR)],
   ["bis Peak (Min)", t => trFi(t.mfeMin)],
   ["Minus (Pkt)", t => trFi(t.maePts)], ["Minus (R)", t => trFx(t.maeR)],
+  ["Gegen mich gesamt (R)", t => trFx(t.maeAllR)],
   ["Rückgabe (Pkt)", t => trFi(t.givebackPts)], ["Dauer (Min)", t => trFi(t.dauerMin)],
   ["Ziel vor Fill", t => t.preTouch],
   ["Box-Ziel", t => t.hasTgt ? trNum(t.target) : ""], ["Box RR geplant", t => t.hasTgt ? trFx(t.tgtR) : ""],
@@ -5603,6 +5790,7 @@ function renderTrades() {
     + trFilterCard()
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
+    + trVarCard(list)
     + trEquity(list)
     + `<div class="tr-broad">${trSimCard(list)}${trAccCard(list)}</div>`
     + trHist(list)
@@ -5674,6 +5862,10 @@ async function trRun() {
   if (res.err) { trMsg = { ok: false, text: res.err }; renderTrades(); return; }
   trTrades = append ? trTrades.concat(res.trades) : res.trades;
   if (!append) trHide = {};
+  // Limit-Zahlen tragen die Fill-Quote — beim Anhängen addieren sie sich
+  const lim = (append && trMeta.limits) ? { ...trMeta.limits } : {};
+  for (const k in (res.limits || {})) lim[k] = (lim[k] || 0) + res.limits[k];
+  trMeta.limits = lim;
   // Kontoeinstellungen und Ziel-RR gehören zur Strategie, nicht zur Datei —
   // die bleiben beim Einlesen einer neuen CSV stehen.
   trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
