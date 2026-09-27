@@ -2058,11 +2058,27 @@
 
     .tr-broad { display: grid; gap: 0 14px; align-items: start; }
     .tr-broad > .tr-card { min-width: 0; }   /* Raster-Spalten dürfen schrumpfen */
+
+    /* Ein Bereich je Einstiegsfamilie: zugeklappt zeigt die Kopfzeile die
+       Eckwerte, aufgeklappt stehen die drei Karten nebeneinander. */
+    .tr-band { margin-bottom: 14px; }
+    .tr-band > summary {
+      cursor: pointer; list-style: none; padding: 14px 36px 14px 16px; position: relative;
+      background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+    }
+    .tr-band > summary::-webkit-details-marker { display: none; }
+    .tr-band > summary b { font-size: 14px; font-weight: 600; }
+    .tr-band > summary span { font-size: 12.5px; color: var(--muted); }
+    .tr-band > summary::after { content: "›"; color: var(--faint); position: absolute; right: 16px; top: 13px; }
+    .tr-band[open] > summary { margin-bottom: 14px; }
+    .tr-band[open] > summary::after { content: "⌄"; }
+
     @media (min-width: 1000px) {
-      .tr-broad {
+      .tr-band {
         width: min(1400px, 94vw); margin-left: 50%; transform: translateX(-50%);
-        grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
       }
+      .tr-broad { grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); }
       .tr-broad > .tr-card { margin-bottom: 14px; }
     }
 
@@ -4992,6 +5008,48 @@ function trVarCard(list) {
   </div>`;
 }
 
+// ── Bereiche je Einstiegsfamilie ──────────────────────────────────────────
+// „Was wäre, wenn ich nur die Kies-Limits handeln würde?" — dieselben drei
+// Karten noch einmal, aber nur mit den Einstiegen einer Familie. Kies 1 und
+// Kies 2 gehören dabei zusammen, ebenso Hunt 1 und Hunt 2: sie sind zwei
+// Limits derselben Art, nicht zwei Arten.
+const trFam = n => String(n || '').replace(/\s*\d+$/, '').trim();
+
+function trBands(list) {
+  const fams = [];
+  list.forEach(t => { const f = trFam(t.variante); if (f && !fams.includes(f)) fams.push(f); });
+  const rk = f => { const i = TR_VAR_ORDER.findIndex(n => trFam(n) === f); return i < 0 ? 99 : i; };
+  fams.sort((a, b) => rk(a) - rk(b) || a.localeCompare(b, 'de'));
+  const out = [{ key: 'alle', title: 'Alle Einstiege zusammen', list }];
+  if (fams.length >= 2) fams.forEach(f => out.push({
+    key: 'f' + f.toLowerCase().replace(/[^a-z0-9]/g, ''),
+    title: 'nur ' + f, list: list.filter(t => trFam(t.variante) === f)
+  }));
+  return out;
+}
+
+function trBandHtml(b, open) {
+  const cards = trSimCard(b.list, b.key) + trAccCard(b.list, b.key);
+  if (!cards) return '';
+  // Eckwerte in die Kopfzeile, damit sich die Bereiche zugeklappt vergleichen lassen
+  const { series } = trSim(b.list);
+  const best = series.reduce((x, y) => (isNaN(y.exp) ? x : (!x || y.exp > x.exp ? y : x)), null);
+  const start = trStart();
+  const acc = best ? trAccount([best], start, trRisk())[0] : null;
+  const pct = trPctOn();
+  const facts = [
+    `${b.list.length} ${b.list.length === 1 ? 'Einstieg' : 'Einstiege'}`,
+    best ? `bestes Ziel ${best.name} ${trSign(best.exp)} R` : null,
+    acc ? 'Konto ' + (pct ? (acc.end >= start ? '+' : '−') + trNum2.format(Math.abs(acc.end / start - 1) * 100).replace(',00', '') + ' %'
+                          : trNum0.format(Math.round(acc.end))) : null,
+    acc ? 'tiefster Stand −' + acc.maxDD.toFixed(1).replace('.', ',') + ' %' : null
+  ].filter(Boolean);
+  return `<details class="tr-band"${open ? ' open' : ''}>
+    <summary><b>${esc(b.title)}</b><span>${facts.join(' · ')}</span></summary>
+    <div class="tr-broad">${cards}</div>
+  </details>`;
+}
+
 function trDimCard(list, title, fn, open) {
   const g = trGroups(list, fn);
   if (g.length < 2) return '';
@@ -5079,10 +5137,11 @@ async function trSetPick(i) {
 
 // Betonungs-Form: die gewählte Kurve farbig, die übrigen als grauer Kontext.
 // Fünf gleichrangige Farben wären nebeneinander nicht sicher unterscheidbar.
-function trSimCard(list) {
+function trSimCard(list, key) {
+  key = key || 'alle';
   const { base, series } = trSim(list);
   if (!base.length || !series.length) return '';
-  if (trPick >= series.length) trPick = 0;
+  const pick = Math.min(trPick, series.length - 1);
   const best = series.reduce((b, s) => (isNaN(s.exp) ? b : (b === null || s.exp > b.exp ? s : b)), null);
 
   const cum = s => { let c = 0; return s.vals.map(v => (c += v)); };
@@ -5109,8 +5168,8 @@ function trSimCard(list) {
   for (let k = 1; k < ends.length; k++)
     if (ends[k].y - ends[k - 1].y < 12) ends[k].y = ends[k - 1].y + 12;
 
-  trSimPts = curves.map(c => ({ name: c.s.name, pts: c.pts }));
-  trSimN = n;
+  trSimPts[key] = curves.map(c => ({ name: c.s.name, pts: c.pts }));
+  trSimN[key] = n;
   const offen = series.reduce((m, x) => Math.max(m, x.offen || 0), 0);
 
   return `<div class="tr-card">
@@ -5130,7 +5189,7 @@ function trSimCard(list) {
       <tr><th>Ziel</th><th class="num">Treffer</th>${offen ? '<th class="num">offen</th>' : ''}
           <th class="num">Quote</th><th class="num">Ø erreicht</th><th class="num">Summe</th></tr>
       ${series.map((s, i) => `<tr>
-        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+        <td><button class="tr-pick ${i === pick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(s.name)}</button>${best && s.id === best.id ? '<span class="tr-best">beste</span>' : ''}</td>
         <td class="num">${s.hits} / ${s.n}</td>
         ${offen ? `<td class="num">${s.offen || 0}</td>` : ''}
@@ -5141,49 +5200,50 @@ function trSimCard(list) {
     </table></div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
-      aria-label="Verlauf des aufsummierten R für ${series.length} Zielvarianten über ${n} Einstiege; hervorgehoben ${esc(series[trPick].name)}">
+      aria-label="Verlauf des aufsummierten R für ${series.length} Zielvarianten über ${n} Einstiege; hervorgehoben ${esc(series[pick].name)}">
       ${ticks.map(v => `<line class="${Math.abs(v) < 1e-9 ? 'zero' : 'grid'}" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
         <text class="ax" x="${PL - 7}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${v > 0 ? '+' : ''}${v}</text>`).join('')}
-      ${curves.map((c, i) => i === trPick ? '' :
+      ${curves.map((c, i) => i === pick ? '' :
         `<path class="tr-line tr-ctx" d="${path(c.pts)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
-      <path class="tr-line" d="${path(curves[trPick].pts)}" stroke="var(--ch-good)"
+      <path class="tr-line" d="${path(curves[pick].pts)}" stroke="var(--ch-good)"
         style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
       ${ends.map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}"
-          style="${e.i === trPick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(curves[e.i].s.name)} ${trSign(e.v)}</text>`).join('')}
-      <line id="tr-cross2" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+          style="${e.i === pick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(curves[e.i].s.name)} ${trSign(e.v)}</text>`).join('')}
+      <line id="tr-cross2-${key}" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
       <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
-        onmousemove="trSimHover(event,this.ownerSVGElement)" onmouseleave="trTipOff2()"
-        ontouchmove="trSimHover(event,this.ownerSVGElement)" ontouchend="trTipOff2()"/>
+        onmousemove="trSimHover(event,this.ownerSVGElement,'${key}')" onmouseleave="trTipOff2('${key}')"
+        ontouchmove="trSimHover(event,this.ownerSVGElement,'${key}')" ontouchend="trTipOff2('${key}')"/>
       <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
       <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
     </svg>
     <div class="tr-legend">
-      <span><i style="background:var(--ch-good)"></i>${esc(series[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-good)"></i>${esc(series[pick].name)} · hervorgehoben</span>
       <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
     </div>
   </div>`;
 }
 
-let trSimPts = [], trSimN = 0;
-function trSimHover(ev, svg) {
-  if (!trSimPts.length) return;
+let trSimPts = {}, trSimN = {};
+function trSimHover(ev, svg, key) {
+  const pts = trSimPts[key] || [], n = trSimN[key] || 0;
+  if (!pts.length) return;
   const r = svg.getBoundingClientRect();
   const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
   const W = 520, PL = 38, PR = 62, iw = W - PL - PR;
   const rel = ((cx - r.left) / r.width * W - PL) / iw;
-  const k = Math.max(0, Math.min(trSimN - 1, Math.round(rel * (trSimN - 1))));
-  const cross = document.getElementById('tr-cross2');
+  const k = Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
+  const cross = document.getElementById('tr-cross2-' + key);
   if (cross) {
-    const x = PL + iw * k / Math.max(1, trSimN - 1);
+    const x = PL + iw * k / Math.max(1, n - 1);
     cross.setAttribute('x1', x); cross.setAttribute('x2', x);
     cross.setAttribute('opacity', '.4');
   }
   trTipOn(ev, `Nach Einstieg ${k + 1}<br>` +
-    trSimPts.map((s, i) => `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trSign(s.pts[k])} R${i === trPick ? '</b>' : ''}`).join('<br>'));
+    pts.map((s, i) => `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trSign(s.pts[k])} R${i === trPick ? '</b>' : ''}`).join('<br>'));
 }
-function trTipOff2() {
+function trTipOff2(key) {
   trTipOff();
-  const c = document.getElementById('tr-cross2');
+  const c = document.getElementById('tr-cross2-' + key);
   if (c) c.setAttribute('opacity', '0');
 }
 
@@ -5242,10 +5302,11 @@ const trStep = r => {
   return (q <= 1 ? 1 : q <= 2 ? 2 : q <= 2.5 ? 2.5 : q <= 5 ? 5 : 10) * m;
 };
 
-function trAccCard(list) {
+function trAccCard(list, key) {
+  key = key || 'alle';
   const { base, series } = trSim(list);
   if (!base.length || !series.length) return '';
-  if (trPick >= series.length) trPick = 0;
+  const pick = Math.min(trPick, series.length - 1);
   const start = trStart(), risk = trRisk();
   const acc = trAccount(series, start, risk);
   // In Prozent wird alles auf das Startkapital bezogen: aus 27.658 € werden
@@ -5294,7 +5355,7 @@ function trAccCard(list) {
   const dTicks = [0, 1, 2, 3, 4].map(k => ddTop * k / 4);
   const ddLbl = v => v <= 0 ? (pct ? '0 %' : '0')
     : '−' + (pct ? (v % 1 ? v.toFixed(1).replace('.', ',') : v.toFixed(0)) + ' %' : money(v));
-  const worst = acc[trPick];
+  const worst = acc[pick];
   const wx = worst.ddIdx >= 0 ? X(worst.ddIdx) : null;
   // Die Marke für den tiefsten Stand schiebt sich mit den Namen auseinander
   const dEnds = acc.map((a, i) => ({ i, y: DY(dOf(a)[dOf(a).length - 1] || 0) }));
@@ -5304,9 +5365,9 @@ function trAccCard(list) {
     if (dEnds[k].y - dEnds[k - 1].y < 12) dEnds[k].y = dEnds[k - 1].y + 12;
   const wLbl = dEnds.find(e => e.i === -1);
 
-  trAccPts = acc.map(a => ({ name: a.name, pts: a.pts.map(cv), dd: dOf(a) }));
+  trAccPts[key] = acc.map(a => ({ name: a.name, pts: a.pts.map(cv), dd: dOf(a) }));
   trAccFmt = { pct, start };
-  trAccN = n;
+  trAccN[key] = n;
 
   return `<div class="tr-card">
     <div class="tr-h"><span>Kontoverlauf</span></div>
@@ -5328,7 +5389,7 @@ function trAccCard(list) {
       <tr><th>Ziel</th><th class="num">${pct ? 'Konto vom Start' : 'Konto am Ende'}</th>
           <th class="num">Veränderung</th></tr>
       ${acc.map((a, i) => `<tr>
-        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+        <td><button class="tr-pick ${i === pick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
         <td class="num">${pct ? trNum2.format(a.end / start * 100).replace(',00', '') + ' %' : money(a.end)}</td>
         <td class="num" style="color:${a.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'};font-weight:600">${
@@ -5338,25 +5399,25 @@ function trAccCard(list) {
     </table></div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
-      aria-label="Kontoverlauf für ${acc.length} Zielvarianten ab ${trNum0.format(start)} bei ${trNum2.format(risk)} Prozent Risiko je Einstieg; hervorgehoben ${esc(acc[trPick].name)}">
+      aria-label="Kontoverlauf für ${acc.length} Zielvarianten ab ${trNum0.format(start)} bei ${trNum2.format(risk)} Prozent Risiko je Einstieg; hervorgehoben ${esc(acc[pick].name)}">
       ${ticks.map(v => `<line class="grid" x1="${PL - 6}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
         <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${accLbl(v)}</text>`).join('')}
       <line class="zero" x1="${PL - 6}" y1="${Y(cv(start)).toFixed(1)}" x2="${W - PR}" y2="${Y(cv(start)).toFixed(1)}" stroke-dasharray="3 3"/>
-      ${acc.map((a, i) => i === trPick ? '' :
+      ${acc.map((a, i) => i === pick ? '' :
         `<path class="tr-line tr-ctx" d="${path(a.pts)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
-      <path class="tr-line" d="${path(acc[trPick].pts)}" stroke="var(--ch-good)"
+      <path class="tr-line" d="${path(acc[pick].pts)}" stroke="var(--ch-good)"
         style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
       ${ends.map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}"
-          style="${e.i === trPick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(acc[e.i].name)}</text>`).join('')}
-      <line id="tr-cross3" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+          style="${e.i === pick ? 'fill:var(--ink);font-weight:600' : ''}">${esc(acc[e.i].name)}</text>`).join('')}
+      <line id="tr-cross3-${key}" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
       <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
-        onmousemove="trAccHover(event,this.ownerSVGElement)" onmouseleave="trTipOff3()"
-        ontouchmove="trAccHover(event,this.ownerSVGElement)" ontouchend="trTipOff3()"/>
+        onmousemove="trAccHover(event,this.ownerSVGElement,'${key}')" onmouseleave="trTipOff3('${key}')"
+        ontouchmove="trAccHover(event,this.ownerSVGElement,'${key}')" ontouchend="trTipOff3('${key}')"/>
       <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
       <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
     </svg>
     <div class="tr-legend">
-      <span><i style="background:var(--ch-good)"></i>${esc(acc[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-good)"></i>${esc(acc[pick].name)} · hervorgehoben</span>
       <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
       <span>gestrichelt: Startkapital</span>
     </div>
@@ -5374,20 +5435,20 @@ function trAccCard(list) {
     <div class="tr-tblwrap"><table class="tr-tbl">
       <tr><th>Ziel</th><th class="num">tiefster Stand</th><th class="num">unter Wasser</th></tr>
       ${acc.map((a, i) => `<tr>
-        <td><button class="tr-pick ${i === trPick ? 'on' : ''}" onclick="trSetPick(${i})">
+        <td><button class="tr-pick ${i === pick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
-        <td class="num" style="${i === trPick ? 'color:var(--ch-bad);font-weight:600' : ''}">${
+        <td class="num" style="${i === pick ? 'color:var(--ch-bad);font-weight:600' : ''}">${
           a.maxDD > 0 ? '−' + (pct ? a.maxDD.toFixed(1).replace('.', ',') + ' %' : money(a.maxDDAbs)) : '—'}</td>
         <td class="num">${a.ddLen} ${a.ddLen === 1 ? 'Einstieg' : 'Einstiege'}</td>
       </tr>`).join('')}
     </table></div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
-      aria-label="Rücksetzer vom jeweiligen Höchststand in Prozent für ${acc.length} Zielvarianten, je Einstieg; tiefster Stand der hervorgehobenen Variante ${esc(acc[trPick].name)}: ${worst.maxDD.toFixed(1)} Prozent">
+      aria-label="Rücksetzer vom jeweiligen Höchststand in Prozent für ${acc.length} Zielvarianten, je Einstieg; tiefster Stand der hervorgehobenen Variante ${esc(acc[pick].name)}: ${worst.maxDD.toFixed(1)} Prozent">
       ${dTicks.map(v => `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${PL - 6}" y1="${DY(v).toFixed(1)}" x2="${W - PR}" y2="${DY(v).toFixed(1)}"/>
         <text class="ax" x="${PL - 12}" y="${(DY(v) + 3).toFixed(1)}" text-anchor="end">${ddLbl(v)}</text>`).join('')}
       <path class="tr-area" d="${dArea(worst)}" fill="var(--ch-good)" style="--op:.13"/>
-      ${acc.map((a, i) => i === trPick ? '' :
+      ${acc.map((a, i) => i === pick ? '' :
         `<path class="tr-line tr-ctx" d="${dPath(a)}" stroke="var(--ch-mute)" style="--len:1400;stroke-dasharray:1400;animation-delay:${i * 60}ms"/>`).join('')}
       <path class="tr-line" d="${dPath(worst)}" stroke="var(--ch-good)"
         style="--len:1400;stroke-dasharray:1400;animation-delay:.12s" stroke-width="2.4"/>
@@ -5398,67 +5459,69 @@ function trAccCard(list) {
         <text class="lbl" x="${(W - PR + 6)}" y="${((wLbl ? wLbl.y : DY(worst.maxDD)) + 3).toFixed(1)}"
           style="fill:var(--ch-bad);font-weight:600">${
             'max −' + (pct ? worst.maxDD.toFixed(1).replace('.', ',') + ' %' : money(worst.maxDDAbs))}</text>`}
-      ${dEnds.filter(e => e.i >= 0 && e.i !== trPick).map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}">${esc(acc[e.i].name)}</text>`).join('')}
-      <line id="tr-cross4" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
+      ${dEnds.filter(e => e.i >= 0 && e.i !== pick).map(e => `<text class="lbl" x="${W - PR + 6}" y="${(e.y + 3).toFixed(1)}">${esc(acc[e.i].name)}</text>`).join('')}
+      <line id="tr-cross4-${key}" x1="0" y1="${PT}" x2="0" y2="${PT + ih}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
       <rect x="${PL}" y="${PT}" width="${iw}" height="${ih}" fill="transparent"
-        onmousemove="trDdHover(event,this.ownerSVGElement)" onmouseleave="trTipOff4()"
-        ontouchmove="trDdHover(event,this.ownerSVGElement)" ontouchend="trTipOff4()"/>
+        onmousemove="trDdHover(event,this.ownerSVGElement,'${key}')" onmouseleave="trTipOff4('${key}')"
+        ontouchmove="trDdHover(event,this.ownerSVGElement,'${key}')" ontouchend="trTipOff4('${key}')"/>
       <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
       <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${n}</text>
     </svg>
     <div class="tr-legend">
-      <span><i style="background:var(--ch-good)"></i>${esc(acc[trPick].name)} · hervorgehoben</span>
+      <span><i style="background:var(--ch-good)"></i>${esc(acc[pick].name)} · hervorgehoben</span>
       <span><i style="background:var(--ch-mute)"></i>die übrigen Varianten</span>
       <span><i style="background:var(--ch-bad)"></i>tiefster Stand</span>
     </div>
   </div>`;
 }
 
-let trAccPts = [], trAccN = 0, trAccFmt = { pct: false, start: 0 };
-function trAccHover(ev, svg) {
-  if (!trAccPts.length) return;
+let trAccPts = {}, trAccN = {}, trAccFmt = { pct: false, start: 0 };
+function trAccHover(ev, svg, key) {
+  const series = trAccPts[key] || [], n = trAccN[key] || 0;
+  if (!series.length) return;
   const r = svg.getBoundingClientRect();
   const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
   const W = 520, PL = 52, PR = 66, iw = W - PL - PR;
   const rel = ((cx - r.left) / r.width * W - PL) / iw;
-  const k = Math.max(0, Math.min(trAccN - 1, Math.round(rel * (trAccN - 1))));
-  const cross = document.getElementById('tr-cross3');
+  const k = Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
+  const cross = document.getElementById('tr-cross3-' + key);
   if (cross) {
-    const x = PL + iw * k / Math.max(1, trAccN - 1);
+    const x = PL + iw * k / Math.max(1, n - 1);
     cross.setAttribute('x1', x); cross.setAttribute('x2', x);
     cross.setAttribute('opacity', '.4');
   }
-  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + series.map((s, i) =>
     `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${trAccFmt.pct
       ? (s.pts[k] > 0 ? '+' : s.pts[k] < 0 ? '−' : '') + trNum2.format(Math.abs(s.pts[k])) + ' %'
       : trNum0.format(Math.round(s.pts[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
 }
-function trTipOff3() {
+function trTipOff3(key) {
   trTipOff();
-  const c = document.getElementById('tr-cross3');
+  const c = document.getElementById('tr-cross3-' + key);
   if (c) c.setAttribute('opacity', '0');
 }
-function trDdHover(ev, svg) {
-  if (!trAccPts.length) return;
+function trDdHover(ev, svg, key) {
+  const series = trAccPts[key] || [], n = trAccN[key] || 0;
+  if (!series.length) return;
   const r = svg.getBoundingClientRect();
   const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
   const W = 520, PL = 52, PR = 66, iw = W - PL - PR;
   const rel = ((cx - r.left) / r.width * W - PL) / iw;
-  const k = Math.max(0, Math.min(trAccN - 1, Math.round(rel * (trAccN - 1))));
-  const cross = document.getElementById('tr-cross4');
+  const k = Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
+  const cross = document.getElementById('tr-cross4-' + key);
   if (cross) {
-    const x = PL + iw * k / Math.max(1, trAccN - 1);
+    const x = PL + iw * k / Math.max(1, n - 1);
     cross.setAttribute('x1', x); cross.setAttribute('x2', x);
     cross.setAttribute('opacity', '.4');
   }
-  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + trAccPts.map((s, i) =>
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + series.map((s, i) =>
     `${i === trPick ? '<b>' : ''}${esc(s.name)}: ${s.dd[k] > 0 ? '−' : ''}${trAccFmt.pct
       ? trFx(s.dd[k]).replace('.', ',') + ' %'
       : trNum0.format(Math.round(s.dd[k]))}${i === trPick ? '</b>' : ''}`).join('<br>'));
 }
-function trTipOff4() {
+function trTipOff4(key) {
   trTipOff();
-  const c = document.getElementById('tr-cross4');
+  const c = document.getElementById('tr-cross4-' + key);
   if (c) c.setAttribute('opacity', '0');
 }
 
@@ -5792,7 +5855,7 @@ function renderTrades() {
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trVarCard(list)
     + trEquity(list)
-    + `<div class="tr-broad">${trSimCard(list)}${trAccCard(list)}</div>`
+    + trBands(list).map((b, i) => trBandHtml(b, i === 0)).join('')
     + trHist(list)
     + trGoalsCard(list)
     + TR_DIMS.map(([l, f]) => trDimCard(list, l, f, false)).join('')
