@@ -2053,6 +2053,18 @@
     }
     .tr-verdict b { color: var(--ink); font-weight: 600; }
 
+    /* Sortierbare Kopfzeile der Strategietabelle */
+    .tr-sort {
+      font: inherit; font-weight: 600; color: inherit; background: none; border: none;
+      padding: 0; cursor: pointer; white-space: nowrap;
+    }
+    .tr-sort:hover { color: var(--accent); }
+    .tr-sort.on { color: var(--ink); }
+    .tr-strat td, .tr-strat th { white-space: nowrap; }
+    .tr-combo .tr-legend + .tr-tblwrap { margin-top: 16px; }
+    .tr-dotc { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 7px; }
+    .tr-f input:disabled { opacity: .55; }
+
     .tr-seg { display: inline-flex; flex-wrap: wrap; background: var(--sunken);
       border-radius: 9px; padding: 3px; gap: 2px; max-width: 100%; }
     .tr-seg button {
@@ -5027,58 +5039,158 @@ const TR_METRICS = [
 ];
 const trMetric = () => TR_METRICS.some(m => m[0] === trMeta.metric) ? trMeta.metric : 'konto';
 const trGoalR  = () => (typeof trMeta.goalR === 'number' && trMeta.goalR > 0) ? trMeta.goalR : 2;
-async function trSetMetric(m) {
-  trMeta.metric = m;
-  await persistTrades();
-  renderTrades();
-}
+const trDdCap  = () => (typeof trMeta.ddCap === 'number' && trMeta.ddCap > 0) ? Math.min(99, trMeta.ddCap) : 0;
+const trGrpFam = () => trMeta.grp === 'fam';
+const trWide   = () => window.innerWidth >= 1000;
+
+async function trSetMetric(m) { trMeta.metric = m; await persistTrades(); renderTrades(); }
+async function trSetGrp(g)    { trMeta.grp = g === 'fam' ? 'fam' : 'ein'; await persistTrades(); renderTrades(); }
 async function trSetGoal(v) {
   const n = parseFloat(String(v).replace(',', '.'));
   trMeta.goalR = (isNaN(n) || n <= 0) ? 2 : Math.min(100, n);
   await persistTrades();
   renderTrades();
 }
-const trWide = () => window.innerWidth >= 1000;
+// Leeres Feld = aus: dann gilt für alle Strategien dasselbe Risiko
+async function trSetDdCap(v) {
+  const n = parseFloat(String(v).replace('%', '').replace(',', '.'));
+  trMeta.ddCap = (isNaN(n) || n <= 0) ? 0 : Math.min(99, n);
+  await persistTrades();
+  renderTrades();
+}
 
-// Eine Reihe je Einstiegsart: Zeitpunkt und Wert der gewünschten Kennzahl,
-// gerechnet mit dem eingetragenen Ziel, Startkapital und Risiko.
-function trComboSeries(list, goalR, metric) {
-  const names = [...new Set(list.filter(t => t.variante).map(t => t.variante))];
-  const rk = n => { const i = TR_VAR_ORDER.indexOf(n); return i < 0 ? 90 : i; };
-  names.sort((a, b) => rk(a) - rk(b) || a.localeCompare(b, 'de'));
-  const start = trStart(), risk = trRisk(), pct = trPctOn();
+// ── Eine Strategie durchrechnen ───────────────────────────────────────────
+// Genau der Verlauf, den die Einstiege hergeben: Einstieg für Einstieg, mit
+// dem eingestellten Prozentsatz des aktuellen Kontos. Kein Glätten, keine
+// Gewichtung. Erreicht = +Ziel, ausgestoppt = −1, noch offen = nichts.
+function trStratRun(sub, goalR, riskPct, start) {
+  let bal = start, peak = start, sum = 0, maxDD = 0, maxDDAbs = 0, run = 0, ddLen = 0, hits = 0, dec = 0;
+  const pts = [];
+  for (const t of sub) {
+    const o = trRrOut(t, goalR);
+    const v = o === null ? 0 : o;
+    if (o !== null) { dec++; if (o > 0) hits++; }
+    sum += v;
+    bal = Math.max(0, bal * (1 + riskPct / 100 * v));
+    if (bal > peak) peak = bal;
+    const dd = peak > 0 ? (peak - bal) / peak * 100 : 0;
+    if (dd > maxDD) { maxDD = dd; maxDDAbs = peak - bal; }
+    if (dd > 0) { run++; if (run > ddLen) ddLen = run; } else run = 0;
+    pts.push({ t: t.ts, bal, sum, dd, ddAbs: Math.max(0, peak - bal) });
+  }
+  return { pts, end: bal, sum, maxDD, maxDDAbs, ddLen, n: sub.length, dec, hits,
+           quote: dec ? 100 * hits / dec : NaN, exp: dec ? sum / dec : NaN };
+}
+
+// Welcher Einsatz je Trade hätte genau diesen Rücksetzer ergeben? Tiefer
+// Rücksetzer und Einsatz hängen monoton zusammen, also per Halbierung gesucht.
+function trRiskForDD(sub, goalR, start, targetDD) {
+  if (!sub.length) return NaN;
+  if (trStratRun(sub, goalR, 99, start).maxDD < targetDD) return NaN;   // nie so tief
+  let lo = 0.001, hi = 99;
+  if (trStratRun(sub, goalR, lo, start).maxDD > targetDD) return lo;
+  for (let i = 0; i < 44; i++) {
+    const mid = (lo + hi) / 2;
+    if (trStratRun(sub, goalR, mid, start).maxDD < targetDD) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// ── Strategien: je Einstiegsart oder je Familie ───────────────────────────
+function trStratRows(list) {
+  const fam = trGrpFam();
+  const keyOf = t => fam ? trFam(t.variante) : t.variante;
+  const order = fam ? [...new Set(TR_VAR_ORDER.map(trFam))] : TR_VAR_ORDER;
+  const rk = n => { const i = order.indexOf(n); return i < 0 ? 90 : i; };
+  const names = [...new Set(list.filter(t => t.variante).map(keyOf))]
+    .sort((a, b) => rk(a) - rk(b) || a.localeCompare(b, 'de'));
+  const goalR = trGoalR(), start = trStart(), cap = trDdCap();
   return names.map(name => {
-    const sub = list.filter(t => t.variante === name && !isNaN(t.mfeR))
+    const sub = list.filter(t => keyOf(t) === name && !isNaN(t.mfeR))
                     .slice().sort((a, b) => a.ts - b.ts);
-    let bal = start, peak = start, sum = 0;
-    const pts = sub.map(t => {
-      const o = trRrOut(t, goalR);        // offen zählt als noch nichts realisiert
-      const v = o === null ? 0 : o;
-      bal = Math.max(0, bal * (1 + risk / 100 * v));
-      if (bal > peak) peak = bal;
-      sum += v;
-      const dd = peak > 0 ? (peak - bal) / peak * 100 : 0;
-      const y = metric === 'summe' ? sum
-              : metric === 'dd' ? (pct ? -dd : -(peak - bal))
-              : (pct ? (bal / start - 1) * 100 : bal);
-      return { t: t.ts, y };
-    });
-    return { name, col: 's' + (rk(name) % 6 + 1), pts };
+    const fit = cap > 0 ? trRiskForDD(sub, goalR, start, cap) : NaN;
+    const risk = cap > 0 ? (isNaN(fit) ? 99 : fit) : trRisk();
+    const r = trStratRun(sub, goalR, risk, start);
+    return { name, col: 's' + (rk(name) % 6 + 1), risk, fitted: cap > 0, unreached: cap > 0 && isNaN(fit), ...r };
   }).filter(r => r.pts.length);
 }
 
+// ── Tabelle: eine Zeile je Strategie, Kopfzeile sortiert ──────────────────
+const TR_STRAT_COLS = [
+  ['name',     'Strategie',        1],
+  ['n',        'Einstiege',       -1],
+  ['risk',     'Risiko',          -1],
+  ['exp',      'Ø RR je Trade',   -1],
+  ['quote',    'Treffer',         -1],
+  ['end',      'Konto am Ende',   -1],
+  ['chg',      'Veränderung',     -1],
+  ['maxDD',    'max. Rücksetzer',  1],
+  ['maxDDAbs', 'davon in Geld',    1],
+  ['ddLen',    'unter Wasser',     1]
+];
+const trSortK = () => TR_STRAT_COLS.some(c => c[0] === trMeta.sortK) ? trMeta.sortK : 'exp';
+const trSortD = () => trMeta.sortD === 1 ? 1 : -1;
+async function trSetSort(k) {
+  const col = TR_STRAT_COLS.find(c => c[0] === k);
+  if (!col || !col[2]) return;
+  if (trSortK() === k) trMeta.sortD = trSortD() === 1 ? -1 : 1;
+  else { trMeta.sortK = k; trMeta.sortD = col[2]; }
+  await persistTrades();
+  renderTrades();
+}
+
+function trStratTable(rows, start) {
+  const pct = trPctOn(), k = trSortK(), d = trSortD();
+  const val = (r, key) => key === 'chg' ? r.end - start : key === 'name' ? r.name : r[key];
+  const sorted = rows.slice().sort((a, b) => {
+    const x = val(a, k), y = val(b, k);
+    if (typeof x === 'string') return d * x.localeCompare(y, 'de');
+    const xa = isNaN(x) ? -Infinity : x, ya = isNaN(y) ? -Infinity : y;
+    return d * (xa - ya);
+  });
+  const money = v => trNum0.format(Math.round(v));
+  const cell = (r, key) => {
+    switch (key) {
+      case 'name': return `<i class="tr-dotc" style="background:var(--${r.col})"></i>${esc(r.name)}`;
+      case 'n': return r.n;
+      case 'risk': return r.unreached ? '—' : trNum2.format(r.risk).replace(',00', '') + ' %';
+      case 'exp': return `<b style="color:${r.exp >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)'}">${trSign(r.exp)} R</b>`;
+      case 'quote': return trFi(r.quote) + ' %';
+      case 'end': return pct ? trNum2.format(r.end / start * 100).replace(',00', '') + ' %' : money(r.end);
+      case 'chg': return `<span style="color:${r.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'}">${
+        pct ? (r.end >= start ? '+' : '−') + trNum2.format(Math.abs(r.end / start - 1) * 100).replace(',00', '') + ' %'
+            : (r.end >= start ? '+' : '−') + money(Math.abs(r.end - start))}</span>`;
+      case 'maxDD': return '−' + trNum2.format(r.maxDD).replace(',00', '') + ' %';
+      case 'maxDDAbs': return '−' + money(r.maxDDAbs);
+      case 'ddLen': return r.ddLen;
+    }
+  };
+  return `<div class="tr-tblwrap"><table class="tr-tbl tr-strat">
+    <tr>${TR_STRAT_COLS.map(([key, lbl, dir]) => dir
+      ? `<th class="${key === 'name' ? '' : 'num'}" aria-sort="${k === key ? (d === 1 ? 'ascending' : 'descending') : 'none'}">
+          <button class="tr-sort ${k === key ? 'on' : ''}" onclick="trSetSort('${key}')">${esc(lbl)}${
+            k === key ? (d === 1 ? ' ▴' : ' ▾') : ''}</button></th>`
+      : `<th>${esc(lbl)}</th>`).join('')}</tr>
+    ${sorted.map(r => `<tr>${TR_STRAT_COLS.map(([key]) =>
+      `<td class="${key === 'name' ? '' : 'num'}">${cell(r, key)}</td>`).join('')}</tr>`).join('')}
+  </table></div>`;
+}
+
 function trComboCard(list) {
-  const metric = trMetric(), pct = trPctOn(), start = trStart(), goalR = trGoalR();
+  const metric = trMetric(), pct = trPctOn(), start = trStart(), goalR = trGoalR(), cap = trDdCap();
+  const rows = trStratRows(list);
+  if (rows.length < 2) return '';
+
+  const yOf = (m, p) => m === 'summe' ? p.sum
+    : m === 'dd' ? (pct ? -p.dd : -p.ddAbs)
+    : (pct ? (p.bal / start - 1) * 100 : p.bal);
   const panels = (metric === 'both'
     ? [{ m: 'konto', h: .64, cap: pct ? 'Konto in Prozent' : 'Konto in Geld' },
        { m: 'dd', h: .28, cap: 'Rücksetzer vom Höchststand' }]
-    : [{ m: metric, h: 1, cap: '' }])
-    .map(pn => ({ ...pn, rows: trComboSeries(list, goalR, pn.m) }));
-  const rows0 = panels[0].rows;
-  if (rows0.length < 2) return '';
+    : [{ m: metric, h: 1, cap: '' }]);
 
-  const t0 = Math.min(...rows0.flatMap(r => r.pts.map(p => p.t)));
-  const t1 = Math.max(...rows0.flatMap(r => r.pts.map(p => p.t)));
+  const t0 = Math.min(...rows.flatMap(r => r.pts.map(p => p.t)));
+  const t1 = Math.max(...rows.flatMap(r => r.pts.map(p => p.t)));
 
   const wide = trWide();
   const W = wide ? 1120 : 520, Hh = wide ? (metric === 'both' ? 430 : 330) : (metric === 'both' ? 340 : 260);
@@ -5096,7 +5208,7 @@ function trComboCard(list) {
   panels.forEach((pn, pi) => {
     const ih = ihAll * pn.h;
     const base0 = pn.m === 'konto' ? (pct ? 0 : start) : 0;
-    const ys = pn.rows.flatMap(r => r.pts.map(p => p.y)).concat([base0]);
+    const ys = rows.flatMap(r => r.pts.map(p => yOf(pn.m, p))).concat([base0]);
     let lo = Math.min(...ys), hi = Math.max(...ys);
     if (hi === lo) hi = lo + 1;
     const pad = (hi - lo) * .1; lo -= pad; hi += pad;
@@ -5110,20 +5222,19 @@ function trComboCard(list) {
       <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(pn.m, v)}</text>`).join('');
     svg += `<line class="zero" x1="${PL - 6}" y1="${Y(base0).toFixed(1)}" x2="${W - PR}" y2="${Y(base0).toFixed(1)}" stroke-dasharray="3 3"/>`;
     if (pn.cap) svg += `<text class="ax" x="${PL - 6}" y="${(y0 - 4).toFixed(1)}" style="fill:var(--faint)">${esc(pn.cap)}</text>`;
-    svg += pn.rows.map((r, i) => `<path class="tr-line" d="M${X(r.pts[0].t).toFixed(1)} ${Y(base0).toFixed(1)} ${
-      r.pts.map(p => 'L' + X(p.t).toFixed(1) + ' ' + Y(p.y).toFixed(1)).join(' ')}" stroke="var(--${r.col})"
+    svg += rows.map((r, i) => `<path class="tr-line" d="M${X(r.pts[0].t).toFixed(1)} ${Y(base0).toFixed(1)} ${
+      r.pts.map(p => 'L' + X(p.t).toFixed(1) + ' ' + Y(yOf(pn.m, p)).toFixed(1)).join(' ')}" stroke="var(--${r.col})"
       style="--len:2600;stroke-dasharray:2600;animation-delay:${i * 70}ms" stroke-width="${pn.h < .5 ? 1.6 : 2}"/>`).join('');
 
-    // Namen nur an der oberen Kurve — unten würden sie nur verdoppeln
     if (pi === 0) {
-      const ends = pn.rows.map((r, i) => {
+      const ends = rows.map((r, i) => {
         const p = r.pts[r.pts.length - 1];
-        return { i, x: Math.min(W - PR + 6, X(p.t) + 7), y: Y(p.y), v: p.y };
+        return { i, x: Math.min(W - PR + 6, X(p.t) + 7), y: Y(yOf(pn.m, p)), v: yOf(pn.m, p) };
       }).sort((a, b) => a.y - b.y);
       for (let k = 1; k < ends.length; k++)
         if (ends[k].y - ends[k - 1].y < 13) ends[k].y = ends[k - 1].y + 13;
       svg += ends.map(e => `<text class="lbl" x="${e.x.toFixed(1)}" y="${(e.y + 3).toFixed(1)}"
-        style="fill:var(--${pn.rows[e.i].col});font-weight:600">${esc(pn.rows[e.i].name)} ${fmt(pn.m, e.v)}</text>`).join('');
+        style="fill:var(--${rows[e.i].col});font-weight:600">${esc(rows[e.i].name)} ${fmt(pn.m, e.v)}</text>`).join('');
     }
     geo.push({ y0, ih });
     top = y0 + ih + GAP;
@@ -5139,16 +5250,20 @@ function trComboCard(list) {
       onmousemove="trComboHover(event,this.ownerSVGElement)" onmouseleave="trTipOff5()"
       ontouchmove="trComboHover(event,this.ownerSVGElement)" ontouchend="trTipOff5()"/>`;
 
-  trComboPts = panels.map(pn => ({ m: pn.m, rows: pn.rows.map(r => ({ name: r.name, pts: r.pts })) }));
+  trComboPts = panels.map(pn => ({ m: pn.m,
+    rows: rows.map(r => ({ name: r.name, pts: r.pts.map(p => ({ t: p.t, y: yOf(pn.m, p) })) })) }));
   trComboBox = { W, PL, PR, t0, t1, pct };
 
   const goalLbl = trRrLbl(goalR);
+  const unreached = rows.filter(r => r.unreached).map(r => r.name);
   return `<div class="tr-card tr-combo">
-    <div class="tr-h"><span>Alle Einstiegsarten im Vergleich</span></div>
-    <div class="tr-sub">Jede Art als eigene Kurve über die Zeit — so lassen sich auch Arten
-      vergleichen, die unterschiedlich oft füllen. Gerechnet wird mit dem Ziel unten links:
-      ein Einstieg, dessen Max-Profit mindestens ${goalLbl} R erreicht hat, bringt ${goalLbl} R,
-      ein ausgestoppter −1 R, ein noch laufender nichts.</div>
+    <div class="tr-h"><span>Welche Strategie gehe ich?</span></div>
+    <div class="tr-sub">Alle Einstiege in einem Verlauf, Einstieg für Einstieg gerechnet —
+      kein Glätten, keine Gewichtung. Ein Einstieg, dessen Max-Profit mindestens ${goalLbl} R
+      erreicht hat, bringt ${goalLbl} R, ein ausgestoppter −1 R, ein noch laufender nichts.
+      ${cap > 0 ? `Das Risiko je Trade ist nicht vorgegeben, sondern <b>je Strategie so gewählt,
+        dass ihr tiefster Rücksetzer ${trNum2.format(cap).replace(',00', '')} % beträgt</b> —
+        so stehen alle bei gleichem Schmerz nebeneinander.` : ''}</div>
 
     <div class="tr-rrs">
       <div class="tr-f"><label>Geplantes Ziel</label>
@@ -5158,9 +5273,20 @@ function trComboCard(list) {
         <input type="text" inputmode="decimal" style="width:108px" value="${trNum0.format(start)}"
           onchange="trSetAcc('start', this.value)"></div>
       <div class="tr-f"><label>Risiko je Trade</label>
-        <input type="text" inputmode="decimal" style="width:76px" value="${trNum2.format(trRisk()).replace(',00','')} %"
+        <input type="text" inputmode="decimal" style="width:${cap > 0 ? 108 : 76}px" ${cap > 0 ? 'disabled' : ''}
+          value="${cap > 0 ? 'je Strategie' : trNum2.format(trRisk()).replace(',00', '') + ' %'}"
           onchange="trSetAcc('risk', this.value)"></div>
+      <div class="tr-f"><label>Rücksetzer, den ich aushalte</label>
+        <input type="text" inputmode="decimal" style="width:86px" placeholder="aus"
+          value="${cap > 0 ? trNum2.format(cap).replace(',00', '') + ' %' : ''}"
+          onchange="trSetDdCap(this.value)"></div>
       <div class="tr-f"><label>Anzeige</label>${trUnitPick()}</div>
+      <div class="tr-f"><label>Strategien</label>
+        <div class="tr-seg" role="group" aria-label="Strategien">
+          ${[['ein', 'je Einstieg'], ['fam', 'je Familie']].map(([g, l]) =>
+            `<button class="${trGrpFam() === (g === 'fam') ? 'on' : ''}" aria-pressed="${trGrpFam() === (g === 'fam')}"
+              onclick="trSetGrp('${g}')">${l}</button>`).join('')}
+        </div></div>
       <div class="tr-f"><label>Kennzahl</label>
         <div class="tr-seg" role="group" aria-label="Kennzahl">
           ${TR_METRICS.map(([k, l]) => `<button class="${metric === k ? 'on' : ''}"
@@ -5169,10 +5295,16 @@ function trComboCard(list) {
     </div>
 
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}" role="img"
-      aria-label="${esc(panels.map(pn => pn.m === 'summe' ? 'Aufsummierte R' : pn.m === 'dd' ? 'Rücksetzer vom Höchststand' : 'Kontoverlauf').join(' und '))} je Einstiegsart über die Zeit, ${rows0.length} Arten, Ziel ${goalLbl} R">
+      aria-label="${esc(panels.map(pn => pn.m === 'summe' ? 'Aufsummierte R' : pn.m === 'dd' ? 'Rücksetzer vom Höchststand' : 'Kontoverlauf').join(' und '))} je Strategie über die Zeit, ${rows.length} Strategien, Ziel ${goalLbl} R">
       ${svg}
     </svg>
-    <div class="tr-legend">${rows0.map(r => `<span><i style="background:var(--${r.col})"></i>${esc(r.name)}</span>`).join('')}</div>
+    <div class="tr-legend">${rows.map(r => `<span><i style="background:var(--${r.col})"></i>${esc(r.name)}</span>`).join('')}</div>
+
+    ${trStratTable(rows, start)}
+    <div class="tr-sub" style="margin:10px 0 0">Ein Klick auf eine Überschrift sortiert die Zeilen danach,
+      ein zweiter dreht die Richtung um.${unreached.length ? ` ${unreached.map(esc).join(' und ')}
+      ${unreached.length > 1 ? 'erreichen' : 'erreicht'} diesen Rücksetzer selbst bei 99 % Einsatz nicht —
+      ${unreached.length > 1 ? 'sie stehen' : 'sie steht'} dort mit dem Höchstwert.` : ''}</div>
   </div>`;
 }
 
