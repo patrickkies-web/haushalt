@@ -5300,6 +5300,12 @@ function trComboCard(list) {
     </svg>
     <div class="tr-legend">${rows.map(r => `<span><i style="background:var(--${r.col})"></i>${esc(r.name)}</span>`).join('')}</div>
 
+    <div class="tr-sub" style="margin:16px 0 8px">Die Zeilen rechnen mit dem Ziel
+      <b>${goalLbl} R</b>, ${cap > 0 ? `dem je Strategie auf ${trNum2.format(cap).replace(',00', '')} %
+      Rücksetzer eingestellten Risiko` : `<b>${trNum2.format(trRisk()).replace(',00', '')} %</b> Risiko je Trade`}
+      und ${trGrpFam() ? 'je Familie zusammengefassten Einstiegen' : 'jeder Einstiegsart für sich'}.
+      Die Bereiche darunter rechnen mit dem Ziel, das dort hervorgehoben ist — stehen dort andere
+      Zahlen, gehören sie zu einem anderen Ziel oder zu einer anderen Zusammenfassung.</div>
     ${trStratTable(rows, start)}
     <div class="tr-sub" style="margin:10px 0 0">Ein Klick auf eine Überschrift sortiert die Zeilen danach,
       ein zweiter dreht die Richtung um.${unreached.length ? ` ${unreached.map(esc).join(' und ')}
@@ -5364,18 +5370,22 @@ function trBands(list) {
 function trBandHtml(b, open) {
   const cards = trSimCard(b.list, b.key) + trAccCard(b.list, b.key);
   if (!cards) return '';
-  // Eckwerte in die Kopfzeile, damit sich die Bereiche zugeklappt vergleichen lassen
+  // Eckwerte in die Kopfzeile. Sie gelten für das Ziel, das in den Karten
+  // hervorgehoben ist — sonst stünde hier eine Zahl zu einem anderen Ziel als
+  // gleich darunter in den Tabellen.
   const { series } = trSim(b.list);
+  const cur = series[Math.min(trPick, series.length - 1)];
   const best = series.reduce((x, y) => (isNaN(y.exp) ? x : (!x || y.exp > x.exp ? y : x)), null);
   const start = trStart();
-  const acc = best ? trAccount([best], start, trRisk())[0] : null;
+  const acc = cur ? trAccount([cur], start, trRisk())[0] : null;
   const pct = trPctOn();
   const facts = [
     `${b.list.length} ${b.list.length === 1 ? 'Einstieg' : 'Einstiege'}`,
-    best ? `bestes Ziel ${best.name} ${trSign(best.exp)} R` : null,
+    cur ? `bei ${cur.name}: ${trSign(cur.exp)} R je Einstieg` : null,
     acc ? 'Konto ' + (pct ? (acc.end >= start ? '+' : '−') + trNum2.format(Math.abs(acc.end / start - 1) * 100).replace(',00', '') + ' %'
                           : trNum0.format(Math.round(acc.end))) : null,
-    acc ? 'tiefster Stand −' + acc.maxDD.toFixed(1).replace('.', ',') + ' %' : null
+    acc ? 'tiefster Stand −' + acc.maxDD.toFixed(1).replace('.', ',') + ' %' : null,
+    (best && cur && best.name !== cur.name) ? `bestes Ziel wäre ${best.name}` : null
   ].filter(Boolean);
   return `<details class="tr-band"${open ? ' open' : ''}>
     <summary><b>${esc(b.title)}</b><span>${facts.join(' · ')}</span></summary>
