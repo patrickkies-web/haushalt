@@ -2061,6 +2061,7 @@
     .tr-sort:hover { color: var(--accent); }
     .tr-sort.on { color: var(--ink); }
     .tr-strat td, .tr-strat th { white-space: nowrap; }
+    .tr-strat tr.tr-sum td { border-top: 2px solid var(--line); color: var(--muted); }
     .tr-combo .tr-legend + .tr-tblwrap { margin-top: 16px; }
     .tr-dotc { width: 9px; height: 9px; border-radius: 3px; display: inline-block; margin-right: 7px; }
     .tr-f input:disabled { opacity: .55; }
@@ -4793,7 +4794,8 @@ function trReport() {
 function trEquity(list) {
   const pts = [];
   let cum = 0;
-  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).forEach((t, i) => { cum += t.tgtRR; pts.push({ i: i + 1, v: cum, t }); });
+  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).slice().sort((a, b) => a.ts - b.ts)
+    .forEach((t, i) => { cum += t.tgtRR; pts.push({ i: i + 1, v: cum, t }); });
   if (pts.length < 2) return '';
   const W = 640, Hh = 210, PL = 42, PR = 14, PT = 12, PB = 26;
   const iw = W - PL - PR, ih = Hh - PT - PB;
@@ -5139,7 +5141,21 @@ async function trSetSort(k) {
   renderTrades();
 }
 
-function trStratTable(rows, start) {
+// „Alle zusammen" ist selbst eine Strategie: jedes Limit jedes Events handeln.
+// Sie bekommt eine eigene Zeile, damit der Bereich ganz oben seine Entsprechung
+// in der Tabelle hat — sonst vergleicht man ihn mit einer einzelnen Art und
+// wundert sich über den viel tieferen Rücksetzer.
+function trStratAll(list) {
+  const sub = list.filter(t => !isNaN(t.mfeR)).slice().sort((a, b) => a.ts - b.ts);
+  if (!sub.length) return null;
+  const goalR = trGoalR(), start = trStart(), cap = trDdCap();
+  const fit = cap > 0 ? trRiskForDD(sub, goalR, start, cap) : NaN;
+  const risk = cap > 0 ? (isNaN(fit) ? 99 : fit) : trRisk();
+  return { name: 'Alle zusammen', col: 'ch-mute', risk, fitted: cap > 0,
+           unreached: cap > 0 && isNaN(fit), all: true, ...trStratRun(sub, goalR, risk, start) };
+}
+
+function trStratTable(rows, start, sum) {
   const pct = trPctOn(), k = trSortK(), d = trSortD();
   const val = (r, key) => key === 'chg' ? r.end - start : key === 'name' ? r.name : r[key];
   const sorted = rows.slice().sort((a, b) => {
@@ -5160,7 +5176,7 @@ function trStratTable(rows, start) {
       case 'chg': return `<span style="color:${r.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)'}">${
         pct ? (r.end >= start ? '+' : '−') + trNum2.format(Math.abs(r.end / start - 1) * 100).replace(',00', '') + ' %'
             : (r.end >= start ? '+' : '−') + money(Math.abs(r.end - start))}</span>`;
-      case 'maxDD': return '−' + trNum2.format(r.maxDD).replace(',00', '') + ' %';
+      case 'maxDD': return '−' + trNum2.format(r.maxDD) + ' %';
       case 'maxDDAbs': return '−' + money(r.maxDDAbs);
       case 'ddLen': return r.ddLen;
     }
@@ -5173,6 +5189,8 @@ function trStratTable(rows, start) {
       : `<th>${esc(lbl)}</th>`).join('')}</tr>
     ${sorted.map(r => `<tr>${TR_STRAT_COLS.map(([key]) =>
       `<td class="${key === 'name' ? '' : 'num'}">${cell(r, key)}</td>`).join('')}</tr>`).join('')}
+    ${sum ? `<tr class="tr-sum">${TR_STRAT_COLS.map(([key]) =>
+      `<td class="${key === 'name' ? '' : 'num'}">${cell(sum, key)}</td>`).join('')}</tr>` : ''}
   </table></div>`;
 }
 
@@ -5255,6 +5273,10 @@ function trComboCard(list) {
   trComboBox = { W, PL, PR, t0, t1, pct };
 
   const goalLbl = trRrLbl(goalR);
+  // Womit rechnen die Bereiche darunter gerade? Steht dort ein anderes Ziel,
+  // ist das der Grund für abweichende Zahlen — und das soll hier stehen.
+  const bandSeries = trSim(list).series;
+  const bandsGoal = bandSeries.length ? bandSeries[Math.min(trPick, bandSeries.length - 1)].name : '';
   const unreached = rows.filter(r => r.unreached).map(r => r.name);
   return `<div class="tr-card tr-combo">
     <div class="tr-h"><span>Welche Strategie gehe ich?</span></div>
@@ -5304,11 +5326,14 @@ function trComboCard(list) {
       <b>${goalLbl} R</b>, ${cap > 0 ? `dem je Strategie auf ${trNum2.format(cap).replace(',00', '')} %
       Rücksetzer eingestellten Risiko` : `<b>${trNum2.format(trRisk()).replace(',00', '')} %</b> Risiko je Trade`}
       und ${trGrpFam() ? 'je Familie zusammengefassten Einstiegen' : 'jeder Einstiegsart für sich'}.
-      Die Bereiche darunter rechnen mit dem Ziel, das dort hervorgehoben ist — stehen dort andere
-      Zahlen, gehören sie zu einem anderen Ziel oder zu einer anderen Zusammenfassung.</div>
-    ${trStratTable(rows, start)}
+      ${bandsGoal && bandsGoal !== goalLbl + ' R'
+        ? `Die Bereiche darunter stehen gerade auf <b>${esc(bandsGoal)}</b> — deshalb stehen dort andere Zahlen.`
+        : 'Dieselben Zahlen stehen in den Bereichen darunter, sobald dort dasselbe Ziel hervorgehoben ist.'}
+      ${!trGrpFam() ? 'Die Bereiche fassen außerdem zusammen, was zusammengehört: „nur Kies“ rechnet Kies 1 und Kies 2 gemeinsam.' : ''}</div>
+    ${trStratTable(rows, start, trStratAll(list))}
     <div class="tr-sub" style="margin:10px 0 0">Ein Klick auf eine Überschrift sortiert die Zeilen danach,
-      ein zweiter dreht die Richtung um.${unreached.length ? ` ${unreached.map(esc).join(' und ')}
+      ein zweiter dreht die Richtung um. Die letzte Zeile ist der Bereich <b>Alle Einstiege zusammen</b>:
+      jedes Limit jedes Events gehandelt — mehrere Positionen gleichzeitig, deshalb der viel tiefere Rücksetzer.${unreached.length ? ` ${unreached.map(esc).join(' und ')}
       ${unreached.length > 1 ? 'erreichen' : 'erreicht'} diesen Rücksetzer selbst bei 99 % Einsatz nicht —
       ${unreached.length > 1 ? 'sie stehen' : 'sie steht'} dort mit dem Höchstwert.` : ''}</div>
   </div>`;
@@ -5384,7 +5409,7 @@ function trBandHtml(b, open) {
     cur ? `bei ${cur.name}: ${trSign(cur.exp)} R je Einstieg` : null,
     acc ? 'Konto ' + (pct ? (acc.end >= start ? '+' : '−') + trNum2.format(Math.abs(acc.end / start - 1) * 100).replace(',00', '') + ' %'
                           : trNum0.format(Math.round(acc.end))) : null,
-    acc ? 'tiefster Stand −' + acc.maxDD.toFixed(1).replace('.', ',') + ' %' : null,
+    acc ? 'tiefster Stand −' + acc.maxDD.toFixed(2).replace('.', ',') + ' %' : null,
     (best && cur && best.name !== cur.name) ? `bestes Ziel wäre ${best.name}` : null
   ].filter(Boolean);
   return `<details class="tr-band"${open ? ' open' : ''}>
@@ -5429,7 +5454,9 @@ const trRrOut = (t, x) => (!isNaN(t.mfeR) && t.mfeR >= x) ? x : (t.stopped ? -1 
 
 // Alle Varianten über denselben Einstiegen, damit die Kurven vergleichbar sind
 function trSim(list) {
-  const base = list.filter(t => !isNaN(t.mfeR));
+  // Nach Zeit sortiert: beim Anhängen mehrerer Dateien steht die Sammlung
+  // sonst in Dateireihenfolge, und Kontoverlauf wie Rücksetzer wären falsch.
+  const base = list.filter(t => !isNaN(t.mfeR)).slice().sort((a, b) => a.ts - b.ts);
   const series = [];
   trRRs().forEach((x, i) => {
     if (x === null) return;
@@ -5776,12 +5803,14 @@ function trAccCard(list, key) {
     <div class="tr-rrs"><div class="tr-f"><label>Anzeige</label>${trUnitPick()}</div></div>
 
     <div class="tr-tblwrap"><table class="tr-tbl">
-      <tr><th>Ziel</th><th class="num">tiefster Stand</th><th class="num">unter Wasser</th></tr>
+      <tr><th>Ziel</th><th class="num">tiefster Stand</th><th class="num">davon in Geld</th>
+          <th class="num">unter Wasser</th></tr>
       ${acc.map((a, i) => `<tr>
         <td><button class="tr-pick ${i === pick ? 'on' : ''}" onclick="trSetPick(${i})">
           <i></i>${esc(a.name)}</button></td>
         <td class="num" style="${i === pick ? 'color:var(--ch-bad);font-weight:600' : ''}">${
-          a.maxDD > 0 ? '−' + (pct ? a.maxDD.toFixed(1).replace('.', ',') + ' %' : money(a.maxDDAbs)) : '—'}</td>
+          a.maxDD > 0 ? '−' + a.maxDD.toFixed(2).replace('.', ',') + ' %' : '—'}</td>
+        <td class="num">${a.maxDD > 0 ? '−' + money(a.maxDDAbs) : '—'}</td>
         <td class="num">${a.ddLen} ${a.ddLen === 1 ? 'Einstieg' : 'Einstiege'}</td>
       </tr>`).join('')}
     </table></div>
@@ -6191,7 +6220,8 @@ function renderTrades() {
   // Punkte für den Tooltip der Verlaufskurve mitschreiben
   trEqPts = [];
   let cum = 0;
-  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).forEach(t => { cum += t.tgtRR; trEqPts.push({ ...t, cum }); });
+  list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).slice().sort((a, b) => a.ts - b.ts)
+    .forEach(t => { cum += t.tgtRR; trEqPts.push({ ...t, cum }); });
 
   host.innerHTML = input
     + trFilterCard()
