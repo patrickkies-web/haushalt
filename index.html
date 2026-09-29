@@ -5042,7 +5042,7 @@ const TR_METRICS = [
 const trMetric = () => TR_METRICS.some(m => m[0] === trMeta.metric) ? trMeta.metric : 'konto';
 const trGoalR  = () => (typeof trMeta.goalR === 'number' && trMeta.goalR > 0) ? trMeta.goalR : 2;
 const trDdCap  = () => (typeof trMeta.ddCap === 'number' && trMeta.ddCap > 0) ? Math.min(99, trMeta.ddCap) : 0;
-const trGrpFam = () => trMeta.grp === 'fam';
+const trGrpFam = () => trMeta.grp !== 'ein';   // Familien sind die Vorgabe
 const trWide   = () => window.innerWidth >= 1000;
 
 async function trSetMetric(m) { trMeta.metric = m; await persistTrades(); renderTrades(); }
@@ -5240,14 +5240,27 @@ function trComboCard(list) {
       <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(pn.m, v)}</text>`).join('');
     svg += `<line class="zero" x1="${PL - 6}" y1="${Y(base0).toFixed(1)}" x2="${W - PR}" y2="${Y(base0).toFixed(1)}" stroke-dasharray="3 3"/>`;
     if (pn.cap) svg += `<text class="ax" x="${PL - 6}" y="${(y0 - 4).toFixed(1)}" style="fill:var(--faint)">${esc(pn.cap)}</text>`;
-    svg += rows.map((r, i) => `<path class="tr-line" d="M${X(r.pts[0].t).toFixed(1)} ${Y(base0).toFixed(1)} ${
-      r.pts.map(p => 'L' + X(p.t).toFixed(1) + ' ' + Y(yOf(pn.m, p)).toFixed(1)).join(' ')}" stroke="var(--${r.col})"
+    // Als Treppe: zwischen zwei Einstiegen passiert am Konto nichts, beim
+    // Einstieg springt es. Eine Diagonale von Punkt zu Punkt sähe über der
+    // Zeitachse aus wie eine geglättete Linie — jeder Trade soll als Kante
+    // sichtbar sein, genau wie in den Bereichen darunter.
+    const stepD = r => {
+      let py = Y(base0);
+      let d = `M${(PL - 6).toFixed(1)} ${py.toFixed(1)}`;
+      for (const p of r.pts) {
+        const x = X(p.t), y = Y(yOf(pn.m, p));
+        d += ` L${x.toFixed(1)} ${py.toFixed(1)} L${x.toFixed(1)} ${y.toFixed(1)}`;
+        py = y;
+      }
+      return d + ` L${(W - PR).toFixed(1)} ${py.toFixed(1)}`;
+    };
+    svg += rows.map((r, i) => `<path class="tr-line" d="${stepD(r)}" stroke="var(--${r.col})"
       style="--len:2600;stroke-dasharray:2600;animation-delay:${i * 70}ms" stroke-width="${pn.h < .5 ? 1.6 : 2}"/>`).join('');
 
     if (pi === 0) {
       const ends = rows.map((r, i) => {
         const p = r.pts[r.pts.length - 1];
-        return { i, x: Math.min(W - PR + 6, X(p.t) + 7), y: Y(yOf(pn.m, p)), v: yOf(pn.m, p) };
+        return { i, x: W - PR + 6, y: Y(yOf(pn.m, p)), v: yOf(pn.m, p) };
       }).sort((a, b) => a.y - b.y);
       for (let k = 1; k < ends.length; k++)
         if (ends[k].y - ends[k - 1].y < 13) ends[k].y = ends[k - 1].y + 13;
