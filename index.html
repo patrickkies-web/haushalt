@@ -5207,14 +5207,16 @@ function trComboCard(list) {
        { m: 'dd', h: .28, cap: 'Rücksetzer vom Höchststand' }]
     : [{ m: metric, h: 1, cap: '' }]);
 
-  const t0 = Math.min(...rows.flatMap(r => r.pts.map(p => p.t)));
-  const t1 = Math.max(...rows.flatMap(r => r.pts.map(p => p.t)));
+  // X ist die laufende Nummer des Einstiegs, nicht die Uhrzeit — genau wie in
+  // den Bereichen darunter. Über der Zeitachse wären die Abstände ungleich und
+  // die Linie sähe geglättet aus; so ist jeder Trade ein gleich breiter Zacken.
+  const maxN = Math.max(...rows.map(r => r.pts.length));
 
   const wide = trWide();
   const W = wide ? 1120 : 520, Hh = wide ? (metric === 'both' ? 430 : 330) : (metric === 'both' ? 340 : 260);
   const PL = wide ? 66 : 54, PR = wide ? 108 : 74, PT = 14, PB = 30, GAP = 22;
   const iw = W - PL - PR, ihAll = Hh - PT - PB - (panels.length > 1 ? GAP : 0);
-  const X = t => PL + iw * (t1 > t0 ? (t - t0) / (t1 - t0) : .5);
+  const X = i => PL + iw * (maxN > 1 ? i / (maxN - 1) : .5);
 
   const money = v => trNum0.format(Math.round(v));
   const fmt = (m, v) => m === 'summe' ? trSign(v) + ' R'
@@ -5240,27 +5242,17 @@ function trComboCard(list) {
       <text class="ax" x="${PL - 12}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${fmt(pn.m, v)}</text>`).join('');
     svg += `<line class="zero" x1="${PL - 6}" y1="${Y(base0).toFixed(1)}" x2="${W - PR}" y2="${Y(base0).toFixed(1)}" stroke-dasharray="3 3"/>`;
     if (pn.cap) svg += `<text class="ax" x="${PL - 6}" y="${(y0 - 4).toFixed(1)}" style="fill:var(--faint)">${esc(pn.cap)}</text>`;
-    // Als Treppe: zwischen zwei Einstiegen passiert am Konto nichts, beim
-    // Einstieg springt es. Eine Diagonale von Punkt zu Punkt sähe über der
-    // Zeitachse aus wie eine geglättete Linie — jeder Trade soll als Kante
-    // sichtbar sein, genau wie in den Bereichen darunter.
-    const stepD = r => {
-      let py = Y(base0);
-      let d = `M${(PL - 6).toFixed(1)} ${py.toFixed(1)}`;
-      for (const p of r.pts) {
-        const x = X(p.t), y = Y(yOf(pn.m, p));
-        d += ` L${x.toFixed(1)} ${py.toFixed(1)} L${x.toFixed(1)} ${y.toFixed(1)}`;
-        py = y;
-      }
-      return d + ` L${(W - PR).toFixed(1)} ${py.toFixed(1)}`;
-    };
-    svg += rows.map((r, i) => `<path class="tr-line" d="${stepD(r)}" stroke="var(--${r.col})"
+    // Ein Punkt je Einstieg, gerade verbunden — der Zackenverlauf der Karten
+    // darunter. Links steht der Startwert vor dem ersten Einstieg.
+    const lineD = r => `M${(PL - 6).toFixed(1)} ${Y(base0).toFixed(1)} ` +
+      r.pts.map((p, k) => 'L' + X(k).toFixed(1) + ' ' + Y(yOf(pn.m, p)).toFixed(1)).join(' ');
+    svg += rows.map((r, i) => `<path class="tr-line" d="${lineD(r)}" stroke="var(--${r.col})"
       style="--len:2600;stroke-dasharray:2600;animation-delay:${i * 70}ms" stroke-width="${pn.h < .5 ? 1.6 : 2}"/>`).join('');
 
     if (pi === 0) {
       const ends = rows.map((r, i) => {
         const p = r.pts[r.pts.length - 1];
-        return { i, x: W - PR + 6, y: Y(yOf(pn.m, p)), v: yOf(pn.m, p) };
+        return { i, x: Math.min(W - PR + 6, X(r.pts.length - 1) + 7), y: Y(yOf(pn.m, p)), v: yOf(pn.m, p) };
       }).sort((a, b) => a.y - b.y);
       for (let k = 1; k < ends.length; k++)
         if (ends[k].y - ends[k - 1].y < 13) ends[k].y = ends[k - 1].y + 13;
@@ -5271,10 +5263,9 @@ function trComboCard(list) {
     top = y0 + ih + GAP;
   });
 
-  const tTicks = [0, 1, 2, 3].map(k => t0 + (t1 - t0) * k / 3);
-  const tLbl = ms => { const d = new Date(ms);
-    return (t1 - t0) > 2 * 864e5 ? trP2(d.getDate()) + '.' + trP2(d.getMonth() + 1) + '.' : trClock(ms); };
-  svg += tTicks.map(t => `<text class="ax" x="${X(t).toFixed(1)}" y="${Hh - 9}" text-anchor="middle">${tLbl(t)}</text>`).join('');
+  svg += `<text class="ax" x="${PL}" y="${Hh - 9}">1</text>
+    <text class="ax" x="${W - PR}" y="${Hh - 9}" text-anchor="end">${maxN}</text>
+    <text class="ax" x="${(PL + (W - PR)) / 2}" y="${Hh - 9}" text-anchor="middle" style="fill:var(--faint)">Einstieg</text>`;
   const hitTop = geo[0].y0, hitH = geo[geo.length - 1].y0 + geo[geo.length - 1].ih - geo[0].y0;
   svg += `<line id="tr-cross5" x1="0" y1="${hitTop}" x2="0" y2="${(hitTop + hitH).toFixed(1)}" stroke="var(--muted)" stroke-width="1" opacity="0"/>
     <rect x="${PL}" y="${hitTop}" width="${iw}" height="${hitH.toFixed(1)}" fill="transparent"
@@ -5283,7 +5274,7 @@ function trComboCard(list) {
 
   trComboPts = panels.map(pn => ({ m: pn.m,
     rows: rows.map(r => ({ name: r.name, pts: r.pts.map(p => ({ t: p.t, y: yOf(pn.m, p) })) })) }));
-  trComboBox = { W, PL, PR, t0, t1, pct };
+  trComboBox = { W, PL, PR, maxN, pct };
 
   const goalLbl = trRrLbl(goalR);
   // Womit rechnen die Bereiche darunter gerade? Steht dort ein anderes Ziel,
@@ -5294,7 +5285,9 @@ function trComboCard(list) {
   return `<div class="tr-card tr-combo">
     <div class="tr-h"><span>Welche Strategie gehe ich?</span></div>
     <div class="tr-sub">Alle Einstiege in einem Verlauf, Einstieg für Einstieg gerechnet —
-      kein Glätten, keine Gewichtung. Ein Einstieg, dessen Max-Profit mindestens ${goalLbl} R
+      kein Glätten, keine Gewichtung. Waagerecht steht die laufende Nummer des Einstiegs, nicht
+      die Uhrzeit: so ist jeder Trade gleich breit und als Zacken zu sehen, dafür liegt Einstieg 9
+      der einen Strategie nicht im selben Moment wie Einstieg 9 der anderen. Ein Einstieg, dessen Max-Profit mindestens ${goalLbl} R
       erreicht hat, bringt ${goalLbl} R, ein ausgestoppter −1 R, ein noch laufender nichts.
       ${cap > 0 ? `Das Risiko je Trade ist nicht vorgegeben, sondern <b>je Strategie so gewählt,
         dass ihr tiefster Rücksetzer ${trNum2.format(cap).replace(',00', '')} % beträgt</b> —
@@ -5355,28 +5348,30 @@ function trComboCard(list) {
 let trComboPts = [], trComboBox = null;
 function trComboHover(ev, svg) {
   if (!trComboPts.length || !trComboBox) return;
-  const { W, PL, PR, t0, t1, pct } = trComboBox;
+  const { W, PL, PR, maxN, pct } = trComboBox;
   const r = svg.getBoundingClientRect();
   const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
   const iw = W - PL - PR;
   const rel = Math.max(0, Math.min(1, ((cx - r.left) / r.width * W - PL) / iw));
-  const t = t0 + (t1 - t0) * rel;
+  const k = Math.round(rel * Math.max(0, maxN - 1));
   const cross = document.getElementById('tr-cross5');
   if (cross) {
-    const x = PL + iw * rel;
+    const x = PL + iw * (maxN > 1 ? k / (maxN - 1) : .5);
     cross.setAttribute('x1', x); cross.setAttribute('x2', x);
     cross.setAttribute('opacity', '.4');
   }
   const fmt = (m, v) => m === 'summe' ? trSign(v) + ' R'
     : pct ? (v > 0 ? '+' : v < 0 ? '−' : '') + trNum2.format(Math.abs(v)) + ' %'
     : (v < 0 ? '−' : '') + trNum0.format(Math.round(Math.abs(v)));
-  const at = (pts) => { let last = null; for (const p of pts) { if (p.t > t) break; last = p; } return last; };
   const main = trComboPts[0], second = trComboPts[1];
-  trTipOn(ev, `${trDate(t)} ${trClock(t)}<br>` + main.rows.map((r, i) => {
-    const a = at(r.pts);
-    const b = second ? at(second.rows[i].pts) : null;
+  // Kürzere Strategien sind an dieser Stelle schon durch — dann steht ihr
+  // letzter Stand da, in Klammern der Einstieg, zu dem er gehört.
+  trTipOn(ev, `Nach Einstieg ${k + 1}<br>` + main.rows.map((r, i) => {
+    const j = Math.min(k, r.pts.length - 1);
+    const a = r.pts[j], b = second ? second.rows[i].pts[j] : null;
+    const ende = j < k ? ` <span style="opacity:.6">(nach ${j + 1})</span>` : '';
     return `${esc(r.name)}: ${a ? fmt(main.m, a.y) : '—'}` +
-      (second ? ` · ${b ? fmt(second.m, b.y) : '—'}` : '');
+      (second ? ` · ${b ? fmt(second.m, b.y) : '—'}` : '') + ende;
   }).join('<br>'));
 }
 function trTipOff5() {
