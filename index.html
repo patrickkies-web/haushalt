@@ -7769,17 +7769,15 @@ async function reactivateAll() {
 function quickDeactivate() {
   const s = editing ? subs.find(x => x.id === editing) : null;
   if (!s) return;
-  if (s.deactivatedFrom) {
-    // Reaktivieren
-    $("f-deact-date").value = "";
-    $("deact-hint").textContent = "";
-    $("deact-btn").textContent = "Deaktivieren";
+  if ($("f-deact-date").value) {
+    clearDeact();
   } else {
     // Deaktivieren: set to today (first of current month for clean boundary)
     const today = new Date();
     const iso   = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
     $("f-deact-date").value = iso;
     $("deact-hint").textContent = `(ab ${today.toLocaleDateString("de-DE", { month: "long", year: "numeric" })})`;
+    $("f-deact-wrap").style.display = "";
     $("deact-btn").textContent = "Reaktivieren";
   }
 }
@@ -7787,6 +7785,7 @@ function quickDeactivate() {
 function clearDeact() {
   $("f-deact-date").value = "";
   $("deact-hint").textContent = "";
+  $("f-deact-wrap").style.display = "none";
   $("deact-btn").textContent = "Deaktivieren";
 }
 
@@ -10774,27 +10773,19 @@ function openSheet(id) {
   // Deactivation section — only when editing
   const deactWrap = $("f-deact-wrap");
   const deactBtn  = $("deact-btn");
-  if (s) {
+  if (s && s.deactivatedFrom) {
+    // Only a deactivated cost shows the date at all.
     deactWrap.style.display = "";
-    $("f-deact-date").value = s.deactivatedFrom || "";
-    const hint = $("deact-hint");
-    if (s.deactivatedFrom) {
-      const d = new Date(s.deactivatedFrom + "T00:00:00");
-      const mon = d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
-      hint.textContent = subEndsLater(s) ? `(läuft aus zum ${mon})` : `(seit ${mon})`;
-      deactBtn.textContent = "Reaktivieren";
-      deactBtn.style.display = "block";
-    } else {
-      hint.textContent = "";
-      deactBtn.textContent = "Deaktivieren";
-      deactBtn.style.display = "block";
-    }
+    $("f-deact-date").value = s.deactivatedFrom;
+    const d   = new Date(s.deactivatedFrom + "T00:00:00");
+    const mon = d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+    $("deact-hint").textContent = subEndsLater(s) ? `(läuft aus zum ${mon})` : `(seit ${mon})`;
+    deactBtn.textContent = "Reaktivieren";
+    deactBtn.style.display = "block";
   } else {
-    // New cost: the field is shared, so wipe whatever the last edit left in it —
-    // otherwise a fresh cost silently inherits a deactivation date.
     clearDeact();
     deactWrap.style.display = "none";
-    deactBtn.style.display = "none";
+    deactBtn.style.display = s ? "block" : "none";
   }
   clearErr();
   $("scrim").classList.add("on");
