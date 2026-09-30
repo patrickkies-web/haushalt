@@ -2855,6 +2855,28 @@
     }
     .inactive-reactivate:hover { background: var(--line-soft); }
 
+    .all-inactive {
+      margin-top: 8px;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--bg);
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .all-inactive .inactive-reactivate { margin-top: 10px; }
+
+    .sub-end-tag {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--muted);
+      background: var(--line-soft);
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-top: 4px;
+    }
+
     /* Forecast: inactive rows */
     table.fc tr.fc-inactive-row { opacity: 0.55; }
     table.fc tr.fc-inactive-row td { font-style: italic; }
@@ -7722,7 +7744,12 @@ function subDeactMk(s) {
   return d.getFullYear() * 12 + d.getMonth();
 }
 
-function subIsInactive(s) { return !!s.deactivatedFrom; }
+const nowMk = () => { const d = new Date(); return d.getFullYear() * 12 + d.getMonth(); };
+
+// Inactive only once the deactivation month has actually arrived — a date in the
+// future just means the cost runs out later, it is still being paid today.
+function subIsInactive(s) { return subDeactMk(s) <= nowMk(); }
+function subEndsLater(s)  { const mk = subDeactMk(s); return isFinite(mk) && mk > nowMk(); }
 
 function toggleInactive() {
   showInactive = !showInactive;
@@ -7730,9 +7757,9 @@ function toggleInactive() {
 }
 
 async function reactivateAll() {
-  const list = subs.filter(subIsInactive);
+  const list = subs.filter(s => !!s.deactivatedFrom);
   if (!list.length) return;
-  if (!confirm(`${list.length} ${list.length === 1 ? "Kosten" : "Kosten"} wieder aktivieren? Sie werden ab sofort wieder eingeplant.`)) return;
+  if (!confirm(`${list.length === 1 ? "Diese Kosten" : list.length + " Kosten"} wieder aktivieren? Sie werden ab sofort wieder eingeplant.`)) return;
   list.forEach(s => { s.deactivatedFrom = null; });
   await persist();
   render();
@@ -8406,12 +8433,14 @@ function render() {
     return;
   }
 
+  const monY = iso => new Date(iso + "T00:00:00").toLocaleDateString("de-DE", { month: "short", year: "numeric" });
   const renderSubRow = (s, inactive = false) => {
     const norm = s.cycle === "monthly" ? "" : ` · ≈ ${eur.format(monthlyOf(s))}/Mon.`;
     let deactTag = "";
     if (inactive && s.deactivatedFrom) {
-      const d = new Date(s.deactivatedFrom + "T00:00:00");
-      deactTag = `<div class="sub-deact-tag">Inaktiv seit ${d.toLocaleDateString("de-DE", { month: "short", year: "numeric" })}</div>`;
+      deactTag = `<div class="sub-deact-tag">Inaktiv seit ${monY(s.deactivatedFrom)}</div>`;
+    } else if (subEndsLater(s)) {
+      deactTag = `<div class="sub-end-tag">Läuft aus zum ${monY(s.deactivatedFrom)}</div>`;
     }
     return `<div class="row${inactive ? " inactive-sub" : ""}" onclick="openSheet('${s.id}')">
       <div class="swatch" style="background:${catColor(s.cat)}">${esc(initials(s.name))}</div>
@@ -8431,6 +8460,15 @@ function render() {
   const inactiveSubs = sorted.filter(s => subIsInactive(s));
 
   let listHtml = activeSubs.map(s => renderSubRow(s)).join("");
+
+  // Everything marked inactive: say so and offer the way back right away,
+  // instead of leaving an apparently empty list behind a collapsed section.
+  if (!activeSubs.length && inactiveSubs.length) {
+    listHtml += `<div class="all-inactive">
+      <div>Alle ${inactiveSubs.length} Kosten sind als inaktiv markiert und werden nicht eingeplant.</div>
+      <button class="inactive-reactivate" onclick="reactivateAll()">Alle wieder aktivieren</button>
+    </div>`;
+  }
 
   if (inactiveSubs.length > 0) {
     listHtml += `<button class="inactive-toggle" onclick="toggleInactive()">
@@ -10742,7 +10780,8 @@ function openSheet(id) {
     const hint = $("deact-hint");
     if (s.deactivatedFrom) {
       const d = new Date(s.deactivatedFrom + "T00:00:00");
-      hint.textContent = `(seit ${d.toLocaleDateString("de-DE", { month: "long", year: "numeric" })})`;
+      const mon = d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+      hint.textContent = subEndsLater(s) ? `(läuft aus zum ${mon})` : `(seit ${mon})`;
       deactBtn.textContent = "Reaktivieren";
       deactBtn.style.display = "block";
     } else {
