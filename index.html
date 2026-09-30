@@ -2839,6 +2839,22 @@
     }
     .inactive-toggle:hover { background: var(--line-soft); }
 
+    .inactive-reactivate {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      background: transparent;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .inactive-reactivate:hover { background: var(--line-soft); }
+
     /* Forecast: inactive rows */
     table.fc tr.fc-inactive-row { opacity: 0.55; }
     table.fc tr.fc-inactive-row td { font-style: italic; }
@@ -7713,6 +7729,16 @@ function toggleInactive() {
   render();
 }
 
+async function reactivateAll() {
+  const list = subs.filter(subIsInactive);
+  if (!list.length) return;
+  if (!confirm(`${list.length} ${list.length === 1 ? "Kosten" : "Kosten"} wieder aktivieren? Sie werden ab sofort wieder eingeplant.`)) return;
+  list.forEach(s => { s.deactivatedFrom = null; });
+  await persist();
+  render();
+  showToast(list.length === 1 ? "Wieder aktiv" : `${list.length} Kosten wieder aktiv`);
+}
+
 function quickDeactivate() {
   const s = editing ? subs.find(x => x.id === editing) : null;
   if (!s) return;
@@ -8414,7 +8440,8 @@ function render() {
       </svg>
     </button>`;
     if (showInactive) {
-      listHtml += inactiveSubs.map(s => renderSubRow(s, true)).join("");
+      listHtml += inactiveSubs.map(s => renderSubRow(s, true)).join("")
+        + `<button class="inactive-reactivate" onclick="reactivateAll()">Alle wieder aktivieren</button>`;
     }
   }
 
@@ -10724,6 +10751,9 @@ function openSheet(id) {
       deactBtn.style.display = "block";
     }
   } else {
+    // New cost: the field is shared, so wipe whatever the last edit left in it —
+    // otherwise a fresh cost silently inherits a deactivation date.
+    clearDeact();
     deactWrap.style.display = "none";
     deactBtn.style.display = "none";
   }
@@ -10805,7 +10835,8 @@ async function save() {
     note:   $("f-note").value.trim(),
     payer:  draft.payer || null,
     split:  splitValue('f'),
-    deactivatedFrom: (deactEl && deactEl.value) ? deactEl.value : null,
+    // Only an existing cost can carry a deactivation date — the field is hidden for new ones.
+    deactivatedFrom: (editing && deactEl && deactEl.value) ? deactEl.value : null,
   };
 
   if (editing) {
