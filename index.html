@@ -3812,7 +3812,7 @@ async function load() {
     const rt = await window.storage.get(TRKEY);
     if (rt && rt.value) {
       const d = JSON.parse(rt.value);
-      if (Array.isArray(d.trades)) trTrades = d.trades;
+      if (Array.isArray(d.trades)) { trTrades = d.trades; trSortAll(); }
       if (d.meta) trMeta = { ...trMeta, ...d.meta };
       if (d.hide && typeof d.hide === 'object') trHide = d.hide;
     }
@@ -4130,6 +4130,11 @@ const needsSetup = () => !household.name && subs.length === 0;
 // CSV-Erkennung, dasselbe Event-Matching, dieselben Kennzahlen. Neu sind die
 // Darstellung und der JSON-Export.
 let trTrades = [];                                     // ausgewertete Einstiege
+// Die Sammlung liegt immer nach Datum — quer über alle Dateien und Symbole.
+// Ohne das stünden mehrere eingelesene Dateien hintereinander statt ineinander,
+// und jeder Kontoverlauf liefe in der Reihenfolge des Einlesens statt der Zeit.
+const trByTime = (a, b) => (isNaN(a.ts) ? Infinity : a.ts) - (isNaN(b.ts) ? Infinity : b.ts);
+const trSortAll = () => { trTrades.sort(trByTime); };
 let trMeta   = { symbol: '', ps: null, cut: '', at: null };
 let trMsg    = null;
 let trHide   = {};                                     // je Bedingung die ausgeblendeten Werte
@@ -4549,6 +4554,7 @@ function trLoadJson(text, append) {
     return r;
   });
   trTrades = append ? trTrades.concat(clean) : clean;
+  trSortAll();
   if (!append) trHide = {};   // die Filter gehörten zur alten Sammlung
   // Einstellungen übernehmen, soweit die Datei welche mitbringt
   const m = d && d.meta || {};
@@ -6315,6 +6321,7 @@ async function trRun() {
   const res = trEvaluate(raw, opt);
   if (res.err) { trMsg = { ok: false, text: res.err }; renderTrades(); return; }
   trTrades = append ? trTrades.concat(res.trades) : res.trades;
+  trSortAll();
   if (!append) trHide = {};
   // Limit-Zahlen tragen die Fill-Quote — beim Anhängen addieren sie sich
   const lim = (append && trMeta.limits) ? { ...trMeta.limits } : {};
