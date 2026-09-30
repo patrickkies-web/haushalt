@@ -3666,11 +3666,23 @@ const hhPot     = () => household.pot || 'separate';
 // ohne Umschreiben weiter stimmen. Dazu kommt höchstens ein gemeinsames.
 const JOINT = 'joint';
 const ROT   = 'rot';
+const HH    = 'hh';      // Haushaltskonto: fester Betrag drauf, frei verfügbar
+const SPAR  = 'spar';    // Sparkonto: dahin geht, was am Monatsende übrig ist
 const hhHasJoint = () => hhPot() === 'joint' || hhPot() === 'mixed';
 const hhJointName = () => household.jointName || 'Gemeinschaftskonto';
+const hhHasHh   = () => household.hhAcc === true && hhHasJoint();
+const hhHasSpar = () => household.spar === true && hhHasJoint();
+const hhHhName   = () => household.hhName || 'Haushaltskonto';
+const hhSparName = () => household.sparName || 'Sparkonto';
 function hhAccounts() {
   return [
     ...(hhHasJoint() ? [{ id: JOINT, name: hhJointName(), kind: 'joint' }] : []),
+    // Haushalts- und Sparkonto sind keine Töpfe, aus denen gerechnet wird,
+    // sondern Ziele: auf das eine geht ein fester Betrag, auf das andere der
+    // Rest. Als Konten stehen sie trotzdem zur Verfügung, damit Ausgaben
+    // ihnen zugeordnet werden können.
+    ...(hhHasHh()   ? [{ id: HH,   name: hhHhName(),   kind: 'haus' }] : []),
+    ...(hhHasSpar() ? [{ id: SPAR, name: hhSparName(), kind: 'spar' }] : []),
     // Das Rotierkonto ist ein Konto wie jedes andere, sobald geglättet wird —
     // die Jahresrechnung soll ja von dort abgehen, nicht von jemandes eigenem.
     ...(smoothOn() ? [{ id: ROT, name: 'Rotierkonto', kind: 'rot' }] : []),
@@ -7096,6 +7108,21 @@ function openSettings() {
         einzeln zu.</div>
     </div>` : ''}`;
 
+  const extraRows = !hhHasJoint() || hhIncome() !== 'shared' ? '' : `
+    <div class="set-sec">Weitere Konten</div>
+    <p class="set-hint">Konten, die kein eigenes Einkommen haben, sondern aus dem
+      Überschuss bedient werden. Ausgaben lassen sich ihnen trotzdem zuordnen.</p>
+    <button class="set-opt ${hhHasHh() ? 'on' : ''}" onclick="setHhAcc(${hhHasHh() ? 'false' : 'true'})">
+      <span class="set-opt-l">${esc(hhHhName())}</span>
+      <span class="set-opt-d">Ein gemeinsames Konto zur freien Verfügung. Jeden Monat geht ein
+        fester Betrag aus dem Überschuss darauf — den trägst du in der Prognose ein.</span>
+    </button>
+    <button class="set-opt ${hhHasSpar() ? 'on' : ''}" onclick="setSpar(${hhHasSpar() ? 'false' : 'true'})">
+      <span class="set-opt-l">${esc(hhSparName())}</span>
+      <span class="set-opt-d">Was nach allen Auszahlungen übrig bleibt, geht zum Monatsende
+        dorthin. Damit steht in der Prognose nicht „bleibt gemeinsam“, sondern wohin es geht.</span>
+    </button>`;
+
   const surplusRows = !hhHasJoint() || hhIncome() !== 'shared' ? '' : `
     <div class="set-sec">Überschuss</div>
     <p class="set-hint">Was am Monatsende mit dem passiert, was nach allen Kosten übrig ist.</p>
@@ -7137,6 +7164,8 @@ function openSettings() {
     ${incomeRows}
     ${potRows}
 
+    ${extraRows}
+
     ${surplusRows}
 
     <div class="set-sec">Schlüssel</div>
@@ -7151,6 +7180,20 @@ function openSettings() {
       Für die geglättete Variante braucht ihr ein zweites Konto.${hhIncome() === 'own'
         ? ' Daraus wird die klassische Haushaltskasse: jeder überweist monatlich seinen festen Betrag dorthin, die Rechnungen gehen davon ab.' : ''}</p>
     ${smoothRows}
+
+    <div class="set-sec">Vorlage</div>
+    <p class="set-hint">Das Modell, nach dem hier gerechnet wird, in einem Schritt.
+      Ändert nur die Einstellungen — Kosten, Einnahmen und Personen bleiben.</p>
+    <button class="set-opt ${isKies() ? 'on' : ''}" onclick="setKies()">
+      <span class="set-opt-l">Kies-Modus${isKies() ? ' · eingerichtet' : ''}</span>
+      <span class="set-opt-d">Ein Einkommen aus allem. Beide Gehälter gehen aufs
+        <b>Gehaltskonto</b>, davon gehen alle laufenden und vierteljährlichen Kosten ab.
+        Vom Überschuss bekommt jeder einen festen Betrag auf sein <b>eigenes Konto</b>,
+        ein fester Betrag geht aufs <b>Haushaltskonto</b>. Unregelmäßige Rechnungen liegen
+        auf dem <b>Rotierkonto</b>. Was dann noch steht, geht zum Monatsende aufs
+        <b>Sparkonto</b>. Zahlt einer von seinem eigenen Konto eine Rechnung, die aufs
+        Gehaltskonto gehört, bekommt er sie mit der Auszahlung 1:1 zurück.</span>
+    </button>
 
     <div class="set-sec">Haushalt</div>
     <div class="set-row" onclick="openHousehold()">
@@ -7203,6 +7246,50 @@ async function setPayTo(i, acc) {
   await persistHousehold();
   renderForecast();
   openSettings();
+}
+
+async function setHhAcc(on) {
+  household.hhAcc = !!on;
+  await persistHousehold();
+  render(); renderForecast(); openSettings();
+  showToast(hhHhName() + (on ? ' dabei' : ' aus'));
+}
+async function setSpar(on) {
+  household.spar = !!on;
+  await persistHousehold();
+  render(); renderForecast(); openSettings();
+  showToast(hhSparName() + (on ? ' dabei' : ' aus'));
+}
+
+// ── Kies-Modus ────────────────────────────────────────────────────────────
+// Ein Klick statt sieben Einstellungen: ein Einkommen, alles läuft über das
+// Gehaltskonto, jeder bekommt seinen festen Betrag aufs eigene Konto, ein
+// fester Betrag geht aufs Haushaltskonto, unregelmäßige Kosten liegen auf dem
+// Rotierkonto, und was dann noch übrig ist, geht aufs Sparkonto.
+const isKies = () => hhIncome() === 'shared' && hhPot() === 'joint'
+  && hhSurplus() === 'budget' && smoothOn() && hhHasHh() && hhHasSpar()
+  && household.members.every(m => payTo(m) === JOINT);
+
+async function setKies() {
+  const M = household.members;
+  // Bestehende Personen behalten Name und id — sonst hingen die Ausgaben,
+  // die auf ihr Konto gebucht sind, plötzlich im Leeren.
+  while (M.length < 2)
+    M.push({ id: 'm' + Date.now().toString(36) + M.length, name: M.length ? 'Sara' : 'Pati' });
+  household.income    = 'shared';
+  household.pot       = 'joint';
+  household.jointName = 'Gehaltskonto';
+  household.mode      = 'equal';
+  household.surplus   = 'budget';
+  household.smooth    = true;
+  household.hhAcc     = true;
+  household.hhName    = household.hhName || 'Haushaltskonto';
+  household.spar      = true;
+  household.sparName  = household.sparName || 'Sparkonto';
+  M.forEach(m => { m.payTo = JOINT; });
+  await persistHousehold();
+  render(); renderForecast(); openSettings();
+  showToast('Kies-Modus eingerichtet');
 }
 
 async function setPot(v) {
@@ -8024,6 +8111,9 @@ function sharedSettle(mk, base) {
   const owed   = M.map((m, i) => (budget
     ? sock
     : Math.max(0, S - save) * base[i]) - priv[i] + prevs[i]);
+  // Fester Betrag aufs Haushaltskonto — wie der Sockel eine Auszahlung aus
+  // dem Überschuss, kein Kostenposten.
+  const toHh = (budget && hhHasHh()) ? getInc(mk, 'hhbudget') : 0;
 
   // Auf dem eigenen Konto: das dort eingehende Gehalt minus die davon
   // abgegangenen Ausgaben. Läuft das Gehalt aufs Gemeinschaftskonto, ist das 0.
@@ -8032,9 +8122,9 @@ function sharedSettle(mk, base) {
 
   const jointIn = M.reduce((a, m, i) => a + (payTo(m) === JOINT ? wages[i] : 0), 0) + other;
   return {
-    T, C, S, owed, own, prevs,
+    T, C, S, owed, own, prevs, toHh,
     balance: owed.map((v, i) => v - own[i]),
-    rest: S - owed.reduce((a, v) => a + v, 0) + prevs.reduce((a, v) => a + v, 0),
+    rest: S - owed.reduce((a, v) => a + v, 0) + prevs.reduce((a, v) => a + v, 0) - toHh,
     jointIn,
     has: wages.some(v => v) || other !== 0
   };
@@ -8653,6 +8743,7 @@ function renderForecast() {
       + (budget
           ? M.map(m => iRow('inc-input', `Vormonat ${esc(m.name)}`, inputCells('prev_' + m.id))).join('')
             + iRow('inc-input', 'Sockel / Person', inputCells('sockel'))
+            + (hhHasHh() ? iRow('inc-input', `→ ${esc(hhHhName())}`, inputCells('hhbudget')) : '')
           : iRow('inc-input', 'Sparen / Monat', inputCells('sparen')))
       + M.map((m, i) => iRow('inc-payout',
           `${esc(m.name)} steht zu${budget ? '' : keyPct(i)}`, calcCells('owed_' + m.id))).join('')
@@ -8662,7 +8753,9 @@ function renderForecast() {
       + M.map(m => iRow('rot-net', esc(m.name), calcCells('bal_' + m.id))).join('')
       + (acc
           ? iRow('inc-calc muted', 'Eingang gemeinsam', calcCells('jointin'))
-            + iRow('inc-calc remain', 'Bleibt gemeinsam', calcCells('remain'))
+            + iRow('inc-calc remain',
+                hhHasSpar() ? `Rest → ${esc(hhSparName())}` : 'Bleibt gemeinsam',
+                calcCells('remain'))
           : '');
     })();
 
