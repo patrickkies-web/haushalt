@@ -2045,19 +2045,26 @@
 
     /* ── Kies gegen Hunt ── */
     .tr-famset {
-      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
-      padding: 0 0 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
+      display: flex; gap: 6px 22px; flex-wrap: wrap; align-items: baseline;
+      padding: 0 0 11px; margin-bottom: 13px; border-bottom: 1px solid var(--line-soft);
     }
-    .tr-famset .tr-f { margin: 0; flex: 1 1 96px; min-width: 96px; }
-    .tr-famset input { width: 100%; }
+    .tr-famset .tr-f { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+    .tr-famset label { font-size: 11.5px; letter-spacing: 0; text-transform: none;
+      color: var(--muted); font-weight: 400; white-space: nowrap; }
+    .tr-famset input {
+      width: 82px; font-size: 13px; padding: 4px 2px; border-radius: 0;
+      background: transparent; border: none; border-bottom: 1px solid var(--line);
+      font-variant-numeric: tabular-nums; font-weight: 500;
+    }
+    .tr-famset input:focus { border-bottom-color: var(--accent); }
 
     .tr-famgrid { display: grid; gap: 16px 18px; grid-template-columns: repeat(auto-fit, minmax(216px, 1fr)); }
     .tr-fam { min-width: 0; }
     .tr-famh {
       display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-      margin-bottom: 6px; font-size: 14px;
+      margin-bottom: 4px; font-size: 13px;
     }
-    .tr-famh b { font-weight: 650; }
+    .tr-famh b { font-weight: 600; letter-spacing: .01em; }
     .tr-famh span { font-variant-numeric: tabular-nums; font-weight: 600; }
     .tr-famh span.pos { color: var(--ch-good); }
     .tr-famh span.neg { color: var(--ch-bad); }
@@ -2065,17 +2072,18 @@
       color: var(--muted); margin-left: 6px; }
 
 
-    .tr-famtbl { font-size: 12px; margin-top: 10px; }
-    .tr-famtbl th { font-size: 10px; line-height: 1.25; white-space: nowrap; }
-    .tr-famtbl td { white-space: nowrap; }
+    .tr-famtbl { font-size: 11.5px; margin-top: 6px; }
+    .tr-famtbl th { font-size: 9.5px; line-height: 1.25; white-space: nowrap;
+      font-weight: 400; letter-spacing: .05em; padding-bottom: 5px; }
+    .tr-famtbl td { white-space: nowrap; padding: 6px 10px 6px 0; }
     .tr-famtbl td:first-child, .tr-famtbl th:first-child { white-space: nowrap; font-weight: 600; }
     .tr-famtbl td i { font-style: normal; font-size: 10.5px; margin-left: 4px; font-weight: 600; }
     .tr-famtbl td i.pos { color: var(--ch-good); }
     .tr-famtbl td i.neg { color: var(--ch-bad); }
     .tr-famtbl .sep { color: var(--faint); margin: 0 2px; }
-    .tr-fcmp td { background: color-mix(in srgb, var(--c3) 9%, transparent); }
-    .tr-fcmp td:first-child { color: var(--c3); }
-    .tr-famnote { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+    .tr-fcmp td { background: color-mix(in srgb, var(--c3) 7%, transparent); }
+    .tr-fcmp td:first-child { color: var(--c3); box-shadow: inset 2px 0 0 var(--c3); padding-left: 8px; }
+    .tr-famnote { font-size: 11px; color: var(--faint); margin-top: 7px; line-height: 1.5; }
 
     /* Auswahl in der Familienansicht */
     .tr-fsel { font-size: 11.5px; color: var(--muted); margin: 9px 0 5px; }
@@ -2083,8 +2091,8 @@
     .tr-fsel b { color: var(--ink); font-weight: 650; }
     .tr-fsel span.pos { color: var(--ch-good); font-weight: 600; }
     .tr-fsel span.neg { color: var(--ch-bad); font-weight: 600; }
-    .tr-flegend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px;
-      color: var(--muted); margin-top: 4px; }
+    .tr-flegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 10.5px;
+      color: var(--faint); margin-top: 2px; }
     .tr-flegend span { display: inline-flex; align-items: center; gap: 5px; }
     .tr-flegend i { width: 12px; height: 2.5px; border-radius: 2px; display: inline-block; }
     .tr-flegend i.dash { background: repeating-linear-gradient(90deg,
@@ -2093,46 +2101,48 @@
     /* Hinweis an einer Bedingung */
     .tr-i {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 14px; height: 14px; margin-left: 6px; border-radius: 50%;
-      border: 1px solid var(--line); color: var(--faint);
-      font-size: 9.5px; font-weight: 700; font-style: normal;
+      width: 13px; height: 13px; margin-left: 6px; border-radius: 50%;
+      border: 1px solid var(--line-soft); color: var(--faint);
+      font-size: 9px; font-weight: 500; font-style: normal;
       text-transform: none; letter-spacing: 0; cursor: help; vertical-align: 1px;
     }
     .tr-i:hover { border-color: var(--muted); color: var(--muted); }
 
     /* Bedingungen ausprobieren: ein Block je Bedingung, nebeneinander */
     .tr-pall {
-      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
-      font-size: 12.5px; color: var(--muted); margin: 0 0 14px;
-      padding-bottom: 12px; border-bottom: 1px solid var(--line-soft);
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 13px;
+      font-size: 12px; color: var(--muted); margin: 0 0 13px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--line-soft);
     }
-    .tr-pall b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tr-pall b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
     .tr-pall .pick { color: var(--c3); font-weight: 600; }
     .tr-pall .pick .tr-flink { color: var(--muted); font-weight: 500; }
 
-    .tr-pgrid { display: grid; gap: 18px 30px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .tr-pgrid { display: grid; gap: 20px 34px; grid-template-columns: repeat(auto-fit, minmax(264px, 1fr)); }
     .tr-pblock { min-width: 0; }
     .tr-phead {
-      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      color: var(--faint); margin-bottom: 4px;
+      font-size: 11.5px; font-weight: 600; letter-spacing: .01em;
+      color: var(--muted); margin-bottom: 1px; padding-bottom: 4px;
     }
-    .tr-phead i { font-style: normal; text-transform: none; letter-spacing: 0;
-      font-weight: 600; color: var(--c3); margin-left: 8px; }
-    .tr-ptbl { font-size: 12px; }
-    .tr-ptbl th { font-size: 10px; white-space: nowrap; }
-    .tr-ptbl td { white-space: nowrap; }
+    .tr-phead i { font-style: normal; font-weight: 500; color: var(--c3); margin-left: 7px;
+      font-size: 10.5px; }
+    .tr-ptbl { font-size: 11.5px; }
+    .tr-ptbl th { font-size: 9.5px; white-space: nowrap; font-weight: 400;
+      letter-spacing: .05em; padding-bottom: 5px; }
+    .tr-ptbl td { white-space: nowrap; padding: 5px 10px 5px 0; }
     .tr-pval { cursor: pointer; }
     .tr-pval:hover td { background: var(--line-soft); }
-    .tr-pval.on td { background: color-mix(in srgb, var(--c3) 12%, transparent); }
-    .tr-pname { white-space: normal; }
+    .tr-pval.on td { background: color-mix(in srgb, var(--c3) 6%, transparent); }
+    .tr-pval.on .tr-pname { box-shadow: inset 2px 0 0 var(--c3); }
+    .tr-pname { white-space: normal; padding-left: 8px; }
     .tr-pbox {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; margin-right: 7px; border-radius: 5px;
-      border: 1.5px solid var(--line); font-size: 10px; color: var(--on-ink);
-      vertical-align: -3px; flex-shrink: 0;
+      width: 12px; height: 12px; margin-right: 7px; border-radius: 50%;
+      border: 1px solid var(--line); font-size: 8px; color: var(--on-ink);
+      vertical-align: 0; flex-shrink: 0;
     }
     .tr-pval.on .tr-pbox { background: var(--c3); border-color: var(--c3); }
-    .tr-ptbl td.num i { font-style: normal; font-size: 10.5px; margin-left: 4px; }
+    .tr-ptbl td.num i { font-style: normal; font-size: 10px; margin-left: 4px; opacity: .85; }
     .tr-ptbl td.num i.pos { color: var(--ch-good); }
     .tr-ptbl td.num i.neg { color: var(--ch-bad); }
 
@@ -5296,9 +5306,10 @@ const TR_VAR_MIN = 3;   // unter so wenigen Fills wird nichts gekürt
 const trQ = v => esc(JSON.stringify(v));
 const trPickSel = () => (trMeta.pick && typeof trMeta.pick === 'object') ? trMeta.pick : {};
 const trPickAny = () => Object.values(trPickSel()).some(v => v && v.length);
-function trPickHas(t) {
+function trPickHas(t, skip) {
   const sel = trPickSel();
   for (const [label, vals] of Object.entries(sel)) {
+    if (label === skip) continue;
     if (!vals || !vals.length) continue;
     const dim = TR_DIMS.find(d => d[0] === label);
     if (!dim) continue;
@@ -5332,11 +5343,16 @@ function trPickTable(list) {
   const goalR = trGoalR();
   const base = trPickStats(list, goalR);
   const sel = trPickSel();
-  // Je Bedingung ein eigener kleiner Block. Nebeneinander statt untereinander:
-  // eine einzige lange Tabelle zwingt zum Scrollen, obwohl der Schirm breit ist.
+  const aktiv = trPickAny();
+  const pick = aktiv ? trPickStats(list.filter(t => trPickHas(t)), goalR) : null;
+  // Jede Bedingung rechnet unter den jeweils ÜBRIGEN. Nur so sieht man, was
+  // eine weitere Bedingung noch beiträgt — ohne das stünden überall dieselben
+  // Zahlen, egal was schon gewählt ist, und das Zusammenspiel bliebe unsichtbar.
   const bloecke = TR_DIMS.map(([label, fn]) => {
+    const cand = aktiv ? list.filter(t => trPickHas(t, label)) : list;
+    const ref  = aktiv ? trPickStats(cand, goalR) : base;
     const by = {};
-    list.forEach(t => {
+    cand.forEach(t => {
       const raw = fn(t);
       const v = (raw === null || raw === undefined || raw === '') ? TR_NONE : String(raw);
       (by[v] = by[v] || []).push(t);
@@ -5355,12 +5371,12 @@ function trPickTable(list) {
     return `<div class="tr-pblock ${on.length ? 'on' : ''}">
       <div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
       <table class="tr-tbl tr-ptbl">
-        <thead><tr><th>Möglichkeit</th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
+        <thead><tr><th></th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
           <th title="Erwartungswert: durchschnittliches Ergebnis je Trade in R">Erwartung</th><th>Trades</th></tr></thead>
         <tbody>${keys.map(k => {
           const st = trPickStats(by[k], goalR);
           const act = on.includes(k);
-          const dQ = st.quote - base.quote, dE = st.exp - base.exp;
+          const dQ = st.quote - ref.quote, dE = st.exp - ref.exp;
           return `<tr class="tr-pval ${act ? 'on' : ''}" onclick="trPickTap(${trQ(label)}, ${trQ(k)})">
             <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${esc(k === TR_NONE ? TR_NONE_LBL : k)}</td>
             <td class="num">${isNaN(st.quote) ? '—' : trFi(st.quote) + ' %'}
@@ -5373,13 +5389,14 @@ function trPickTable(list) {
     </div>`;
   }).filter(Boolean);
   if (!bloecke.length) return '';
-  const pick = trPickAny() ? trPickStats(list.filter(trPickHas), goalR) : null;
   return `<details class="tr-card tr-pickcard" open><summary>Bedingungen ausprobieren</summary>
     <div class="tr-body">
       <div class="tr-sub">Tippe Möglichkeiten an — mehrere in einem Block gelten als „oder“,
         über Blöcke hinweg als „und“. Die Auswahl verändert die Seite nicht, sie läuft oben
         als eigene Kurve gegen deine mit. „Erwartung“ ist der Erwartungswert: was ein Trade
-        im Schnitt einbringt, in R. Die kleine Zahl daneben ist der Abstand zu allen Einstiegen.</div>
+        im Schnitt einbringt, in R.
+        ${aktiv ? 'Jeder Block rechnet unter deinen <b>übrigen</b> Bedingungen — die kleine Zahl daneben sagt, was die Möglichkeit gegenüber dem Stand ohne sie noch ändert.'
+                : 'Die kleine Zahl daneben ist der Abstand zu allen Einstiegen.'}</div>
       <div class="tr-pall">alle Einstiege<b>${isNaN(base.quote) ? '—' : trFi(base.quote) + ' % Treffer'}</b>
         <b>${isNaN(base.exp) ? '—' : trSign(base.exp) + ' R je Trade'}</b>
         <b>${base.n} Trades</b>
