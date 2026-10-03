@@ -4887,6 +4887,7 @@ const TR_DIM_INFO = {
   "Limit-Reihenfolge": "Ob das Limit näher am Markt lag (1) oder ferner (2). Das nähere füllt öfter, das fernere günstiger.",
   "Richtung": "Long oder Short.",
   "Session": "In welcher Handelszeit der Einstieg gefüllt wurde.",
+  "Einstiegszeit": "Zu welcher Tageszeit das Limit gefüllt wurde, in halben Stunden. Es zählt die Uhrzeit, die beim Einlesen der Datei galt.",
   "Wochentag": "An welchem Wochentag der Einstieg gefüllt wurde.",
   "Symbol": "Das Währungspaar, aus dessen Datei der Einstieg stammt.",
   "Gegen Trend": "Ob der Bruch, aus dem der Einstieg entstand, gegen die laufende Richtung ging oder mit ihr.",
@@ -4900,9 +4901,55 @@ const TR_DIM_INFO = {
   "Box überschießt Zone": "Ob die Box in Trade-Richtung über die Zone hinausragt — ein Sweep über die Zonenkante.",
   "Abstand zur Zone": "Wie weit der Einstieg von der nächsten Zonenkante entfernt ist, gemessen in Zonenhöhen. Eine halbe Zonenhöhe bei einer 40-Punkt-Zone sind 20 Punkte.",
   "Eintauchtiefe": "Wie tief der Preis zwischen Berührung und Event in die Zone gelaufen ist, in Prozent der Zonenhöhe.",
-  "Wartezeit": "Wie viel Zeit zwischen dem Event und dem Füllen des Limits vergangen ist."
+  "Wartezeit": "Wie viel Zeit zwischen dem Event und dem Füllen des Limits vergangen ist — in halben Stunden bis fünf Stunden, darüber eine Stufe."
 };
 const trDimInfo = l => TR_DIM_INFO[l] ? `<span class="tr-i" title="${esc(TR_DIM_INFO[l])}">i</span>` : '';
+
+// Einstiegszeit in halben Stunden. Gelesen wird die gespeicherte Uhrzeit des
+// Einstiegs, nicht der Zeitstempel — sonst verschöbe sich alles, wenn die
+// Auswertung in einer anderen Zeitzone geöffnet wird als beim Einlesen.
+const TR_SLOTS = Array.from({ length: 48 }, (_, i) => {
+  const lbl = k => trP2(Math.floor((k % 48) / 2)) + ":" + ((k % 2) ? "30" : "00");
+  return lbl(i) + "–" + lbl(i + 1);
+});
+function trSlot(t) {
+  let h = NaN, mi = NaN;
+  const m = String(t.uhrzeit || "").match(/^(\d{1,2}):(\d{2})/);
+  if (m) { h = +m[1]; mi = +m[2]; }
+  else if (!isNaN(t.ts)) { const d = new Date(t.ts); h = d.getHours(); mi = d.getMinutes(); }
+  if (isNaN(h) || isNaN(mi)) return null;
+  return TR_SLOTS[h * 2 + (mi >= 30 ? 1 : 0)] || null;
+}
+
+// Stufen haben eine natürliche Reihenfolge, die man ihren Namen nicht ansieht:
+// „bis 30 Min." und „30 bis 60 Min." beginnen beide mit 30. Deshalb steht sie hier.
+const TR_WARTE = ["bis 30 Min.", "30 bis 60 Min.", "1 bis 1½ Std.", "1½ bis 2 Std.",
+  "2 bis 2½ Std.", "2½ bis 3 Std.", "3 bis 3½ Std.", "3½ bis 4 Std.",
+  "4 bis 4½ Std.", "4½ bis 5 Std.", "über 5 Std."];
+const TR_DIM_ORDER = {
+  "Wartezeit": TR_WARTE,
+  "Einstiegszeit": TR_SLOTS,
+  "Abstand zur Zone": ["im Bereich der Zone", "bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"],
+  "Eintauchtiefe": ["bis halb hinein", "halb bis ganz", "durch die Zone"],
+  "Lage zur Zone": ["in der Zone", "oberhalb der Zone", "unterhalb der Zone"],
+  "Richtung zur Zone": ["zur Zone", "von der Zone weg"],
+  "Box & Zone": ["Kontakt zur Zone", "kein Kontakt zur Zone"]
+};
+// Vergleich für die Werte einer Bedingung: feste Reihenfolge, wo es eine gibt,
+// sonst nach der Zahl im Namen, sonst alphabetisch. „ohne Angabe" immer zuletzt.
+function trValCmp(label) {
+  const o = TR_DIM_ORDER[label];
+  const rk = k => { const i = o ? o.indexOf(k) : -1; return i < 0 ? 1e6 : i; };
+  const num = k => { const m = String(k).match(/-?\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(',', '.')) : NaN; };
+  return (a, b) => {
+    if (a === TR_NONE) return 1;
+    if (b === TR_NONE) return -1;
+    if (o) { const d = rk(a) - rk(b); if (d) return d; }
+    const na = num(a), nb = num(b);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), 'de');
+  };
+}
 
 const TR_DIMS = [
   ["Einstiegsart",       t => t.variante || null],
@@ -4911,6 +4958,7 @@ const TR_DIMS = [
   ["Limit-Reihenfolge",  t => t.limOrder ? (t.limOrder === "einzig" ? "einziges Limit" : "Limit " + t.limOrder + (t.limOrder === "1" ? " (näher)" : " (ferner)")) : null],
   ["Richtung",           t => t.dir === 1 ? "Long" : t.dir === -1 ? "Short" : null],
   ["Session",            t => t.session],
+  ["Einstiegszeit",      t => trSlot(t)],
   ["Wochentag",          t => t.wtag],
   ["Symbol",             t => t.sym || null],
   ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
@@ -4932,8 +4980,8 @@ const TR_DIMS = [
                               ["bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"], "im Bereich der Zone")],
   ["Eintauchtiefe",      t => trBucket(t.zonePenPct, [50, 100],
                               ["bis halb hinein", "halb bis ganz", "durch die Zone"])],
-  ["Wartezeit",          t => trBucket(t.warteMin, [60, 240],
-                              ["unter 1 Std.", "1 bis 4 Std.", "über 4 Std."])]
+  ["Wartezeit",          t => trBucket(t.warteMin, [30, 60, 90, 120, 150, 180, 210, 240, 270, 300],
+                              TR_WARTE)]
 ];
 // Eine Zahl in einen festen Bereich einsortieren. Ohne Zahl kein Wert — und
 // ein eigener Name für den Sonderfall, wenn er einer ist.
@@ -4945,21 +4993,14 @@ function trBucket(v, cuts, names, sonder) {
   while (i < cuts.length && n >= cuts[i]) i++;
   return names[i];
 }
-function trGroups(list, keyFn) {
+function trGroups(list, keyFn, label) {
   const g = {};
   for (const t of list) {
     const k = keyFn(t);
     if (k === null || k === undefined || k === "") continue;
     (g[k] = g[k] || []).push(t);
   }
-  // Enthält ein Schlüssel eine Zahl, wird nach dieser sortiert — sonst stünde
-  // "Bruch 10" zwischen "Bruch 1" und "Bruch 2".
-  const num = k => { const m = String(k).match(/\d+/); return m ? +m[0] : NaN; };
-  return Object.keys(g).sort((a, b) => {
-    const na = num(a), nb = num(b);
-    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
-    return String(a).localeCompare(String(b), 'de');
-  }).map(k => {
+  return Object.keys(g).sort(trValCmp(label)).map(k => {
     const rows = g[k];
     return {
       key: k, n: rows.length,
@@ -5014,14 +5055,8 @@ function trDimVals(label, fn, base, facet) {
   (trHide[label] || []).forEach(k => keys.add(k));
   const c = {};
   (facet || base).forEach(t => { const k = trDimVal(fn, t); if (keys.has(k)) c[k] = (c[k] || 0) + 1; });
-  const num = k => { const m = String(k).match(/\d+/); return m ? +m[0] : NaN; };
-  return [...keys].sort((a, b) => {
-    if (a === TR_NONE) return 1;
-    if (b === TR_NONE) return -1;
-    const na = num(a), nb = num(b);
-    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
-    return String(a).localeCompare(String(b), 'de');
-  }).map(k => ({ val: k, n: c[k] || 0, on: !(trHide[label] || []).includes(k) }));
+  return [...keys].sort(trValCmp(label))
+    .map(k => ({ val: k, n: c[k] || 0, on: !(trHide[label] || []).includes(k) }));
 }
 
 async function trFilt(label, val, on) {
@@ -5115,7 +5150,7 @@ function trReport() {
     })(),
     ziele: TR_GOALS.map(([l, ...f]) => ({ ziel: l, ...(trGoal(list, ...f) || {}) })).filter(z => z.n),
     einstiegsarten: trVarRows(list) || undefined,
-    aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f) }))
+    aufschluesselung: TR_DIMS.map(([l, f]) => ({ dimension: l, gruppen: trGroups(list, f, l) }))
       .filter(d => d.gruppen.length >= 2),
     trades: list
   };
@@ -5359,14 +5394,7 @@ function trPickTable(list) {
     });
     const keys = Object.keys(by);
     if (keys.length < 2) return '';
-    const num = k => { const m = String(k).match(/-?\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(',', '.')) : NaN; };
-    keys.sort((a, b) => {
-      if (a === TR_NONE) return 1;
-      if (b === TR_NONE) return -1;
-      const na = num(a), nb = num(b);
-      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
-      return String(a).localeCompare(String(b), 'de');
-    });
+    keys.sort(trValCmp(label));
     const on = sel[label] || [];
     return `<div class="tr-pblock ${on.length ? 'on' : ''}">
       <div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
@@ -6019,7 +6047,7 @@ function trBandHtml(b, open) {
 }
 
 function trDimCard(list, title, fn, open) {
-  const g = trGroups(list, fn);
+  const g = trGroups(list, fn, title);
   if (g.length < 2) return '';
   const mx = Math.max(...g.map(x => x.n));
   return `<details class="tr-fold"${open ? ' open' : ''}>
