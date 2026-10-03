@@ -2043,36 +2043,37 @@
     .tr-fchk.off { opacity: .45; }
     .tr-fchk.off span { text-decoration: line-through; }
 
-    /* ── Regelvorschläge ── */
-    .tr-rswitch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
-    .tr-rtbl td, .tr-rtbl th { white-space: nowrap; }
-    .tr-rtbl td.tr-rregel { white-space: normal; min-width: 210px; max-width: 340px; }
-    .tr-rchip {
-      display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
-      background: var(--sunken); border-radius: 999px; padding: 3px 4px 3px 9px;
-      margin: 2px 4px 2px 0; line-height: 1.4; white-space: nowrap;
+    /* ── Kies gegen Hunt ── */
+    .tr-famset {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+      padding: 0 0 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft);
     }
-    .tr-rchip b { font-weight: 600; color: var(--ink); }
-    .tr-rchip button {
-      font: inherit; font-size: 13px; line-height: 1; color: var(--faint);
-      background: none; border: none; border-radius: 999px; cursor: pointer;
-      padding: 1px 5px 3px;
+    .tr-famset .tr-f { margin: 0; flex: 1 1 96px; min-width: 96px; }
+    .tr-famset input { width: 100%; }
+
+    .tr-famgrid { display: grid; gap: 16px 18px; grid-template-columns: repeat(auto-fit, minmax(216px, 1fr)); }
+    .tr-fam { min-width: 0; }
+    .tr-famh {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+      margin-bottom: 6px; font-size: 14px;
     }
-    .tr-rchip button:hover { color: var(--danger); background: var(--line-soft); }
-    .tr-rbase { font-size: 12px; color: var(--muted); }
-    .tr-rrow { cursor: pointer; }
-    .tr-rrow:hover td { background: var(--line-soft); }
-    .tr-rbaserow td { color: var(--muted); border-bottom: 2px solid var(--line); }
-    .tr-rverd { font-size: 11.5px; font-weight: 600; }
-    .tr-rrow.ok   .tr-rverd { color: var(--accent); }
-    .tr-rrow.weak .tr-rverd,
-    .tr-rrow.rnd  .tr-rverd { color: var(--danger); }
-    .tr-rrow.thin .tr-rverd { color: var(--faint); }
-    .tr-rrow.thin td { opacity: .6; }
-    .tr-rfoot { margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
-    .tr-rfoot .btn { display: block; margin: 0 0 7px; }
-    .tr-rfoot b { color: var(--ink); }
+    .tr-famh b { font-weight: 650; }
+    .tr-famh span { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .tr-famh span.pos { color: var(--ch-good); }
+    .tr-famh span.neg { color: var(--ch-bad); }
+    .tr-famh i { font-style: normal; font-size: 11.5px; font-weight: 500;
+      color: var(--muted); margin-left: 6px; }
+    .tr-fam .tr-svg { height: 150px; width: 100%; }
+
+    .tr-fkacheln { display: grid; gap: 6px; grid-template-columns: repeat(3, 1fr); margin-top: 10px; }
+    .tr-fkachel {
+      background: var(--sunken); border-radius: 11px; padding: 8px 9px; text-align: center;
+    }
+    .tr-fkachel .v { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    .tr-fkachel .v.pos { color: var(--ch-good); }
+    .tr-fkachel .v.neg { color: var(--ch-bad); }
+    .tr-fkachel .l { font-size: 10.5px; color: var(--muted); line-height: 1.35; margin-top: 2px; hyphens: auto; }
+    .tr-famnote { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
 
     /* Festes Ziel und Kontoverlauf gehören zusammen: auf breiten Schirmen
        stehen sie nebeneinander, damit man zum Vergleichen nicht scrollen
@@ -2112,7 +2113,7 @@
 
     /* Ein Bereich je Einstiegsfamilie: zugeklappt zeigt die Kopfzeile die
        Eckwerte, aufgeklappt stehen die drei Karten nebeneinander. */
-    .tr-band, .tr-combo { margin-bottom: 14px; }
+    .tr-band, .tr-combo, .tr-famcard { margin-bottom: 14px; }
     .tr-band > summary {
       cursor: pointer; list-style: none; padding: 14px 36px 14px 16px; position: relative;
       background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -2126,7 +2127,7 @@
     .tr-band[open] > summary::after { content: "⌄"; }
 
     @media (min-width: 1000px) {
-      .tr-band, .tr-combo {
+      .tr-band, .tr-combo, .tr-famcard {
         width: min(1400px, 94vw); margin-left: 50%; transform: translateX(-50%);
       }
       .tr-broad { grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); }
@@ -5204,299 +5205,104 @@ function trGoalsCard(list) {
 // Ein weit entferntes Limit kauft Genauigkeit mit verpassten Einstiegen.
 // Nur noch die beiden Familien: Kies und Hunt. Extreme und Volume werden
 // nicht mehr erfasst; was davon noch in der Sammlung liegt, fliegt beim Laden.
-// ── Welche Bedingungen versprechen etwas? ──────────────────────────────────
-// Die Suche rankt nicht den gemessenen Bestwert, sondern seine statistische
-// UNTERGRENZE. Damit verliert „3 von 3 getroffen" (Untergrenze 44 %) gegen
-// „60 von 100" (Untergrenze 50 %) von selbst — kleine Gruppen müssen nicht
-// verboten werden, die Rechnung erledigt es. Dazu kommen vier Prüfungen:
-// Belegstärke, Zeitsplit, Weglassen der besten Events und ein Zufallstest
-// über die ganze Suche.
-const TR_Z = 1.96;
-const trWilsonLow = (k, n) => {
-  if (!n) return NaN;
-  const p = k / n, d = 1 + TR_Z * TR_Z / n;
-  return ((p + TR_Z * TR_Z / (2 * n)) - TR_Z * Math.sqrt(p * (1 - p) / n + TR_Z * TR_Z / (4 * n * n))) / d;
-};
-const trMeanLow = v => {
-  const n = v.length;
-  if (n < 2) return NaN;
-  const m = v.reduce((a, b) => a + b, 0) / n;
-  const sd = Math.sqrt(v.reduce((a, x) => a + (x - m) * (x - m), 0) / (n - 1));
-  return m - TR_Z * sd / Math.sqrt(n);
-};
-// Mehrere Einstiege desselben Events laufen miteinander — gezählt wird deshalb
-// überall auch, aus wie vielen Events eine Gruppe stammt.
-const trEvKey = t => (t.evDatum || t.evZeit) ? (t.evDatum + ' ' + t.evZeit) : ('#' + t.ts);
-
-const TR_RULE_MIN_T = 20, TR_RULE_MIN_EV = 10, TR_RULE_MIN_SHARE = 0.10, TR_RULE_GAIN = 0.10;
-const trRuleObj = () => trMeta.ruleObj === 'quote' ? 'quote' : 'exp';
-let trRuleRows = null;     // angezeigte Regeln, vom Nutzer gekürzt
-let trRuleP    = null;     // Ergebnis des Zufallstests
-
-function trRuleRecs(list) {
-  const goal = trGoalR();
-  return list.map((t, i) => ({
-    id: i, ev: trEvKey(t), ts: t.ts, out: trRrOut(t, goal),
-    dim: Object.fromEntries(TR_DIMS.map(([l, f]) => [l, f(t)])
-      .filter(([, v]) => v !== null && v !== undefined && v !== ''))
-  }));
-}
-function trRuleDims(recs) {
-  const m = {};
-  recs.forEach(r => Object.entries(r.dim).forEach(([l, v]) => (m[l] = m[l] || new Set()).add(v)));
-  return Object.entries(m).filter(([, s]) => s.size >= 2).map(([l, s]) => [l, [...s]]);
-}
-function trRuleEval(recs, conds) {
-  const sub = recs.filter(r => conds.every(([l, v]) => r.dim[l] === v));
-  const dec = sub.filter(r => r.out !== null);
-  const outs = dec.map(r => r.out);
-  const wins = dec.filter(r => r.out > 0).length;
-  const nEv = new Set(sub.map(r => r.ev)).size;
-  const sum = outs.reduce((a, b) => a + b, 0);
-  return { conds, sub, dec, n: sub.length, nEv, nDec: dec.length, wins,
-    quote: dec.length ? 100 * wins / dec.length : NaN,
-    quoteLow: 100 * trWilsonLow(wins, dec.length),
-    exp: dec.length ? sum / dec.length : NaN,
-    expLow: trMeanLow(outs), sum, perEv: nEv ? sum / nEv : NaN };
-}
-const trRuleKey = r => trRuleObj() === 'quote' ? r.quoteLow / 100 : r.expLow;
-const trRuleSupp = (r, baseN) => r.n >= TR_RULE_MIN_T && r.nEv >= TR_RULE_MIN_EV
-                                 && r.n >= TR_RULE_MIN_SHARE * baseN;
-
-// Suche: erst jede Bedingung einzeln, dann die besten fünf weiterbauen.
-// Eine Bedingung darf nur bleiben, wenn sie die Untergrenze merklich hebt.
-function trRuleSearch(recs, dims) {
-  const base = trRuleEval(recs, []);
-  const lvl1 = [];
-  for (const [l, vals] of dims) for (const v of vals) {
-    const r = trRuleEval(recs, [[l, v]]);
-    if (r.nDec) lvl1.push(r);
-  }
-  lvl1.sort((a, b) => trRuleKey(b) - trRuleKey(a));
-  const found = lvl1.slice();
-  let beam = lvl1.filter(r => trRuleSupp(r, base.n)).slice(0, 5);
-  for (let depth = 2; depth <= 3; depth++) {
-    const next = [];
-    for (const r of beam) for (const [l, vals] of dims) {
-      if (r.conds.some(([cl]) => cl === l)) continue;
-      for (const v of vals) {
-        const c = trRuleEval(recs, [...r.conds, [l, v]]);
-        if (!trRuleSupp(c, base.n)) continue;
-        if (!(trRuleKey(c) >= trRuleKey(r) + TR_RULE_GAIN)) continue;
-        next.push(c);
-      }
-    }
-    next.sort((a, b) => trRuleKey(b) - trRuleKey(a));
-    beam = next.slice(0, 5);
-    found.push(...next);
-  }
-  // Erst was genug Belege hat, dann der Rest — sonst stehen Zufallsgruppen
-  // mit drei Trades oben, nur weil ihr gemessener Wert schön aussieht.
-  const supp = r => trRuleSupp(r, base.n) ? 1 : 0;
-  found.sort((a, b) => supp(b) - supp(a) || trRuleKey(b) - trRuleKey(a));
-  const keep = [];
-  for (const r of found) {
-    const ids = new Set(r.sub.map(x => x.id));
-    const dup = keep.some(k => {
-      const o = k.sub.reduce((a, x) => a + (ids.has(x.id) ? 1 : 0), 0);
-      return o / (k.n + r.n - o) > 0.9;
-    });
-    if (!dup) keep.push(r);
-  }
-  return { base, rules: keep.slice(0, 8) };
-}
-// Auf der ersten Hälfte der Events gesucht, auf der zweiten gemessen
-function trRuleSplit(recs, conds) {
-  const first = {};
-  recs.forEach(r => { if (first[r.ev] === undefined || r.ts < first[r.ev]) first[r.ev] = r.ts; });
-  const evs = Object.keys(first).sort((a, b) => first[a] - first[b]);
-  const cut = new Set(evs.slice(0, Math.floor(evs.length * 0.6)));
-  return [trRuleEval(recs.filter(r => cut.has(r.ev)), conds),
-          trRuleEval(recs.filter(r => !cut.has(r.ev)), conds)];
-}
-// Die besten 20 % der Events weglassen: trägt die Regel ohne ihre Glücksfälle?
-function trRuleDrop(recs, conds) {
-  const r = trRuleEval(recs, conds);
-  const by = {};
-  r.dec.forEach(x => { (by[x.ev] = by[x.ev] || []).push(x.out); });
-  const avg = k => by[k].reduce((a, b) => a + b, 0) / by[k].length;
-  const order = Object.keys(by).sort((a, b) => avg(b) - avg(a));
-  const drop = new Set(order.slice(0, Math.max(1, Math.round(order.length * 0.2))));
-  return trRuleEval(recs.filter(x => !drop.has(x.ev)), conds);
-}
-// Zufallstest: Ergebnisse neu verteilen, Struktur behalten — jedes Event behält
-// seine Blockgröße, die Blöcke wandern zwischen den Events und innerhalb eines
-// Blocks werden sie auf die Einstiegsarten neu verteilt. Danach hat keine
-// Bedingung mehr einen echten Zusammenhang zum Ergebnis. Was die Suche jetzt
-// noch findet, ist Zufall — und genau das ist die Vergleichszahl.
-function trRulePerm(recs, dims, best, runs) {
-  const evs = [...new Set(recs.map(r => r.ev))];
-  const blocks = evs.map(e => recs.filter(r => r.ev === e).map(r => r.out));
-  const ids = evs.map(e => recs.filter(r => r.ev === e).map(r => r.id));
-  const mix = a => { for (let j = a.length - 1; j > 0; j--) { const k = (Math.random() * (j + 1)) | 0; [a[j], a[k]] = [a[k], a[j]]; } return a; };
-  let hits = 0;
-  for (let i = 0; i < runs; i++) {
-    const order = mix(blocks.map((_, k) => k));
-    const outBy = {};
-    evs.forEach((e, k) => {
-      const src = mix(blocks[order[k]].slice());
-      ids[k].forEach((id, j) => { outBy[id] = src[j % src.length]; });
-    });
-    const res = trRuleSearch(recs.map(r => ({ ...r, out: outBy[r.id] })), dims);
-    const top = res.rules[0];
-    if (top && trRuleKey(top) >= best) hits++;
-  }
-  return 100 * hits / runs;
-}
-function trRuleVerdict(r, baseN, B, drop, p) {
-  if (!r.conds.length) return '';
-  if (!trRuleSupp(r, baseN)) return 'zu dünn';
-  if (p !== null && p > 10) return 'Zufallsverdacht';
-  if (!(trRuleKey(r) > 0)) return 'ohne Vorteil';
-  if (!(B.exp > 0) || !(drop.expLow > 0)) return 'wackelig';
-  return 'trägt';
-}
-
-// ── Anzeige: Vorschläge als Tabelle, Bedingungen einzeln abwählbar ────────
-const TR_RULE_COLS = [
-  ['Trades', r => String(r.n)],
-  ['Events', r => String(r.nEv)],
-  ['Treffer', r => trFi(r.quote) + ' %'],
-  ['↓ Treffer', r => trFi(r.quoteLow) + ' %'],
-  ['Ø RR', r => trSign(r.exp)],
-  ['↓ Ø RR', r => trSign(r.expLow)],
-  ['Summe R', r => trSign(r.sum)],
-  ['R je Event', r => trSign(r.perEv)]
-];
-function trRuleSetObj(o) { trMeta.ruleObj = o; trRuleRows = null; trRuleP = null; renderTrades(); }
-function trRuleReset()   { trRuleRows = null; trRuleP = null; renderTrades(); }
-// Eine Bedingung aus einer vorgeschlagenen Regel werfen — die Zeile rechnet
-// sich sofort als kürzere Regel neu, damit sichtbar wird, was sie wert war.
-function trRuleKick(i, j) {
-  if (!trRuleRows || !trRuleRows[i]) return;
-  trRuleRows[i] = trRuleRows[i].filter((_, k) => k !== j);
-  renderTrades();
-}
-// Regel in die Filter übernehmen: je Bedingung bleibt nur ihr Wert übrig
-function trRuleApply(i) {
-  if (!trRuleRows || !trRuleRows[i]) return;
-  for (const [label, val] of trRuleRows[i]) {
-    const dim = TR_DIMS.find(d => d[0] === label);
-    if (!dim) continue;
-    const all = trDimVals(label, dim[1], trTrades.filter(t => t.sel !== false)).map(v => v.val);
-    trHide[label] = all.filter(v => v !== val);
-  }
-  trRuleRows = null; trRuleP = null;
-  persistTrades();
-  renderTrades();
-}
-async function trRuleTest() {
-  const list = trOn();
-  const recs = trRuleRecs(list), dims = trRuleDims(recs);
-  const res = trRuleSearch(recs, dims);
-  if (!res.rules.length) return;
-  const runs = recs.length > 800 ? 20 : 40;
-  trRuleP = trRulePerm(recs, dims, trRuleKey(res.rules[0]), runs);
-  renderTrades();
-}
-
-function trRuleCard(list) {
-  const recs = trRuleRecs(list);
-  const dims = trRuleDims(recs);
-  if (recs.length < 4 || dims.length < 1) return '';
-  const res = trRuleSearch(recs, dims);
-  // Hat keine Regel genug Belege, reichen drei Zeilen als Beleg dafür, dass
-  // hier nichts zu holen ist — acht Zufallsgruppen wären nur Lärm.
-  const tragfaehig = res.rules.some(r => trRuleSupp(r, res.base.n));
-  const vor = tragfaehig ? res.rules : res.rules.slice(0, 3);
-  if (trRuleRows === null) trRuleRows = vor.map(r => r.conds);
-  const obj = trRuleObj();
-  const rows = [res.base, ...trRuleRows.map(c => trRuleEval(recs, c))];
-  const nEvAll = res.base.nEv;
-  const body = rows.map((r, idx) => {
-    const i = idx - 1;
-    const [, B] = trRuleSplit(recs, r.conds);
-    const drop = trRuleDrop(recs, r.conds);
-    const verd = trRuleVerdict(r, res.base.n, B, drop, trRuleP);
-    const chips = r.conds.length
-      ? r.conds.map(([l, v], j) => `<span class="tr-rchip">${esc(l)}: <b>${esc(v)}</b>
-          <button onclick="event.stopPropagation();trRuleKick(${i},${j})" title="Bedingung weglassen">×</button></span>`).join('')
-      : `<span class="tr-rbase">alle Einstiege der aktuellen Auswahl</span>`;
-    const cls = verd === 'trägt' ? 'ok' : verd === 'zu dünn' ? 'thin'
-      : verd === 'Zufallsverdacht' ? 'rnd' : verd ? 'weak' : '';
-    return `<tr class="${r.conds.length ? 'tr-rrow' : 'tr-rbaserow'} ${cls}"${
-      r.conds.length ? ` onclick="trRuleApply(${i})" title="Als Filter übernehmen"` : ''}>
-      <td class="tr-rregel">${chips}</td>
-      <td class="tr-rverd">${verd || '—'}</td>
-      ${TR_RULE_COLS.map(([, f]) => `<td class="num">${f(r)}</td>`).join('')}
-      <td class="num">${trSign(B.exp)}</td>
-      <td class="num">${trSign(drop.expLow)}</td>
-    </tr>`;
-  }).join('');
-  const hint = obj === 'quote'
-    ? 'Sortiert nach der Untergrenze der Trefferquote.'
-    : 'Sortiert nach der Untergrenze des Ø RR je Trade.';
-  return `<details class="tr-card tr-rule" open><summary>Welche Bedingungen versprechen etwas?</summary>
-    <div class="tr-body">
-      <div class="tr-sub">Gesucht wird nicht der schönste gemessene Wert, sondern der, der auch
-        bei wenigen Belegen noch hält: gerankt wird die <b>Untergrenze</b> (95 %). „3 von 3 getroffen“
-        hat eine Untergrenze von 44 % und verliert damit gegen „60 von 100“ mit 50 %.
-        ${hint} Ziel ${trNum2.format(trGoalR()).replace(',00', '')} R.
-        Ein Klick auf eine Zeile übernimmt sie in die Filter, das <b>×</b> an einer Bedingung
-        lässt sie weg — dann siehst du, was sie wert war.</div>
-      <div class="tr-rswitch">
-        <span>Zielrichtung</span>
-        <div class="tr-seg">
-          <button class="${obj === 'exp' ? 'on' : ''}" onclick="trRuleSetObj('exp')">Gewinn (Ø RR)</button>
-          <button class="${obj === 'quote' ? 'on' : ''}" onclick="trRuleSetObj('quote')">Trefferquote</button>
-        </div>
-        <button class="tr-flink" onclick="trRuleReset()">Vorschläge neu</button>
-      </div>
-      <div class="tr-tblwrap"><table class="tr-tbl tr-rtbl">
-        <thead><tr><th>Regel</th><th>Urteil</th>${TR_RULE_COLS.map(([l]) => `<th>${esc(l)}</th>`).join('')}
-          <th title="Auf der ersten Hälfte der Events gesucht, hier auf der zweiten gemessen">2. Hälfte</th>
-          <th title="Die besten 20 % der Events weggelassen">ohne beste</th></tr></thead>
-        <tbody>${body}</tbody>
-      </table></div>
-      ${tragfaehig ? '' : `<div class="tr-sub" style="margin-top:9px">Keine Bedingung hat genug
-        Belege — die Zeilen oben stehen nur als Beleg dafür da.</div>`}
-      <div class="tr-rfoot">
-        ${trRuleP === null
-          ? `<button class="btn btn-ghost" onclick="trRuleTest()">Zufallstest rechnen</button>
-             <span>Mischt die Ergebnisse und lässt die ganze Suche erneut laufen — so oft, bis klar ist,
-             wie gut der Zufall allein abschneidet.</span>`
-          : `<b>Zufallstest:</b> in ${trFi(trRuleP)} % der Mischungen kam etwas gleich Gutes heraus.
-             ${trRuleP > 10
-               ? 'Das ist zu oft — was hier oben steht, kann genauso gut Zufall sein.'
-               : 'Der Zufall erreicht das selten; der Befund hat Substanz.'}`}
-      </div>
-      ${(() => {
-        // Filtern kostet immer Masse. Solange Filter aktiv sind, steht der
-        // Vergleich zur ganzen Sammlung daneben — sonst sieht man nur den
-        // Gewinn an Qualität und nicht, was dafür wegfiel.
-        const act = Object.keys(trHide).some(k => trHide[k] && trHide[k].length);
-        if (!act) return '';
-        const alle = trRuleEval(trRuleRecs(trTrades.filter(t => t.sel !== false)), []);
-        const b = res.base;
-        return `<div class="tr-verdict" style="margin:12px 0 0">Mit deinen Filtern bleiben
-          <b>${b.n} von ${alle.n}</b> Einstiegen (${b.nEv} von ${alle.nEv} Events).
-          Ø RR <b>${trSign(b.exp)}</b> statt ${trSign(alle.exp)} ·
-          Summe <b>${trSign(b.sum)} R</b> statt ${trSign(alle.sum)} R ·
-          je Event <b>${trSign(b.perEv)}</b> statt ${trSign(alle.perEv)}.
-          <button class="tr-flink" onclick="trFiltReset()">Filter zurücksetzen</button></div>`;
-      })()}
-      <div class="tr-sub" style="margin-top:10px">Belegstärke: mindestens
-        ${TR_RULE_MIN_T} Einstiege, ${TR_RULE_MIN_EV} Events und
-        ${Math.round(TR_RULE_MIN_SHARE * 100)} % der Auswahl — sonst „zu dünn“.
-        Gerade sind es <b>${res.base.n} Einstiege aus ${nEvAll} Events</b>.
-        Ein starker, echter Vorteil wird erfahrungsgemäß erst ab etwa 240 Events
-        verlässlich erkannt.</div>
-    </div></details>`;
-}
-
 const TR_VAR_ORDER = ['Kies 1', 'Kies 2', 'Hunt 1', 'Hunt 2'];
 const TR_VAR_DROP = /^(Extreme|Volume)$/;
 const TR_VAR_MIN = 3;   // unter so wenigen Fills wird nichts gekürt
+
+// ── Kies gegen Hunt: zwei Hälften, dieselbe Vorgabe ───────────────────────
+// Oben die drei Zahlen, die den Versuch bestimmen: Konto, Einsatz je Trade und
+// das Ziel. Darunter je Familie derselbe Verlauf — durchgezogen, was die
+// gesetzten Bedingungen übrig lassen, gestrichelt alle Einstiege der Familie.
+const TR_FAM_ORDER = ['Kies', 'Hunt'];
+
+// Beide Hälften teilen sich Maßstab und Breite — sonst sieht eine Familie
+// nur deshalb besser aus, weil ihre Achse anders steht.
+function trFamSvg(run, ref, start, sc) {
+  const W = 320, H = 150, PL = 38, PR = 10, PT = 10, PB = 18;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const lo = sc.lo, hi = sc.hi, nMax = sc.n;
+  const X = i => PL + iw * i / (nMax - 1);
+  const Y = v => PT + ih * (hi - v) / (hi - lo);
+  const path = r => !r || !r.pts.length ? ''
+    : `M${PL.toFixed(1)} ${Y(start).toFixed(1)} `
+      + r.pts.map((p, k) => 'L' + X(k + 1).toFixed(1) + ' ' + Y(p.bal).toFixed(1)).join(' ');
+  const col = run && run.end >= start ? 'var(--ch-good)' : 'var(--ch-bad)';
+  const ticks = [];
+  const stp = trStep((hi - lo) / 3);
+  for (let v = Math.ceil(lo / stp) * stp; v <= hi; v += stp) ticks.push(v);
+  return `<svg class="tr-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+    role="img" aria-label="Kontoverlauf">
+    ${ticks.map(v => `<line class="grid" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
+      <text class="ax" x="${PL - 5}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${trNum0.format(Math.round(v))}</text>`).join('')}
+    <line class="zero" x1="${PL}" y1="${Y(start).toFixed(1)}" x2="${W - PR}" y2="${Y(start).toFixed(1)}"/>
+    ${ref ? `<path d="${path(ref)}" fill="none" stroke="var(--muted)" stroke-width="1.4"
+      stroke-dasharray="4 4" opacity=".45"/>` : ''}
+    <path d="${path(run)}" fill="none" stroke="${col}" stroke-width="2"
+      stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function trFamPanel(list) {
+  const goalR = trGoalR(), start = trStart(), risk = trRisk();
+  const alle = trTrades.filter(t => t.sel !== false);
+  const gefiltert = Object.keys(trHide).some(k => trHide[k] && trHide[k].length);
+  const halves = TR_FAM_ORDER.map(fam => {
+    const sel = list.filter(t => trFam(t.variante) === fam).slice().sort(trByTime);
+    const ref = alle.filter(t => trFam(t.variante) === fam).slice().sort(trByTime);
+    return { fam, n: ref.length,
+      run: trStratRun(sel, goalR, risk, start),
+      ref: gefiltert ? trStratRun(ref, goalR, risk, start) : null };
+  }).filter(h => h.n);
+  if (!halves.length) return '';
+  const vals = [start];
+  halves.forEach(h => { [h.run, h.ref].forEach(r => { if (r) r.pts.forEach(p => vals.push(p.bal)); }); });
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += 1; lo -= 1; }
+  const pad = (hi - lo) * .1;
+  const sc = { lo: lo - pad, hi: hi + pad,
+    n: Math.max(2, ...halves.map(h => Math.max(h.run.pts.length, h.ref ? h.ref.pts.length : 0))) };
+  const geld = v => trNum0.format(Math.round(v)) + ' €';
+  const kachel = (v, l, cls) => `<div class="tr-fkachel"><div class="v ${cls || ''}">${v}</div><div class="l">${l}</div></div>`;
+  return `<div class="tr-card tr-famcard">
+    <div class="tr-h"><span>Kies gegen Hunt</span></div>
+    <div class="tr-famset">
+      <div class="tr-f"><label>Konto</label>
+        <input type="text" inputmode="decimal" value="${trNum0.format(start)}"
+          onchange="trSetAcc('start', this.value)"></div>
+      <div class="tr-f"><label>Risiko je Trade</label>
+        <input type="text" inputmode="decimal" value="${trNum2.format(risk).replace(',00', '')} %"
+          onchange="trSetAcc('risk', this.value)"></div>
+      <div class="tr-f"><label>Ziel je Trade</label>
+        <input type="text" inputmode="decimal" value="${trRrLbl(goalR)} R"
+          onchange="trSetGoal(this.value)"></div>
+    </div>
+    <div class="tr-famgrid">
+      ${halves.map(h => {
+        const r = h.run, verl = r.dec - r.hits, offen = r.n - r.dec;
+        const d = r.end - start;
+        return `<div class="tr-fam">
+          <div class="tr-famh"><b>${esc(h.fam)}</b>
+            <span class="${d >= 0 ? 'pos' : 'neg'}">${geld(r.end)}<i>${d >= 0 ? '+' : '−'}${geld(Math.abs(d))}</i></span></div>
+          ${trFamSvg(r, h.ref, start, sc)}
+          <div class="tr-fkacheln">
+            ${kachel(isNaN(r.quote) ? '—' : trFi(r.quote) + ' %', 'Gewinn&shy;wahrscheinlichkeit')}
+            ${kachel(r.n, 'Einstiege')}
+            ${kachel(r.hits, 'gewonnen', 'pos')}
+            ${kachel(verl, 'verloren', 'neg')}
+            ${kachel(isNaN(r.maxDD) ? '—' : '−' + trFi(r.maxDD) + ' %', 'max. Rücksetzer')}
+          </div>
+          ${offen ? `<div class="tr-famnote">${offen} ${offen === 1 ? 'Einstieg läuft' : 'Einstiege laufen'} noch
+            und ${offen === 1 ? 'zählt' : 'zählen'} weder als gewonnen noch als verloren.</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="tr-sub">Jeder Einstieg setzt ${trNum2.format(risk).replace(',00', '')} % des Kontos
+      und bringt ${trRrLbl(goalR)} R, wenn er sein Ziel erreicht, sonst −1 R.
+      ${gefiltert ? 'Gestrichelt alle Einstiege der Familie, ohne die gesetzten Bedingungen.'
+                  : 'Es sind keine Bedingungen gesetzt — es zählen alle Einstiege.'}</div>
+  </div>`;
+}
+
 
 function trVarRows(list) {
   const names = [...new Set(trTrades.filter(t => t.variante).map(t => t.variante))];
@@ -6806,7 +6612,7 @@ function renderTrades() {
     + trFilterCard()
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
-    + trRuleCard(list)
+    + trFamPanel(list)
     + trVarCard(list)
     + trEquity(list)
     + trComboCard(list)
