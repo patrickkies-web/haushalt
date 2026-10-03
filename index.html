@@ -2090,6 +2090,16 @@
     .tr-flegend i.dash { background: repeating-linear-gradient(90deg,
       var(--muted) 0 4px, transparent 4px 8px); height: 2px; }
 
+    /* Hinweis an einer Bedingung */
+    .tr-i {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; margin-left: 6px; border-radius: 50%;
+      border: 1px solid var(--line); color: var(--faint);
+      font-size: 9.5px; font-weight: 700; font-style: normal;
+      text-transform: none; letter-spacing: 0; cursor: help; vertical-align: 1px;
+    }
+    .tr-i:hover { border-color: var(--muted); color: var(--muted); }
+
     /* Bedingungen ausprobieren: ein Block je Bedingung, nebeneinander */
     .tr-pall {
       display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
@@ -4668,10 +4678,11 @@ function trEvaluate(raw, opt) {
           zoneDistPts = toPts(d);
           zoneDistPct = 100 * d / zH;
         }
-        zoneDir = zonePos === "in"
-          ? (dir === 1 ? "heraus nach oben" : "heraus nach unten")
-          : ((zonePos === "ueber") === (dir === -1) ? "zur Zone" : "von der Zone weg");
-        const zoneAhead = zoneDir !== "von der Zone weg";
+        // Zwei Werte, mehr will die Frage nicht: läuft der Trade auf die Zone
+        // zu oder von ihr fort. Aus der Zone heraus heißt fort von ihr.
+        zoneDir = (zonePos !== "in" && ((zonePos === "ueber") === (dir === -1)))
+          ? "zur Zone" : "von der Zone weg";
+        const zoneAhead = zonePos === "in" || zoneDir === "zur Zone";
         if (!isNaN(target)) {
           if (!zoneAhead) zoneTgt = "Zone nicht im Weg";
           else if (inZone(target)) zoneTgt = "Ziel in der Zone";
@@ -4856,6 +4867,33 @@ const TR_GOALS = [
   ['TP 1',     t => t.tpHas1,  t => t.tp1R, t => t.tp1RR, t => t.tpR1],
   ['TP 2',     t => t.tpHas2,  t => t.tp2R, t => t.tp2RR, t => t.tpR2]
 ];
+// Was jede Bedingung meint — als Hinweis am „i“ neben ihrem Namen. Ohne das
+// raten die Werte selbst sich zusammen, und ein falsch verstandener Filter
+// führt zu einer falschen Entscheidung.
+const TR_DIM_INFO = {
+  "Einstiegsart": "Welches Limit des Indikators gefüllt wurde. Kies 1 und 2 sind die beiden Cluster-Limits, Hunt 1 und 2 die daraus abgeleiteten Farbwechsel-Limits.",
+  "Bruch #": "Der wievielte Bruch nach der Zonenberührung dieses Event ausgelöst hat. Bruch 1 ist der erste Trendbruch, ab 2 sind es die Schlüsselpreis-Brüche.",
+  "Entry-Level": "Ob der Einstieg vom ersten oder vom zweiten Cluster-Limit des Events stammt.",
+  "Limit-Reihenfolge": "Ob das Limit näher am Markt lag (1) oder ferner (2). Das nähere füllt öfter, das fernere günstiger.",
+  "Richtung": "Long oder Short.",
+  "Session": "In welcher Handelszeit der Einstieg gefüllt wurde.",
+  "Wochentag": "An welchem Wochentag der Einstieg gefüllt wurde.",
+  "Symbol": "Das Währungspaar, aus dessen Datei der Einstieg stammt.",
+  "Gegen Trend": "Ob der Bruch, aus dem der Einstieg entstand, gegen die laufende Richtung ging oder mit ihr.",
+  "Zone durchgedippt": "Ob der Preis zwischen Berührung und Event ganz durch die Zone hindurchgelaufen ist, statt nur hineinzureichen.",
+  "Lage zur Zone": "Wo der Einstiegspreis selbst liegt: in der Zone, oberhalb oder unterhalb davon. Kanten zählen zur Zone.",
+  "Richtung zur Zone": "Ob der Trade auf die Zone zuläuft oder sich von ihr entfernt. Ein Verkauf oberhalb der Zone läuft auf sie zu, ein Kauf oberhalb von ihr fort. Ein Einstieg innerhalb der Zone läuft aus ihr heraus und zählt als fort.",
+  "Box & Zone": "Ob die Box die Zone irgendwo berührt oder überlappt — oder ganz außerhalb von ihr liegt.",
+  "Stand": "Ob der Einstieg abgeschlossen ist oder noch läuft. Laufende zählen weder als gewonnen noch als verloren.",
+  "Risiko": "Woher die Risikodistanz kommt: ein gesetzter SL, die SL-Distanz des Indikators oder der Median der übrigen Einstiege.",
+  "Box-Ziel vor Fill berührt": "Ob das Ziel dieser Box schon erreicht war, bevor dieser Einstieg überhaupt füllte.",
+  "Box überschießt Zone": "Ob die Box in Trade-Richtung über die Zone hinausragt — ein Sweep über die Zonenkante.",
+  "Abstand zur Zone": "Wie weit der Einstieg von der nächsten Zonenkante entfernt ist, gemessen in Zonenhöhen. Eine halbe Zonenhöhe bei einer 40-Punkt-Zone sind 20 Punkte.",
+  "Eintauchtiefe": "Wie tief der Preis zwischen Berührung und Event in die Zone gelaufen ist, in Prozent der Zonenhöhe.",
+  "Wartezeit": "Wie viel Zeit zwischen dem Event und dem Füllen des Limits vergangen ist."
+};
+const trDimInfo = l => TR_DIM_INFO[l] ? `<span class="tr-i" title="${esc(TR_DIM_INFO[l])}">i</span>` : '';
+
 const TR_DIMS = [
   ["Einstiegsart",       t => t.variante || null],
   ["Bruch #",            t => isNaN(t.brk) ? null : "Bruch " + t.brk],
@@ -4869,34 +4907,23 @@ const TR_DIMS = [
   ["Zone durchgedippt",  t => t.zoneThrough === "JA" ? "durchgedippt" : t.zoneThrough === "nein" ? "nicht durchgedippt" : null],
   ["Lage zur Zone",      t => t.zonePos === "in" ? "in der Zone" : t.zonePos === "ueber" ? "oberhalb der Zone"
                             : t.zonePos === "unter" ? "unterhalb der Zone" : null],
-  ["Richtung zur Zone",  t => t.zoneDir || null],
+  ["Richtung zur Zone",  t => !t.zoneDir ? null : t.zoneDir === "zur Zone" ? "zur Zone" : "von der Zone weg"],
   ["Box & Zone",         t => t.boxTouch || null],
-  ["Box zur Zone",       t => t.boxZone || null],
-  ["Ziel zur Zone",      t => t.zoneTgt || null],
-  ["SL zur Zone",        t => t.zoneSl || null],
   ["Stand",              t => t.offen === "JA" ? "läuft noch" : t.offen === "nein" ? "abgeschlossen" : null],
   ["Risiko",             t => t.slSrc === 'gesetzt' ? "SL stand fest" : t.slSrc === 'SL-Distanz' ? "SL-Distanz vom Indikator"
                             : t.slSrc === 'geschätzt' ? "Risiko geschätzt" : t.slSrc === 'fehlt' ? "ohne Risiko" : null],
   ["Box-Ziel vor Fill berührt", t => t.preTouch === "JA" ? "vorher berührt" : t.preTouch === "nein" ? "nicht vorher berührt" : null],
   ["Box überschießt Zone", t => t.boxSweep === "JA" ? "Box überschießt Zone" : t.boxSweep === "nein" ? "Box innerhalb Zone" : null],
-  ["TP1 vor Fill erreicht", t => t.preTP1 === "JA" ? "TP1 lief schon" : t.preTP1 === "nein" ? "TP1 lief noch nicht" : null],
-  ["TP2 vor Fill erreicht", t => t.preTP2 === "JA" ? "TP2 lief schon" : t.preTP2 === "nein" ? "TP2 lief noch nicht" : null],
   // Zahlen als feste Bereiche, nicht als gesuchte Schwellen. Eine Schwelle,
   // die aus den Daten selbst stammt, sitzt immer genau dort, wo sie am besten
   // aussieht — feste Stufen sind langweiliger und deshalb belastbarer. Außerdem
   // bleiben sie über neue Dateien hinweg gleich, sodass gesetzte Filter halten.
   ["Abstand zur Zone",   t => trBucket(t.zoneDistPct, t.zonePos === "in" ? [] : [50, 150],
                               ["bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"], "im Bereich der Zone")],
-  ["Höhe in der Zone",   t => trBucket(t.zoneInPct, [33, 67],
-                              ["unteres Drittel", "mittleres Drittel", "oberes Drittel"])],
-  ["Box in der Zone",    t => trBucket(t.boxOvPct, [25, 75],
-                              ["bis ¼ der Box", "¼ bis ¾ der Box", "über ¾ der Box"])],
   ["Eintauchtiefe",      t => trBucket(t.zonePenPct, [50, 100],
                               ["bis halb hinein", "halb bis ganz", "durch die Zone"])],
   ["Wartezeit",          t => trBucket(t.warteMin, [60, 240],
-                              ["unter 1 Std.", "1 bis 4 Std.", "über 4 Std."])],
-  ["Tiefe in der Box",   t => trBucket(t.tiefe, [33, 67],
-                              ["nah am Ziel", "mittig", "nah am Rand"])]
+                              ["unter 1 Std.", "1 bis 4 Std.", "über 4 Std."])]
 ];
 // Eine Zahl in einen festen Bereich einsortieren. Ohne Zahl kein Wert — und
 // ein eigener Name für den Sonderfall, wenn er einer ist.
@@ -5032,7 +5059,7 @@ function trFilterCard() {
         ${act ? `<button class="tr-flink" style="display:block;padding-left:0;margin-top:7px"
           onclick="trFiltReset()">alle Filter zurücksetzen</button>` : ''}</div>
       ${dims.map(d => `<div class="tr-fdim">
-        <div class="tr-fhead"><b>${esc(d.l)}</b><span>
+        <div class="tr-fhead"><b>${esc(d.l)}${trDimInfo(d.l)}</b><span>
           <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, true)">alle</button>
           <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, false)">keine</button></span></div>
         <div class="tr-fvals">${d.vals.map(v => `<label class="tr-fchk ${v.on ? '' : 'off'}"${
@@ -5326,7 +5353,7 @@ function trPickTable(list) {
     });
     const on = sel[label] || [];
     return `<div class="tr-pblock ${on.length ? 'on' : ''}">
-      <div class="tr-phead">${esc(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
+      <div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
       <table class="tr-tbl tr-ptbl">
         <thead><tr><th>Möglichkeit</th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
           <th title="Erwartungswert: durchschnittliches Ergebnis je Trade in R">Erwartung</th><th>Trades</th></tr></thead>
@@ -5979,7 +6006,7 @@ function trDimCard(list, title, fn, open) {
   if (g.length < 2) return '';
   const mx = Math.max(...g.map(x => x.n));
   return `<details class="tr-fold"${open ? ' open' : ''}>
-    <summary>${esc(title)}</summary>
+    <summary>${esc(title)}${trDimInfo(title)}</summary>
     <div class="tr-body"><table class="tr-tbl">
       <tr><th>${esc(title)}</th><th class="num">Einstiege</th><th class="num">gestoppt</th>
           <th class="num">Median Max-Profit</th><th class="num">Ø erreicht</th></tr>
