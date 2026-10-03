@@ -4335,6 +4335,9 @@ function trEvaluate(raw, opt) {
       ent: parseFloat(c[cFE]), sl: parseFloat(c[cFS]),
       awBar: cAW >= 0 ? parseFloat(c[cAW]) : NaN,
       slDBar: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN,
+      // Zonenkanten dieser Kerze — die Zone darf zwischendurch verschoben werden
+      zhi: cZoneHi >= 0 ? parseFloat(c[cZoneHi]) : NaN,
+      zlo: cZoneLo >= 0 ? parseFloat(c[cZoneLo]) : NaN,
       // welche Einstiegsarten in dieser Kerze gefüllt wurden (mehrere möglich)
       vf: (vars.length && parseFloat(c[cF]) === 1) ? vars.map(v => parseFloat(c[v.fill]) === 1) : null
     });
@@ -4353,6 +4356,18 @@ function trEvaluate(raw, opt) {
   }
   bars.sort((a, b) => a.t - b.t);
   events.sort((a, b) => a.t - b.t);
+
+  // Die Zone steht nicht in jeder Zeile. Der letzte bekannte Stand gilt weiter,
+  // und vor der ersten Angabe gilt die erste — so trägt jede Kerze die Kanten,
+  // die zu ihrer Zeit auf dem Chart lagen.
+  for (let k = 1; k < bars.length; k++) {
+    if (isNaN(bars[k].zhi)) bars[k].zhi = bars[k - 1].zhi;
+    if (isNaN(bars[k].zlo)) bars[k].zlo = bars[k - 1].zlo;
+  }
+  for (let k = bars.length - 2; k >= 0; k--) {
+    if (isNaN(bars[k].zhi)) bars[k].zhi = bars[k + 1].zhi;
+    if (isNaN(bars[k].zlo)) bars[k].zlo = bars[k + 1].zlo;
+  }
 
   let ps = opt.ps;
   if (!ps || isNaN(ps) || ps <= 0) {
@@ -4524,6 +4539,47 @@ function trEvaluate(raw, opt) {
       if (!isNaN(zoneHiVal) && !isNaN(zoneLoVal) && !isNaN(b.bhi) && !isNaN(b.blo))
         boxSweep = (dir === -1 ? (b.bhi > zoneHiVal) : (b.blo < zoneLoVal)) ? "JA" : "nein";
       const hasTgt = !isNaN(target), tpHas1 = !isNaN(tpP1), tpHas2 = !isNaN(tpP2);
+      // ── Zone: Lage des Einstiegs, Laufrichtung, Ziel und Stop ───────────
+      // Zwei getrennte Fragen. Erstens rein geometrisch: liegt der Einstieg in
+      // der Zone, darüber oder darunter. Zweitens, aus Lage und Richtung: liegt
+      // die Zone vor dem Trade oder hinter ihm. Ziel und Stop sagen zusätzlich,
+      // ob die Zone auf dem Weg dorthin überhaupt im Spiel ist.
+      const zHi = !isNaN(b.zhi) ? b.zhi : zoneHiVal;
+      const zLo = !isNaN(b.zlo) ? b.zlo : zoneLoVal;
+      const zTop = Math.max(zHi, zLo), zBot = Math.min(zHi, zLo);
+      const zH = (!isNaN(zTop) && !isNaN(zBot)) ? zTop - zBot : NaN;
+      let zonePos = "", zoneDir = "", zoneTgt = "", zoneSl = "";
+      let zoneDistPts = NaN, zoneDistPct = NaN, zoneInPct = NaN;
+      if (!isNaN(zH) && zH > 0 && !isNaN(ent) && (dir === 1 || dir === -1)) {
+        // Die Kante darf großzügig zählen, aber nie so großzügig, dass eine
+        // schmale Zone ganz in der Toleranz verschwindet.
+        const zt = Math.min(tol, zH * 0.02);
+        const inZone = p => !isNaN(p) && p >= zBot - zt && p <= zTop + zt;
+        zonePos = inZone(ent) ? "in" : ent > zTop ? "ueber" : "unter";
+        if (zonePos === "in") {
+          zoneDistPts = 0; zoneDistPct = 0;
+          zoneInPct = 100 * (ent - zBot) / zH;         // 0 % = Unterkante
+        } else {
+          const d = zonePos === "ueber" ? ent - zTop : zBot - ent;
+          zoneDistPts = toPts(d);
+          zoneDistPct = 100 * d / zH;
+        }
+        zoneDir = zonePos === "in"
+          ? (dir === 1 ? "heraus nach oben" : "heraus nach unten")
+          : ((zonePos === "ueber") === (dir === -1) ? "zur Zone" : "von der Zone weg");
+        const zoneAhead = zoneDir !== "von der Zone weg";
+        if (!isNaN(target)) {
+          if (!zoneAhead) zoneTgt = "Zone nicht im Weg";
+          else if (inZone(target)) zoneTgt = "Ziel in der Zone";
+          else zoneTgt = (dir === 1 ? target > zTop + zt : target < zBot - zt)
+            ? "Ziel hinter der Zone" : "Ziel vor der Zone";
+        }
+        if (!isNaN(slP)) {
+          if (inZone(slP)) zoneSl = "SL in der Zone";
+          else zoneSl = (Math.min(ent, slP) < zBot - zt && Math.max(ent, slP) > zTop + zt)
+            ? "SL hinter der Zone" : "Zone nicht beim SL";
+        }
+      }
       out.push({
         sel: true, id: 't' + b.t + '_' + (out.length),
         sym, variante: job.name, ts: b.t, datum: trDate(b.t), uhrzeit: trClock(b.t), wtag: TR_WD[d0.getDay()],
@@ -4545,7 +4601,9 @@ function trEvaluate(raw, opt) {
         tpHas1, tpP1, tpR1,
         tpHas2, tpP2, tpR2,
         dauerMin: Math.max(0, Math.round((endT - b.t) / 60000)),
-        zonePenPct, zoneThrough, zoneHi: zoneHiVal, zoneLo: zoneLoVal, boxSweep,
+        zonePenPct, zoneThrough, zoneHi: zHi, zoneLo: zLo, boxSweep,
+        zonePos, zoneDir, zoneTgt, zoneSl,
+        zoneDistPts, zoneDistPct, zoneInPct, zoneHPts: isNaN(zH) ? NaN : toPts(zH),
         _d: { mfe, mae: maeBeforePeak, maeAll: mae, tgt: tgtDist, tp1: tp1D, tp2: tp2D }
       });
       trSetR(out[out.length - 1], slDist, toPts);
@@ -4579,7 +4637,8 @@ function trEvaluate(raw, opt) {
 // Felder, mit denen gerechnet wird. JSON kennt kein NaN — beim Export wird
 // daraus null, beim Einlesen muss es zurück zu NaN, sonst zählt ein fehlender
 // Wert als 0. Text in diesen Feldern wird ebenfalls zu einer Zahl.
-const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct', 'bhi', 'blo',
+const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct',
+  'zoneDistPts', 'zoneDistPct', 'zoneInPct', 'zoneHPts', 'bhi', 'blo',
   'boxPts', 'tiefe', 'ent', 'sl', 'slPts', 'wickPts', 'mfePts', 'mfeR', 'mfeMin', 'maePts',
   'maeR', 'maeAllPts', 'maeAllR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
   'tpP2', 'tp2R', 'tp2RR', 'ts', 'stunde', 'brk'];
@@ -4669,6 +4728,11 @@ const TR_DIMS = [
   ["Symbol",             t => t.sym || null],
   ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
   ["Zone durchgedippt",  t => t.zoneThrough === "JA" ? "durchgedippt" : t.zoneThrough === "nein" ? "nicht durchgedippt" : null],
+  ["Lage zur Zone",      t => t.zonePos === "in" ? "in der Zone" : t.zonePos === "ueber" ? "oberhalb der Zone"
+                            : t.zonePos === "unter" ? "unterhalb der Zone" : null],
+  ["Richtung zur Zone",  t => t.zoneDir || null],
+  ["Ziel zur Zone",      t => t.zoneTgt || null],
+  ["SL zur Zone",        t => t.zoneSl || null],
   ["Stand",              t => t.offen === "JA" ? "läuft noch" : t.offen === "nein" ? "abgeschlossen" : null],
   ["Risiko",             t => t.slSrc === 'gesetzt' ? "SL stand fest" : t.slSrc === 'SL-Distanz' ? "SL-Distanz vom Indikator"
                             : t.slSrc === 'geschätzt' ? "Risiko geschätzt" : t.slSrc === 'fehlt' ? "ohne Risiko" : null],
@@ -6152,8 +6216,17 @@ const TR_COLS = [
   ["Bruch #", t => isNaN(t.brk) ? "" : t.brk], ["Gegen Trend", t => t.gegenTrend],
   ["Event", t => t.evZeit], ["Touch→Event", t => trFi(t.touchEvMin)], ["Warten (Min)", t => trFi(t.warteMin)],
   ["Zone High", t => trNum(t.zoneHi)], ["Zone Low", t => trNum(t.zoneLo)],
+  ["Zonenhöhe (Pkt)", t => trFi(t.zoneHPts)],
   ["Eintauchtiefe", t => trPct1(t.zonePenPct)],
   ["durchgedippt", t => t.zoneThrough],
+  ["Lage zur Zone", t => t.zonePos === "in" ? "in der Zone" : t.zonePos === "ueber" ? "oberhalb"
+                       : t.zonePos === "unter" ? "unterhalb" : ""],
+  ["Abstand Zone (Pkt)", t => trFi(t.zoneDistPts)],
+  ["Abstand Zone (%)", t => trPct1(t.zoneDistPct)],
+  ["Höhe in Zone (%)", t => trPct1(t.zoneInPct)],
+  ["Richtung zur Zone", t => t.zoneDir || ""],
+  ["Ziel zur Zone", t => t.zoneTgt || ""],
+  ["SL zur Zone", t => t.zoneSl || ""],
   ["Box High", t => trNum(t.bhi)], ["Box Low", t => trNum(t.blo)],
   ["Box (Pkt)", t => trFi(t.boxPts)], ["Entry-Tiefe", t => trPct1(t.tiefe)],
   ["Box ⟩ Zone", t => t.boxSweep],
