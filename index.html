@@ -4235,11 +4235,17 @@ const trMed = arr => {
   const m = Math.floor(a.length / 2);
   return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
 };
+// TradingView nennt die Datei „OANDA_GBPUSD_5-44.csv“: Börse, Symbol, dann
+// Zeiteinheit und eine laufende Nummer. Gesucht ist der letzte Teil, der
+// wirklich nach einem Symbol aussieht — sonst stünde „5-44“ als Währungspaar
+// in der Auswertung.
 const trSymFromFile = name => {
-  let base = name.replace(/\.csv$/i, "").split(",")[0].trim();
+  let base = name.replace(/\.(csv|json)$/i, "").split(",")[0].trim();
   base = base.replace(/\s*\(\d+\)\s*$/, "");
-  const parts = base.split(/[_:]/);
-  return parts[parts.length - 1].trim();
+  const parts = base.split(/[_:]/).map(p => p.trim()).filter(Boolean);
+  const looksSym = p => /^[A-Za-z][A-Za-z0-9.]*$/.test(p) && /[A-Za-z]{2,}/.test(p);
+  for (let i = parts.length - 1; i >= 0; i--) if (looksSym(parts[i])) return parts[i];
+  return parts.length ? parts[parts.length - 1] : "";
 };
 
 // Wertet eine TradingView-CSV aus: findet jede Fill-Zeile, ordnet ihr das
@@ -4377,7 +4383,13 @@ function trEvaluate(raw, opt) {
   }
   const toPts = d => Math.round(d / ps);
   const tol = ps * 0.6;
-  const cutMs = opt.cut ? new Date(opt.cut).getTime() : Infinity;
+  // „Simulation bis“ gehört zur Strategie und bleibt beim Einlesen stehen.
+  // Stammt es aus einer früheren Datei, liegt es oft vor diesen Daten — dann
+  // wäre jede Kerze abgeschnitten und die Auswertung käme leer heraus. In dem
+  // Fall wird der Schnitt übergangen und in der Meldung genannt.
+  let cutMs = opt.cut ? new Date(opt.cut).getTime() : Infinity;
+  let cutIgnored = false;
+  if (isFinite(cutMs) && bars.length && cutMs < bars[0].t) { cutMs = Infinity; cutIgnored = true; }
   const sym = opt.symbol || "";
 
   // Zonen-Eintauchtiefe: vom Touch bis zum ersten Event, in % der Zonenhöhe
@@ -4644,7 +4656,10 @@ function trEvaluate(raw, opt) {
       if (evT !== null) doneFills.push({ evT, t: b.t });
     }
   }
-  if (!out.length) return { err: "Keine Fill-Zeilen (Fill = 1) im Datensatz gefunden." };
+  if (!out.length) return { err: "Keine Fill-Zeilen (Fill = 1) im Datensatz gefunden."
+    + (isFinite(cutMs)
+        ? ` „Simulation bis“ steht auf ${trDate(cutMs)} ${trClock(cutMs)} — bis dahin gibt es keinen Einstieg.`
+        : "") };
   // Wo gar nichts zum Messen da war, tritt der Median der übrigen Distanzen
   // ein. Gibt es auch den nicht, bleibt der Einstieg ohne R — seine Bewegung
   // in Punkten steht trotzdem in der Tabelle.
@@ -4663,7 +4678,7 @@ function trEvaluate(raw, opt) {
     }
     delete t._d;
   });
-  return { trades: out, ps, est, noSl, limits,
+  return { trades: out, ps, est, noSl, limits, cutIgnored,
            offen: out.filter(t => t.offen === 'JA').length };
 }
 
@@ -6493,11 +6508,14 @@ async function trRun() {
   trMeta.limits = lim;
   // Kontoeinstellungen und Ziel-RR gehören zur Strategie, nicht zur Datei —
   // die bleiben beim Einlesen einer neuen CSV stehen.
-  trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: opt.cut, at: Date.now() };
+  // Ein übergangener Schnitt wird auch aus dem Feld genommen — sonst stünde
+  // dort weiter ein Datum, das nichts mehr bewirkt.
+  trMeta = { ...trMeta, symbol: opt.symbol, ps: res.ps, cut: res.cutIgnored ? '' : opt.cut, at: Date.now() };
   trMsg = { ok: true, text: `${trEnt(res.trades.length)} ausgewertet · Sammlung ${trTrades.length} · Punktgröße ${res.ps}`
     + (res.est ? ` · bei ${res.est} fehlte der SL, dafür zählt das mittlere Risiko` : '')
     + (res.noSl ? ` · ${res.noSl} ganz ohne Risiko — nur in Punkten messbar` : '')
-    + (res.offen ? ` · ${res.offen} ${res.offen === 1 ? 'läuft' : 'laufen'} noch` : '') };
+    + (res.offen ? ` · ${res.offen} ${res.offen === 1 ? 'läuft' : 'laufen'} noch` : '')
+    + (res.cutIgnored ? ` · „Simulation bis“ lag vor diesen Daten und wurde übergangen` : '') };
   trRaw = '';
   await persistTrades();
   renderTrades();
