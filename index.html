@@ -2108,6 +2108,25 @@
     }
     .tr-i:hover { border-color: var(--muted); color: var(--muted); }
 
+    /* Diagramm je Bedingung */
+    .tr-pswitch { display: flex; justify-content: flex-end; margin: -4px 0 10px; }
+    .tr-cwrap { overflow-x: auto; margin-top: 2px; }
+    .tr-chart { display: block; height: auto; overflow: visible; }
+    .tr-cwrap::-webkit-scrollbar { height: 6px; }
+    .tr-cwrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+    .tr-chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+    .tr-chart .zero { stroke: var(--line); stroke-width: 1.2; }
+    .tr-chart .ax { fill: var(--faint); font-size: 8.5px; font-variant-numeric: tabular-nums; }
+    .tr-chart .ax.lbl { font-size: 8px; letter-spacing: .04em; }
+    .tr-cn { font-size: 8.5px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+    .tr-cn.in { fill: var(--on-ink); }
+    .tr-cx { font-size: 8.5px; fill: var(--muted); }
+    .tr-cx.on { fill: var(--c3); font-weight: 600; }
+    .tr-cslot { cursor: pointer; }
+    .tr-cslot:hover rect:first-child { fill: var(--line-soft); }
+    .tr-csel { fill: color-mix(in srgb, var(--c3) 9%, transparent);
+      stroke: var(--c3); stroke-width: 1; stroke-opacity: .5; }
+
     /* Bedingungen ausprobieren: ein Block je Bedingung, nebeneinander */
     .tr-pall {
       display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 13px;
@@ -5339,6 +5358,8 @@ const TR_VAR_MIN = 3;   // unter so wenigen Fills wird nichts gekürt
 // allen angetippten Bedingungen genügen. Innerhalb einer Bedingung gilt oder,
 // zwischen den Bedingungen und.
 const trQ = v => esc(JSON.stringify(v));
+const trPickView = () => trMeta.pickView === 'diagramm' ? 'diagramm' : 'tabelle';
+async function trPickSetView(v) { trMeta.pickView = v; await persistTrades(); renderTrades(); }
 const trPickSel = () => (trMeta.pick && typeof trMeta.pick === 'object') ? trMeta.pick : {};
 const trPickAny = () => Object.values(trPickSel()).some(v => v && v.length);
 function trPickHas(t, skip) {
@@ -5374,6 +5395,97 @@ function trPickStats(rows, goalR) {
     exp: outs.length ? outs.reduce((a, b) => a + b, 0) / outs.length : NaN };
 }
 
+// ── Bedingung als Diagramm ────────────────────────────────────────────────
+// Balken: die Erwartung je Trade, nach oben positiv, nach unten negativ, mit
+// der Zahl der Trades im Balken. Darunter, mit eigener Grundlinie, die
+// Trefferquote als Punkt je Möglichkeit.
+//
+// Bewusst zwei getrennte Felder statt einer zweiten Achse im selben Bild: über
+// einer gemeinsamen Grundlinie sähe ein Punkt über einem Balken nach Ursache
+// aus, obwohl beide Maße nichts miteinander zu tun haben — der Abstand
+// zwischen ihnen wäre reine Willkür der Skalen.
+function trPickChart(label, items) {
+  const n = items.length;
+  if (!n) return '';
+  const SW = n > 14 ? 34 : 46, BW = Math.min(28, SW - 14);
+  // Lange Namen nebeneinander überlappen; dann stehen sie schräg.
+  const roh = k => String(k === TR_NONE ? TR_NONE_LBL : k);
+  const schraeg = items.some(i => roh(i.key).length > Math.floor(SW / 5));
+  // Schräge Beschriftungen laufen nach links unten aus. Wie weit, hängt am
+  // längsten Namen — so viel Platz bekommt die linke Seite, sonst ragt die
+  // erste Beschriftung aus dem Block heraus.
+  const kurz = s => s.length > 16 ? s.slice(0, 15) + '…' : s;
+  const lang = Math.max(...items.map(i => kurz(roh(i.key)).length));
+  const PL = schraeg ? Math.max(40, Math.round(lang * 4.3 * 0.79) + 12) : 36;
+  const PR = 34, PT = 12, HB = 84, GAP = 10, HD = 38;
+  const HX = schraeg ? Math.round(lang * 4.3 * 0.62) + 18 : 28;
+  const W = PL + n * SW + PR, H = PT + HB + GAP + HD + HX;
+  const exps = items.map(i => i.st.exp).filter(v => !isNaN(v));
+  let lo = Math.min(0, ...exps), hi = Math.max(0, ...exps);
+  if (hi === lo) { hi += 0.5; lo -= 0.5; }
+  const pad = (hi - lo) * .12; lo -= pad; hi += pad;
+  const Y = v => PT + HB * (hi - v) / (hi - lo);
+  const y0 = Y(0);
+  const DT = PT + HB + GAP;                       // Oberkante des Quotenfelds
+  const YQ = q => DT + HD * (1 - Math.min(100, Math.max(0, q)) / 100);
+  const X = i => PL + i * SW + SW / 2;
+  const ticks = [];
+  const stp = trStep((hi - lo) / 3);
+  for (let v = Math.ceil(lo / stp) * stp; v <= hi; v += stp) if (Math.abs(v) > 1e-9) ticks.push(v);
+
+  const balken = items.map((it, i) => {
+    const e = it.st.exp;
+    if (isNaN(e)) return '';
+    const y = Y(e), x = X(i) - BW / 2;
+    const h = Math.abs(y - y0), oben = e >= 0;
+    const r = Math.min(4, h, BW / 2);
+    // Abgerundet nur am äußeren Ende, der Fuß sitzt auf der Nulllinie
+    const d = oben
+      ? `M${x} ${y0} V${y + r} a${r} ${r} 0 0 1 ${r} ${-r} h${BW - 2 * r} a${r} ${r} 0 0 1 ${r} ${r} V${y0} Z`
+      : `M${x} ${y0} V${y - r} a${r} ${r} 0 0 0 ${r} ${r} h${BW - 2 * r} a${r} ${r} 0 0 0 ${r} ${-r} V${y0} Z`;
+    const col = e >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)';
+    const innen = h >= 17;
+    const ty = oben ? (innen ? y + 11 : y - 4) : (innen ? y - 4 : y + 11);
+    return `<path d="${d}" fill="${col}"/>
+      <text class="tr-cn ${innen ? 'in' : ''}" x="${X(i)}" y="${ty.toFixed(1)}" text-anchor="middle">${it.st.n}</text>`;
+  }).join('');
+
+  const punkte = items.map((it, i) => isNaN(it.st.quote) ? ''
+    : `<circle cx="${X(i)}" cy="${YQ(it.st.quote).toFixed(1)}" r="4.5"
+        fill="var(--muted)" stroke="var(--surface)" stroke-width="2"/>`).join('');
+
+  const felder = items.map((it, i) => `<g class="tr-cslot ${it.act ? 'on' : ''}"
+      onclick="trPickTap(${trQ(label)}, ${trQ(it.key)})">
+      <rect x="${PL + i * SW}" y="${PT - 6}" width="${SW}" height="${H - PT - HX + 10}" fill="transparent"/>
+      ${it.act ? `<rect class="tr-csel" x="${(PL + i * SW + 2).toFixed(1)}" y="${PT - 6}"
+        width="${SW - 4}" height="${H - PT - HX + 10}" rx="7"/>` : ''}
+      <title>${esc(it.key === TR_NONE ? TR_NONE_LBL : it.key)}: ${isNaN(it.st.exp) ? '—' : trSign(it.st.exp) + ' R je Trade'} · ${
+        isNaN(it.st.quote) ? '—' : trFi(it.st.quote) + ' % Treffer'} · ${it.st.n} Trades</title>
+    </g>`).join('');
+
+  return `<div class="tr-cwrap"><svg class="tr-chart" viewBox="0 0 ${W} ${H}" style="width:${W}px"
+      role="img" aria-label="${esc(label)}: Erwartung je Trade und Trefferquote je Möglichkeit">
+    ${ticks.map(v => `<line class="grid" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
+      <text class="ax" x="${PL - 5}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${trSign(v)}</text>`).join('')}
+    <text class="ax lbl" x="0" y="${(PT - 3).toFixed(1)}">R</text>
+    ${felder}
+    ${balken}
+    <line class="zero" x1="${PL - 4}" y1="${y0.toFixed(1)}" x2="${W - PR}" y2="${y0.toFixed(1)}"/>
+    <line class="grid" x1="${PL}" y1="${(DT + HD).toFixed(1)}" x2="${W - PR}" y2="${(DT + HD).toFixed(1)}"/>
+    <line class="grid" x1="${PL}" y1="${YQ(50).toFixed(1)}" x2="${W - PR}" y2="${YQ(50).toFixed(1)}" stroke-dasharray="3 4"/>
+    <text class="ax" x="${W - PR + 5}" y="${(YQ(100) + 3).toFixed(1)}">100 %</text>
+    <text class="ax" x="${W - PR + 5}" y="${(YQ(50) + 3).toFixed(1)}">50</text>
+    <text class="ax" x="${W - PR + 5}" y="${(YQ(0) + 3).toFixed(1)}">0</text>
+    <text class="ax lbl" x="0" y="${(DT + 8).toFixed(1)}">Treffer</text>
+    ${punkte}
+    ${items.map((it, i) => schraeg
+      ? `<text class="tr-cx ${it.act ? 'on' : ''}" text-anchor="end"
+          transform="translate(${(X(i) + 4).toFixed(1)} ${H - HX + 14}) rotate(-38)">${esc(kurz(roh(it.key)))}</text>`
+      : `<text class="tr-cx ${it.act ? 'on' : ''}" x="${X(i)}" y="${H - HX + 12}"
+          text-anchor="middle">${esc(kurz(roh(it.key)))}</text>`).join('')}
+  </svg></div>`;
+}
+
 function trPickTable(list) {
   const goalR = trGoalR();
   const base = trPickStats(list, goalR);
@@ -5396,14 +5508,16 @@ function trPickTable(list) {
     if (keys.length < 2) return '';
     keys.sort(trValCmp(label));
     const on = sel[label] || [];
+    const items = keys.map(k => ({ key: k, st: trPickStats(by[k], goalR), act: on.includes(k) }));
+    const kopf = `<div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>`;
+    if (trPickView() === 'diagramm')
+      return `<div class="tr-pblock ${on.length ? 'on' : ''}">${kopf}${trPickChart(label, items)}</div>`;
     return `<div class="tr-pblock ${on.length ? 'on' : ''}">
-      <div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
+      ${kopf}
       <table class="tr-tbl tr-ptbl">
         <thead><tr><th></th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
           <th title="Erwartungswert: durchschnittliches Ergebnis je Trade in R">Erwartung</th><th>Trades</th></tr></thead>
-        <tbody>${keys.map(k => {
-          const st = trPickStats(by[k], goalR);
-          const act = on.includes(k);
+        <tbody>${items.map(({ key: k, st, act }) => {
           const dQ = st.quote - ref.quote, dE = st.exp - ref.exp;
           return `<tr class="tr-pval ${act ? 'on' : ''}" onclick="trPickTap(${trQ(label)}, ${trQ(k)})">
             <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${esc(k === TR_NONE ? TR_NONE_LBL : k)}</td>
@@ -5425,6 +5539,12 @@ function trPickTable(list) {
         im Schnitt einbringt, in R.
         ${aktiv ? 'Jeder Block rechnet unter deinen <b>übrigen</b> Bedingungen — die kleine Zahl daneben sagt, was die Möglichkeit gegenüber dem Stand ohne sie noch ändert.'
                 : 'Die kleine Zahl daneben ist der Abstand zu allen Einstiegen.'}</div>
+      <div class="tr-pswitch">
+        <div class="tr-seg">
+          <button class="${trPickView() === 'tabelle' ? 'on' : ''}" onclick="trPickSetView('tabelle')">Tabelle</button>
+          <button class="${trPickView() === 'diagramm' ? 'on' : ''}" onclick="trPickSetView('diagramm')">Diagramme</button>
+        </div>
+      </div>
       <div class="tr-pall">alle Einstiege<b>${isNaN(base.quote) ? '—' : trFi(base.quote) + ' % Treffer'}</b>
         <b>${isNaN(base.exp) ? '—' : trSign(base.exp) + ' R je Trade'}</b>
         <b>${base.n} Trades</b>
