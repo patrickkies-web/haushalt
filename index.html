@@ -4504,8 +4504,10 @@ function trEvaluate(raw, opt) {
         if (df.evT === evT && df.t < b.t && (firstFillT === null || df.t < firstFillT)) firstFillT = df.t;
       const preHitLvl = lvl => {
         if (evT === null) return "";
-        if (firstFillT === null) return "nein";
+        // Gibt es das Niveau gar nicht, hat die Frage kein Subjekt — auch beim
+        // ersten Fill eines Events nicht, der sonst pauschal „nein“ bekäme.
         if (isNaN(lvl)) return "";
+        if (firstFillT === null) return "nein";
         for (let j = 0; j < i; j++) {
           const x = bars[j];
           if (x.t < firstFillT || x.t >= b.t) continue;
@@ -4828,6 +4830,14 @@ function trGroups(list, keyFn) {
 // dazukommt, von sich aus mit.
 const TR_NONE = '\u0000leer';
 const TR_NONE_LBL = 'ohne Angabe';
+// Leer heißt nicht „unbekannt“, sondern: für diese Einstiege gibt es den Wert
+// nicht. Entweder weil die Frage für die Einstiegsart keinen Sinn hat (Extreme
+// und Volume gehören zu keinem Kies-Limit), weil der Indikator das Niveau nicht
+// ausgegeben hat (z. B. kein zweites Ziel), oder weil der Einstieg aus einer
+// Auswertung stammt, die dieses Merkmal noch nicht kannte.
+const TR_NONE_HINT = 'Für diese Einstiege gibt es den Wert nicht: die Frage gilt für ihre '
+  + 'Einstiegsart nicht, der Indikator hat das Niveau nicht ausgegeben, oder sie wurden '
+  + 'ausgewertet, bevor es dieses Merkmal gab.';
 const TR_FILT_TOP = ['Einstiegsart', 'Symbol', 'Richtung', 'Session', 'Wochentag'];
 
 const trDimVal = (fn, t) => {
@@ -4911,7 +4921,8 @@ function trFilterCard() {
         <div class="tr-fhead"><b>${esc(d.l)}</b><span>
           <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, true)">alle</button>
           <button class="tr-flink" onclick="trFiltAll(${q(d.l)}, false)">keine</button></span></div>
-        <div class="tr-fvals">${d.vals.map(v => `<label class="tr-fchk ${v.on ? '' : 'off'}">
+        <div class="tr-fvals">${d.vals.map(v => `<label class="tr-fchk ${v.on ? '' : 'off'}"${
+          v.val === TR_NONE ? ` title="${esc(TR_NONE_HINT)}"` : ''}>
           <input type="checkbox" ${v.on ? 'checked' : ''} onchange="trFilt(${q(d.l)}, ${q(v.val)}, this.checked)">
           <span>${esc(v.val === TR_NONE ? TR_NONE_LBL : v.val)}</span><i>${v.n}</i></label>`).join('')}</div>
       </div>`).join('')}
