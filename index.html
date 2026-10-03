@@ -2108,6 +2108,17 @@
     }
     .tr-i:hover { border-color: var(--muted); color: var(--muted); }
 
+    /* Eigene Zeitfenster */
+    .tr-pwin { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); }
+    .tr-pwin input {
+      width: 42px; font-family: inherit; font-size: 11.5px; color: var(--ink);
+      text-align: center; background: transparent; border: none;
+      border-bottom: 1px solid var(--line); padding: 1px 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .tr-pwin input:focus { outline: none; border-bottom-color: var(--c3); }
+    .tr-pwins { display: flex; gap: 16px; flex-wrap: wrap; margin: 2px 0 6px; font-size: 11.5px; }
+
     /* Diagramm je Bedingung */
     .tr-pswitch { display: flex; justify-content: flex-end; margin: -4px 0 10px; }
     .tr-cwrap { overflow-x: auto; margin-top: 2px; }
@@ -4907,6 +4918,7 @@ const TR_DIM_INFO = {
   "Richtung": "Long oder Short.",
   "Session": "In welcher Handelszeit der Einstieg gefüllt wurde.",
   "Einstiegszeit": "Zu welcher Tageszeit das Limit gefüllt wurde, in halben Stunden. Es zählt die Uhrzeit, die beim Einlesen der Datei galt.",
+  "Zeitfenster": "Zwei Zeiträume zum selbst Eintragen. Von-Zeit zählt mit, Bis-Zeit nicht mehr; ein Fenster darf auch über Mitternacht gehen. Einstiege außerhalb beider Fenster bleiben ohne Wert.",
   "Wochentag": "An welchem Wochentag der Einstieg gefüllt wurde.",
   "Symbol": "Das Währungspaar, aus dessen Datei der Einstieg stammt.",
   "Gegen Trend": "Ob der Bruch, aus dem der Einstieg entstand, gegen die laufende Richtung ging oder mit ihr.",
@@ -4923,6 +4935,59 @@ const TR_DIM_INFO = {
   "Wartezeit": "Wie viel Zeit zwischen dem Event und dem Füllen des Limits vergangen ist — in halben Stunden bis fünf Stunden, darüber eine Stufe."
 };
 const trDimInfo = l => TR_DIM_INFO[l] ? `<span class="tr-i" title="${esc(TR_DIM_INFO[l])}">i</span>` : '';
+
+// ── Zwei eigene Zeitfenster ───────────────────────────────────────────────
+// Die halben Stunden beantworten „wann ungefähr". Für „von wann bis wann"
+// gibt es zwei Fenster zum Eintragen, die sich wie jede andere Möglichkeit
+// anwählen lassen.
+const TR_WIN_DEF = [{ von: "08:00", bis: "12:00" }, { von: "14:00", bis: "18:00" }];
+const trWins = () => (Array.isArray(trMeta.wins) && trMeta.wins.length === 2)
+  ? trMeta.wins : TR_WIN_DEF.map(w => ({ ...w }));
+const trWinLbl = w => w.von + "–" + w.bis;
+const trMin = hhmm => {
+  const m = String(hhmm || "").match(/^(\d{1,2})[:.]?(\d{2})?$/);
+  if (!m) return NaN;
+  const h = +m[1], mi = m[2] ? +m[2] : 0;
+  return (h >= 0 && h <= 24 && mi >= 0 && mi < 60) ? (h % 24) * 60 + mi : NaN;
+};
+const trHHMM = min => trP2(Math.floor(min / 60) % 24) + ":" + trP2(min % 60);
+// Minute des Tages eines Einstiegs — aus der gespeicherten Uhrzeit, sonst
+// aus dem Zeitstempel.
+function trTradeMin(t) {
+  const m = String(t.uhrzeit || "").match(/^(\d{1,2}):(\d{2})/);
+  if (m) return +m[1] * 60 + +m[2];
+  if (!isNaN(t.ts)) { const d = new Date(t.ts); return d.getHours() * 60 + d.getMinutes(); }
+  return NaN;
+}
+// In welchem Fenster liegt der Einstieg? Fenster über Mitternacht zählen
+// von abends bis morgens.
+function trWinOf(t) {
+  const x = trTradeMin(t);
+  if (isNaN(x)) return null;
+  for (const w of trWins()) {
+    const a = trMin(w.von), b = trMin(w.bis);
+    if (isNaN(a) || isNaN(b) || a === b) continue;
+    if (a < b ? (x >= a && x < b) : (x >= a || x < b)) return trWinLbl(w);
+  }
+  return null;
+}
+// Beim Ändern wandert eine getroffene Auswahl auf die neue Beschriftung mit,
+// sonst zeigte sie ins Leere.
+async function trWinSet(i, feld, wert) {
+  const ws = trWins().map(w => ({ ...w }));
+  const alt = trWinLbl(ws[i]);
+  const min = trMin(wert);
+  if (!isNaN(min)) ws[i][feld] = trHHMM(min);
+  trMeta.wins = ws;
+  const neu = trWinLbl(ws[i]);
+  const sel = trPickSel();
+  if (sel["Zeitfenster"] && alt !== neu) {
+    const v = sel["Zeitfenster"].map(x => x === alt ? neu : x).filter((x, k, a) => a.indexOf(x) === k);
+    trMeta.pick = { ...sel, Zeitfenster: v };
+  }
+  await persistTrades();
+  renderTrades();
+}
 
 // Einstiegszeit in halben Stunden. Gelesen wird die gespeicherte Uhrzeit des
 // Einstiegs, nicht der Zeitstempel — sonst verschöbe sich alles, wenn die
@@ -4948,6 +5013,7 @@ const TR_WARTE = ["bis 30 Min.", "30 bis 60 Min.", "1 bis 1½ Std.", "1½ bis 2 
 const TR_DIM_ORDER = {
   "Wartezeit": TR_WARTE,
   "Einstiegszeit": TR_SLOTS,
+  "Zeitfenster": [],
   "Abstand zur Zone": ["im Bereich der Zone", "bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"],
   "Eintauchtiefe": ["bis halb hinein", "halb bis ganz", "durch die Zone"],
   "Lage zur Zone": ["in der Zone", "oberhalb der Zone", "unterhalb der Zone"],
@@ -4957,7 +5023,7 @@ const TR_DIM_ORDER = {
 // Vergleich für die Werte einer Bedingung: feste Reihenfolge, wo es eine gibt,
 // sonst nach der Zahl im Namen, sonst alphabetisch. „ohne Angabe" immer zuletzt.
 function trValCmp(label) {
-  const o = TR_DIM_ORDER[label];
+  const o = label === "Zeitfenster" ? trWins().map(trWinLbl) : TR_DIM_ORDER[label];
   const rk = k => { const i = o ? o.indexOf(k) : -1; return i < 0 ? 1e6 : i; };
   const num = k => { const m = String(k).match(/-?\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(',', '.')) : NaN; };
   return (a, b) => {
@@ -4978,6 +5044,7 @@ const TR_DIMS = [
   ["Richtung",           t => t.dir === 1 ? "Long" : t.dir === -1 ? "Short" : null],
   ["Session",            t => t.session],
   ["Einstiegszeit",      t => trSlot(t)],
+  ["Zeitfenster",        t => trWinOf(t)],
   ["Wochentag",          t => t.wtag],
   ["Symbol",             t => t.sym || null],
   ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
@@ -5504,23 +5571,36 @@ function trPickTable(list) {
       const v = (raw === null || raw === undefined || raw === '') ? TR_NONE : String(raw);
       (by[v] = by[v] || []).push(t);
     });
+    const istWin = label === "Zeitfenster";
     const keys = Object.keys(by);
-    if (keys.length < 2) return '';
+    if (!istWin && keys.length < 2) return '';
     keys.sort(trValCmp(label));
     const on = sel[label] || [];
-    const items = keys.map(k => ({ key: k, st: trPickStats(by[k], goalR), act: on.includes(k) }));
+    // Die beiden Fenster stehen immer da — auch leere, sonst ließen sie sich
+    // nicht mehr ändern.
+    const items = istWin
+      ? trWins().map((w, wi) => { const k = trWinLbl(w);
+          return { key: k, win: wi, w, st: trPickStats(by[k] || [], goalR), act: on.includes(k) }; })
+      : keys.map(k => ({ key: k, st: trPickStats(by[k], goalR), act: on.includes(k) }));
+    const felder = w => `<span class="tr-pwin" onclick="event.stopPropagation()">
+      <input type="text" inputmode="numeric" value="${esc(w.w.von)}" aria-label="von"
+        onchange="trWinSet(${w.win}, 'von', this.value)">–<input type="text" inputmode="numeric"
+        value="${esc(w.w.bis)}" aria-label="bis" onchange="trWinSet(${w.win}, 'bis', this.value)"></span>`;
     const kopf = `<div class="tr-phead">${esc(label)}${trDimInfo(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>`;
     if (trPickView() === 'diagramm')
-      return `<div class="tr-pblock ${on.length ? 'on' : ''}">${kopf}${trPickChart(label, items)}</div>`;
+      return `<div class="tr-pblock ${on.length ? 'on' : ''}">${kopf}${
+        istWin ? `<div class="tr-pwins">${items.map(felder).join('')}</div>` : ''}${trPickChart(label, items)}</div>`;
     return `<div class="tr-pblock ${on.length ? 'on' : ''}">
       ${kopf}
       <table class="tr-tbl tr-ptbl">
         <thead><tr><th></th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
           <th title="Erwartungswert: durchschnittliches Ergebnis je Trade in R">Erwartung</th><th>Trades</th></tr></thead>
-        <tbody>${items.map(({ key: k, st, act }) => {
+        <tbody>${items.map(it => {
+          const { key: k, st, act } = it;
           const dQ = st.quote - ref.quote, dE = st.exp - ref.exp;
           return `<tr class="tr-pval ${act ? 'on' : ''}" onclick="trPickTap(${trQ(label)}, ${trQ(k)})">
-            <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${esc(k === TR_NONE ? TR_NONE_LBL : k)}</td>
+            <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${
+              it.win === undefined ? esc(k === TR_NONE ? TR_NONE_LBL : k) : felder(it)}</td>
             <td class="num">${isNaN(st.quote) ? '—' : trFi(st.quote) + ' %'}
               <i class="${dQ >= 0 ? 'pos' : 'neg'}">${isNaN(dQ) ? '' : (dQ >= 0 ? '+' : '−') + trFi(Math.abs(dQ))}</i></td>
             <td class="num">${isNaN(st.exp) ? '—' : trSign(st.exp)}
