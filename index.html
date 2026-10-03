@@ -2063,7 +2063,7 @@
     .tr-famh span.neg { color: var(--ch-bad); }
     .tr-famh i { font-style: normal; font-size: 11.5px; font-weight: 500;
       color: var(--muted); margin-left: 6px; }
-    .tr-fam .tr-svg { height: 150px; width: 100%; }
+
 
     .tr-famtbl { font-size: 12px; margin-top: 10px; }
     .tr-famtbl th { font-size: 10px; line-height: 1.25; white-space: nowrap; }
@@ -2090,28 +2090,39 @@
     .tr-flegend i.dash { background: repeating-linear-gradient(90deg,
       var(--muted) 0 4px, transparent 4px 8px); height: 2px; }
 
-    /* Tabelle zum Ausprobieren */
-    .tr-ptbl td, .tr-ptbl th { vertical-align: middle; }
-    .tr-ptbl th { font-size: 10.5px; line-height: 1.3; }
-    .tr-pdim td {
-      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      color: var(--faint); padding-top: 14px; border-bottom: none;
+    /* Bedingungen ausprobieren: ein Block je Bedingung, nebeneinander */
+    .tr-pall {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+      font-size: 12.5px; color: var(--muted); margin: 0 0 14px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--line-soft);
     }
-    .tr-pdim i { font-style: normal; text-transform: none; letter-spacing: 0;
+    .tr-pall b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tr-pall .pick { color: var(--c3); font-weight: 600; }
+    .tr-pall .pick .tr-flink { color: var(--muted); font-weight: 500; }
+
+    .tr-pgrid { display: grid; gap: 18px 30px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .tr-pblock { min-width: 0; }
+    .tr-phead {
+      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      color: var(--faint); margin-bottom: 4px;
+    }
+    .tr-phead i { font-style: normal; text-transform: none; letter-spacing: 0;
       font-weight: 600; color: var(--c3); margin-left: 8px; }
-    .tr-pbase td { font-weight: 600; color: var(--muted); }
+    .tr-ptbl { font-size: 12px; }
+    .tr-ptbl th { font-size: 10px; white-space: nowrap; }
+    .tr-ptbl td { white-space: nowrap; }
     .tr-pval { cursor: pointer; }
     .tr-pval:hover td { background: var(--line-soft); }
     .tr-pval.on td { background: color-mix(in srgb, var(--c3) 12%, transparent); }
     .tr-pname { white-space: normal; }
     .tr-pbox {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 15px; height: 15px; margin-right: 8px; border-radius: 5px;
+      width: 15px; height: 15px; margin-right: 7px; border-radius: 5px;
       border: 1.5px solid var(--line); font-size: 10px; color: var(--on-ink);
-      vertical-align: -3px;
+      vertical-align: -3px; flex-shrink: 0;
     }
     .tr-pval.on .tr-pbox { background: var(--c3); border-color: var(--c3); }
-    .tr-ptbl td.num i { font-style: normal; font-size: 10.5px; margin-left: 5px; }
+    .tr-ptbl td.num i { font-style: normal; font-size: 10.5px; margin-left: 4px; }
     .tr-ptbl td.num i.pos { color: var(--ch-good); }
     .tr-ptbl td.num i.neg { color: var(--ch-bad); }
 
@@ -2153,7 +2164,7 @@
 
     /* Ein Bereich je Einstiegsfamilie: zugeklappt zeigt die Kopfzeile die
        Eckwerte, aufgeklappt stehen die drei Karten nebeneinander. */
-    .tr-band, .tr-combo, .tr-famcard { margin-bottom: 14px; }
+    .tr-band, .tr-combo, .tr-famcard, .tr-pickcard { margin-bottom: 14px; }
     .tr-band > summary {
       cursor: pointer; list-style: none; padding: 14px 36px 14px 16px; position: relative;
       background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -2167,7 +2178,7 @@
     .tr-band[open] > summary::after { content: "⌄"; }
 
     @media (min-width: 1000px) {
-      .tr-band, .tr-combo, .tr-famcard {
+      .tr-band, .tr-combo, .tr-famcard, .tr-pickcard {
         width: min(1400px, 94vw); margin-left: 50%; transform: translateX(-50%);
       }
       .tr-broad { grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); }
@@ -5294,7 +5305,9 @@ function trPickTable(list) {
   const goalR = trGoalR();
   const base = trPickStats(list, goalR);
   const sel = trPickSel();
-  const rows = TR_DIMS.map(([label, fn]) => {
+  // Je Bedingung ein eigener kleiner Block. Nebeneinander statt untereinander:
+  // eine einzige lange Tabelle zwingt zum Scrollen, obwohl der Schirm breit ist.
+  const bloecke = TR_DIMS.map(([label, fn]) => {
     const by = {};
     list.forEach(t => {
       const raw = fn(t);
@@ -5312,41 +5325,42 @@ function trPickTable(list) {
       return String(a).localeCompare(String(b), 'de');
     });
     const on = sel[label] || [];
-    return `<tr class="tr-pdim"><td colspan="4">${esc(label)}${
-      on.length ? `<i>${on.length} gewählt</i>` : ''}</td></tr>`
-      + keys.map(k => {
-        const s = trPickStats(by[k], goalR);
-        const act = on.includes(k);
-        const dQ = s.quote - base.quote, dE = s.exp - base.exp;
-        return `<tr class="tr-pval ${act ? 'on' : ''}" onclick="trPickTap(${trQ(label)}, ${trQ(k)})">
-          <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${esc(k === TR_NONE ? TR_NONE_LBL : k)}</td>
-          <td class="num">${isNaN(s.quote) ? '—' : trFi(s.quote) + ' %'}
-            <i class="${dQ >= 0 ? 'pos' : 'neg'}">${isNaN(dQ) ? '' : (dQ >= 0 ? '+' : '−') + trFi(Math.abs(dQ))}</i></td>
-          <td class="num">${isNaN(s.exp) ? '—' : trSign(s.exp)}
-            <i class="${dE >= 0 ? 'pos' : 'neg'}">${isNaN(dE) ? '' : (dE >= 0 ? '+' : '−') + trFx(Math.abs(dE))}</i></td>
-          <td class="num">${s.n}</td></tr>`;
-      }).join('');
-  }).join('');
-  if (!rows) return '';
+    return `<div class="tr-pblock ${on.length ? 'on' : ''}">
+      <div class="tr-phead">${esc(label)}${on.length ? `<i>${on.length} gewählt</i>` : ''}</div>
+      <table class="tr-tbl tr-ptbl">
+        <thead><tr><th>Möglichkeit</th><th title="Anteil der entschiedenen Einstiege, die ihr Ziel erreicht haben">Treffer</th>
+          <th title="Erwartungswert: durchschnittliches Ergebnis je Trade in R">Erwartung</th><th>Trades</th></tr></thead>
+        <tbody>${keys.map(k => {
+          const st = trPickStats(by[k], goalR);
+          const act = on.includes(k);
+          const dQ = st.quote - base.quote, dE = st.exp - base.exp;
+          return `<tr class="tr-pval ${act ? 'on' : ''}" onclick="trPickTap(${trQ(label)}, ${trQ(k)})">
+            <td class="tr-pname"><span class="tr-pbox">${act ? '✓' : ''}</span>${esc(k === TR_NONE ? TR_NONE_LBL : k)}</td>
+            <td class="num">${isNaN(st.quote) ? '—' : trFi(st.quote) + ' %'}
+              <i class="${dQ >= 0 ? 'pos' : 'neg'}">${isNaN(dQ) ? '' : (dQ >= 0 ? '+' : '−') + trFi(Math.abs(dQ))}</i></td>
+            <td class="num">${isNaN(st.exp) ? '—' : trSign(st.exp)}
+              <i class="${dE >= 0 ? 'pos' : 'neg'}">${isNaN(dE) ? '' : (dE >= 0 ? '+' : '−') + trFx(Math.abs(dE))}</i></td>
+            <td class="num">${st.n}</td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+  }).filter(Boolean);
+  if (!bloecke.length) return '';
   const pick = trPickAny() ? trPickStats(list.filter(trPickHas), goalR) : null;
   return `<details class="tr-card tr-pickcard" open><summary>Bedingungen ausprobieren</summary>
     <div class="tr-body">
-      <div class="tr-sub">Tippe Möglichkeiten an — mehrere in einer Zeile gelten als „oder“,
-        über Zeilen hinweg als „und“. Die Auswahl verändert die Seite nicht, sie läuft oben
-        als eigene Kurve gegen deine mit.
-        ${pick ? `<b>Gewählt: ${pick.n} von ${base.n} Einstiegen.</b>
-          <button class="tr-flink" onclick="trPickClear()">Auswahl leeren</button>` : ''}</div>
-      <div class="tr-tblwrap"><table class="tr-tbl tr-ptbl">
-        <thead><tr><th>Bedingung</th><th>Gewinn&shy;wahrschein&shy;lichkeit</th>
-          <th>Ø R je Trade</th><th>Trades</th></tr></thead>
-        <tbody>
-          <tr class="tr-pbase"><td>alle Einstiege</td>
-            <td class="num">${isNaN(base.quote) ? '—' : trFi(base.quote) + ' %'}</td>
-            <td class="num">${isNaN(base.exp) ? '—' : trSign(base.exp)}</td>
-            <td class="num">${base.n}</td></tr>
-          ${rows}
-        </tbody>
-      </table></div>
+      <div class="tr-sub">Tippe Möglichkeiten an — mehrere in einem Block gelten als „oder“,
+        über Blöcke hinweg als „und“. Die Auswahl verändert die Seite nicht, sie läuft oben
+        als eigene Kurve gegen deine mit. „Erwartung“ ist der Erwartungswert: was ein Trade
+        im Schnitt einbringt, in R. Die kleine Zahl daneben ist der Abstand zu allen Einstiegen.</div>
+      <div class="tr-pall">alle Einstiege<b>${isNaN(base.quote) ? '—' : trFi(base.quote) + ' % Treffer'}</b>
+        <b>${isNaN(base.exp) ? '—' : trSign(base.exp) + ' R je Trade'}</b>
+        <b>${base.n} Trades</b>
+        ${pick ? `<span class="pick">Gewählt: ${pick.n} Einstiege ·
+          ${isNaN(pick.quote) ? '—' : trFi(pick.quote) + ' % Treffer'} ·
+          ${isNaN(pick.exp) ? '—' : trSign(pick.exp) + ' R je Trade'}
+          <button class="tr-flink" onclick="trPickClear()">leeren</button></span>` : ''}</div>
+      <div class="tr-pgrid">${bloecke.join('')}</div>
     </div></details>`;
 }
 
@@ -5359,7 +5373,7 @@ const TR_FAM_ORDER = ['Kies', 'Hunt'];
 // Beide Hälften teilen sich Maßstab und Breite — sonst sieht eine Familie
 // nur deshalb besser aus, weil ihre Achse anders steht.
 function trFamSvg(run, ref, pick, start, sc) {
-  const W = 320, H = 150, PL = 38, PR = 10, PT = 10, PB = 18;
+  const W = 520, H = 200, PL = 52, PR = 12, PT = 12, PB = 20;
   const iw = W - PL - PR, ih = H - PT - PB;
   const lo = sc.lo, hi = sc.hi, nMax = sc.n;
   const X = i => PL + iw * i / (nMax - 1);
@@ -5371,15 +5385,15 @@ function trFamSvg(run, ref, pick, start, sc) {
   const ticks = [];
   const stp = trStep((hi - lo) / 3);
   for (let v = Math.ceil(lo / stp) * stp; v <= hi; v += stp) ticks.push(v);
-  return `<svg class="tr-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+  return `<svg class="tr-svg" viewBox="0 0 ${W} ${H}"
     role="img" aria-label="Kontoverlauf">
     ${ticks.map(v => `<line class="grid" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
       <text class="ax" x="${PL - 5}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${trNum0.format(Math.round(v))}</text>`).join('')}
     <line class="zero" x1="${PL}" y1="${Y(start).toFixed(1)}" x2="${W - PR}" y2="${Y(start).toFixed(1)}"/>
-    ${ref ? `<path d="${path(ref)}" fill="none" stroke="var(--muted)" stroke-width="1.4"
-      stroke-dasharray="4 4" opacity=".45"/>` : ''}
-    <path d="${path(run)}" fill="none" stroke="${col}" stroke-width="2"
-      stroke-linejoin="round" stroke-linecap="round" ${pick ? 'opacity=".45"' : ''}/>
+    ${ref ? `<path d="${path(ref)}" fill="none" stroke="var(--muted)" stroke-width="1.6"
+      stroke-dasharray="5 5" opacity=".45"/>` : ''}
+    <path d="${path(run)}" fill="none" stroke="${col}" stroke-width="2.2"
+      stroke-linejoin="round" stroke-linecap="round" ${pick ? 'opacity=".4"' : ''}/>
     ${pick && pick.pts.length ? `<path d="${path(pick)}" fill="none" stroke="var(--c3)"
       stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
   </svg>`;
