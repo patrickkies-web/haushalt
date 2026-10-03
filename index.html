@@ -4828,8 +4828,34 @@ const TR_DIMS = [
   ["Box-Ziel vor Fill berührt", t => t.preTouch === "JA" ? "vorher berührt" : t.preTouch === "nein" ? "nicht vorher berührt" : null],
   ["Box überschießt Zone", t => t.boxSweep === "JA" ? "Box überschießt Zone" : t.boxSweep === "nein" ? "Box innerhalb Zone" : null],
   ["TP1 vor Fill erreicht", t => t.preTP1 === "JA" ? "TP1 lief schon" : t.preTP1 === "nein" ? "TP1 lief noch nicht" : null],
-  ["TP2 vor Fill erreicht", t => t.preTP2 === "JA" ? "TP2 lief schon" : t.preTP2 === "nein" ? "TP2 lief noch nicht" : null]
+  ["TP2 vor Fill erreicht", t => t.preTP2 === "JA" ? "TP2 lief schon" : t.preTP2 === "nein" ? "TP2 lief noch nicht" : null],
+  // Zahlen als feste Bereiche, nicht als gesuchte Schwellen. Eine Schwelle,
+  // die aus den Daten selbst stammt, sitzt immer genau dort, wo sie am besten
+  // aussieht — feste Stufen sind langweiliger und deshalb belastbarer. Außerdem
+  // bleiben sie über neue Dateien hinweg gleich, sodass gesetzte Filter halten.
+  ["Abstand zur Zone",   t => trBucket(t.zoneDistPct, t.zonePos === "in" ? [] : [50, 150],
+                              ["bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"], "im Bereich der Zone")],
+  ["Höhe in der Zone",   t => trBucket(t.zoneInPct, [33, 67],
+                              ["unteres Drittel", "mittleres Drittel", "oberes Drittel"])],
+  ["Box in der Zone",    t => trBucket(t.boxOvPct, [25, 75],
+                              ["bis ¼ der Box", "¼ bis ¾ der Box", "über ¾ der Box"])],
+  ["Eintauchtiefe",      t => trBucket(t.zonePenPct, [50, 100],
+                              ["bis halb hinein", "halb bis ganz", "durch die Zone"])],
+  ["Wartezeit",          t => trBucket(t.warteMin, [60, 240],
+                              ["unter 1 Std.", "1 bis 4 Std.", "über 4 Std."])],
+  ["Tiefe in der Box",   t => trBucket(t.tiefe, [33, 67],
+                              ["nah am Ziel", "mittig", "nah am Rand"])]
 ];
+// Eine Zahl in einen festen Bereich einsortieren. Ohne Zahl kein Wert — und
+// ein eigener Name für den Sonderfall, wenn er einer ist.
+function trBucket(v, cuts, names, sonder) {
+  const n = trN(v);
+  if (isNaN(n)) return null;
+  if (!cuts.length) return sonder || names[0];
+  let i = 0;
+  while (i < cuts.length && n >= cuts[i]) i++;
+  return names[i];
+}
 function trGroups(list, keyFn) {
   const g = {};
   for (const t of list) {
@@ -5015,14 +5041,26 @@ function trEquity(list) {
   list.filter(t => t.hasTgt && !isNaN(t.tgtRR)).slice().sort((a, b) => a.ts - b.ts)
     .forEach((t, i) => { cum += t.tgtRR; pts.push({ i: i + 1, v: cum, t }); });
   if (pts.length < 2) return '';
+  // Sind Filter gesetzt, läuft die ungefilterte Sammlung als blasse Linie mit.
+  // Filtern verbessert fast immer den Schnitt und kostet fast immer Masse —
+  // nebeneinander sieht man beides statt nur die schönere Hälfte davon.
+  const filt = Object.keys(trHide).some(k => trHide[k] && trHide[k].length);
+  const ref = [];
+  if (filt) {
+    let c2 = 0;
+    trTrades.filter(t => t.sel !== false && t.hasTgt && !isNaN(t.tgtRR))
+      .slice().sort((a, b) => a.ts - b.ts)
+      .forEach((t, i) => { c2 += t.tgtRR; ref.push({ i: i + 1, v: c2 }); });
+  }
   const W = 640, Hh = 210, PL = 42, PR = 14, PT = 12, PB = 26;
   const iw = W - PL - PR, ih = Hh - PT - PB;
-  const vs = pts.map(p => p.v);
+  const vs = pts.map(p => p.v).concat(ref.map(p => p.v));
   let lo = Math.min(0, ...vs), hi = Math.max(0, ...vs);
   if (hi === lo) { hi += 1; lo -= 1; }
   const pad = (hi - lo) * .08;
   lo -= pad; hi += pad;
-  const X = i => PL + iw * (i - 1) / Math.max(1, pts.length - 1);
+  const nMax = Math.max(pts.length, ref.length);
+  const X = i => PL + iw * (i - 1) / Math.max(1, nMax - 1);
   const Y = v => PT + ih * (hi - v) / (hi - lo);
   const line = pts.map((p, k) => (k ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' ');
   const area = line + ` L${X(pts[pts.length - 1].i).toFixed(1)} ${Y(0).toFixed(1)} L${X(1).toFixed(1)} ${Y(0).toFixed(1)} Z`;
@@ -5031,16 +5069,24 @@ function trEquity(list) {
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) ticks.push(v);
   const end = pts[pts.length - 1].v;
   const col = end >= 0 ? 'var(--ch-good)' : 'var(--ch-bad)';
+  const refLine = ref.length > 1
+    ? ref.map((p, k) => (k ? 'L' : 'M') + X(p.i).toFixed(1) + ' ' + Y(p.v).toFixed(1)).join(' ') : '';
+  const refEnd = ref.length ? ref[ref.length - 1].v : NaN;
   return `<div class="tr-card">
     <div class="tr-h"><span>Verlauf · R am Box-Ziel</span>
-      <span style="color:${col};font-variant-numeric:tabular-nums">${trSign(end)} R</span></div>
+      <span style="font-variant-numeric:tabular-nums">${refLine
+        ? `<span style="color:var(--muted);font-weight:500">ungefiltert ${trSign(refEnd)} R</span>
+           <span style="color:var(--faint)"> · </span>` : ''}<span style="color:${col}">${trSign(end)} R</span></span></div>
     <div class="tr-sub">Jeder Einstieg bringt sein erreichtes RR ein: das geplante bei Treffer,
-      sonst −1. Der Endwert ist das Ergebnis der ganzen Sammlung in R.</div>
+      sonst −1. Der Endwert ist das Ergebnis der ${filt ? 'Auswahl' : 'ganzen Sammlung'} in R.${
+      refLine ? ` Gestrichelt die ganze Sammlung ohne Filter — ${pts.length} von ${ref.length} Einstiegen bleiben.` : ''}</div>
     <svg class="tr-svg" viewBox="0 0 ${W} ${Hh}"
       role="img" aria-label="Verlauf des aufsummierten R über ${pts.length} Einstiege, Endstand ${trSign(end)} R"
       >
       ${ticks.map(v => `<line class="${Math.abs(v) < 1e-9 ? 'zero' : 'grid'}" x1="${PL}" y1="${Y(v).toFixed(1)}" x2="${W - PR}" y2="${Y(v).toFixed(1)}"/>
         <text class="ax" x="${PL - 7}" y="${(Y(v) + 3).toFixed(1)}" text-anchor="end">${v > 0 ? '+' : ''}${v}</text>`).join('')}
+      ${refLine ? `<path d="${refLine}" fill="none" stroke="var(--muted)" stroke-width="1.5"
+        stroke-dasharray="4 4" opacity=".5"/>` : ''}
       <path class="tr-area" d="${area}" fill="${col}"/>
       <path class="tr-line" d="${line}" stroke="${col}" style="--len:${Math.round(iw * 1.6)};stroke-dasharray:${Math.round(iw * 1.6)}"/>
       <circle class="tr-dot" cx="${X(pts[pts.length - 1].i).toFixed(1)}" cy="${Y(end).toFixed(1)}"
@@ -5050,7 +5096,7 @@ function trEquity(list) {
         onmousemove="trEqHover(event,this.ownerSVGElement)" onmouseleave="trTipOff()"
         ontouchmove="trEqHover(event,this.ownerSVGElement)" ontouchend="trTipOff()"/>
       <text class="ax" x="${PL}" y="${Hh - 8}">1</text>
-      <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${pts.length}</text>
+      <text class="ax" x="${W - PR}" y="${Hh - 8}" text-anchor="end">${nMax}</text>
     </svg>
   </div>`;
 }
