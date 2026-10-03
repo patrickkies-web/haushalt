@@ -4550,6 +4550,8 @@ function trEvaluate(raw, opt) {
       const zH = (!isNaN(zTop) && !isNaN(zBot)) ? zTop - zBot : NaN;
       let zonePos = "", zoneDir = "", zoneTgt = "", zoneSl = "";
       let zoneDistPts = NaN, zoneDistPct = NaN, zoneInPct = NaN;
+      let boxTouch = "", boxZone = "";
+      let boxOvPts = NaN, boxOvPct = NaN, boxGapPts = NaN, boxGapPct = NaN;
       if (!isNaN(zH) && zH > 0 && !isNaN(ent) && (dir === 1 || dir === -1)) {
         // Die Kante darf großzügig zählen, aber nie so großzügig, dass eine
         // schmale Zone ganz in der Toleranz verschwindet.
@@ -4579,6 +4581,36 @@ function trEvaluate(raw, opt) {
           else zoneSl = (Math.min(ent, slP) < zBot - zt && Math.max(ent, slP) > zTop + zt)
             ? "SL hinter der Zone" : "Zone nicht beim SL";
         }
+        // ── Die Box selbst: hat sie Kontakt zur Zone, und welcher Art ──────
+        // Entscheidend ist die Überdeckung der beiden Preisbänder. Ist sie
+        // negativ, liegen Box und Zone getrennt; ist sie null, berühren sich
+        // die Kanten; ist sie positiv, überlappen sie — und dann sagt die Lage
+        // der Boxkanten, auf welche der denkbaren Weisen.
+        if (!isNaN(b.bhi) && !isNaN(b.blo) && boxH > 0) {
+          const bTop = Math.max(b.bhi, b.blo), bBot = Math.min(b.bhi, b.blo);
+          const ov = Math.min(bTop, zTop) - Math.max(bBot, zBot);
+          if (ov < -zt) {
+            boxTouch = "kein Kontakt zur Zone";
+            boxZone = bBot > zTop ? "komplett oberhalb" : "komplett unterhalb";
+            boxGapPts = toPts(-ov);
+            boxGapPct = 100 * -ov / zH;
+          } else {
+            boxTouch = "Kontakt zur Zone";
+            boxGapPts = 0; boxGapPct = 0;
+            boxOvPts = toPts(Math.max(0, ov));
+            boxOvPct = 100 * Math.max(0, ov) / boxH;
+            const oben = bTop > zTop + zt, unten = bBot < zBot - zt;
+            // Kantenberührung nur, wenn die Box auch wirklich außen anliegt —
+            // eine sehr flache Box mitten in der Zone hat ebenfalls kaum
+            // Überdeckung, liegt aber drin.
+            const kante = ov <= zt && (bBot >= zTop - zt || bTop <= zBot + zt);
+            boxZone = kante ? (bBot >= zTop - zt ? "berührt die Oberkante" : "berührt die Unterkante")
+              : (oben && unten) ? "umspannt die Zone"
+              : oben ? "ragt oben heraus"
+              : unten ? "ragt unten heraus"
+              : "ganz in der Zone";
+          }
+        }
       }
       out.push({
         sel: true, id: 't' + b.t + '_' + (out.length),
@@ -4604,6 +4636,7 @@ function trEvaluate(raw, opt) {
         zonePenPct, zoneThrough, zoneHi: zHi, zoneLo: zLo, boxSweep,
         zonePos, zoneDir, zoneTgt, zoneSl,
         zoneDistPts, zoneDistPct, zoneInPct, zoneHPts: isNaN(zH) ? NaN : toPts(zH),
+        boxTouch, boxZone, boxOvPts, boxOvPct, boxGapPts, boxGapPct,
         _d: { mfe, mae: maeBeforePeak, maeAll: mae, tgt: tgtDist, tp1: tp1D, tp2: tp2D }
       });
       trSetR(out[out.length - 1], slDist, toPts);
@@ -4638,7 +4671,8 @@ function trEvaluate(raw, opt) {
 // daraus null, beim Einlesen muss es zurück zu NaN, sonst zählt ein fehlender
 // Wert als 0. Text in diesen Feldern wird ebenfalls zu einer Zahl.
 const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct',
-  'zoneDistPts', 'zoneDistPct', 'zoneInPct', 'zoneHPts', 'bhi', 'blo',
+  'zoneDistPts', 'zoneDistPct', 'zoneInPct', 'zoneHPts',
+  'boxOvPts', 'boxOvPct', 'boxGapPts', 'boxGapPct', 'bhi', 'blo',
   'boxPts', 'tiefe', 'ent', 'sl', 'slPts', 'wickPts', 'mfePts', 'mfeR', 'mfeMin', 'maePts',
   'maeR', 'maeAllPts', 'maeAllR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
   'tpP2', 'tp2R', 'tp2RR', 'ts', 'stunde', 'brk'];
@@ -4731,6 +4765,8 @@ const TR_DIMS = [
   ["Lage zur Zone",      t => t.zonePos === "in" ? "in der Zone" : t.zonePos === "ueber" ? "oberhalb der Zone"
                             : t.zonePos === "unter" ? "unterhalb der Zone" : null],
   ["Richtung zur Zone",  t => t.zoneDir || null],
+  ["Box & Zone",         t => t.boxTouch || null],
+  ["Box zur Zone",       t => t.boxZone || null],
   ["Ziel zur Zone",      t => t.zoneTgt || null],
   ["SL zur Zone",        t => t.zoneSl || null],
   ["Stand",              t => t.offen === "JA" ? "läuft noch" : t.offen === "nein" ? "abgeschlossen" : null],
@@ -6225,6 +6261,11 @@ const TR_COLS = [
   ["Abstand Zone (%)", t => trPct1(t.zoneDistPct)],
   ["Höhe in Zone (%)", t => trPct1(t.zoneInPct)],
   ["Richtung zur Zone", t => t.zoneDir || ""],
+  ["Box & Zone", t => t.boxTouch ? (t.boxTouch === "Kontakt zur Zone" ? "Kontakt" : "kein Kontakt") : ""],
+  ["Box zur Zone", t => t.boxZone || ""],
+  ["Box in Zone (Pkt)", t => trFi(t.boxOvPts)],
+  ["Box in Zone (%)", t => trPct1(t.boxOvPct)],
+  ["Abstand Box→Zone (Pkt)", t => trFi(t.boxGapPts)],
   ["Ziel zur Zone", t => t.zoneTgt || ""],
   ["SL zur Zone", t => t.zoneSl || ""],
   ["Box High", t => trNum(t.bhi)], ["Box Low", t => trNum(t.blo)],
