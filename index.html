@@ -2043,6 +2043,17 @@
     .tr-fchk.off { opacity: .45; }
     .tr-fchk.off span { text-decoration: line-through; }
 
+    /* Normale Limits bei laufendem Stophunt */
+    .tr-shtbl { font-size: 12px; }
+    .tr-shtbl th { font-size: 9.5px; font-weight: 400; letter-spacing: .05em; }
+    .tr-shtbl td { white-space: nowrap; }
+    .tr-shtbl td:first-child { white-space: normal; }
+    .tr-shsum td { font-weight: 600; background: var(--sunken); }
+    .tr-shalt td { color: var(--c3); }
+    .tr-dünn { font-size: 10px; color: var(--ch-bad); }
+
+    /* Normale Limits bei laufendem Stophunt — Ende */
+
     /* ── Kies gegen Hunt ── */
     .tr-famset {
       display: flex; gap: 6px 22px; flex-wrap: wrap; align-items: baseline;
@@ -4579,18 +4590,20 @@ function trEvaluate(raw, opt) {
   bars.sort((a, b) => a.t - b.t);
   events.sort((a, b) => a.t - b.t);
 
-  // ── Stand von Box 1 je Kerze ────────────────────────────────────────────
-  // Der Stophunt-Einstieg greift das Limit von Bruch #1 wieder auf. Ab Bruch #2
-  // tragen die Spalten „Kies x" aber die Werte von Box 2. Deshalb wandert der
-  // Stand der letzten Bruch-#1-Zeile mit jeder Kerze mit.
-  let b1 = null, iEv = 0;
+  // ── Referenz-Box je Kerze ───────────────────────────────────────────────
+  // Der Stophunt nimmt die Limits der VORHERIGEN Box wieder auf: Bruch N wird
+  // gegen Box N−1 geprüft. Die Spalten „Kies x" tragen ab dem Bruch längst die
+  // Werte der neuen Box — deshalb wandert der Stand der vorletzten Event-Zeile
+  // mit jeder Kerze mit.
+  let vorige = null, aktuell = null, iEv = 0;
   for (const b of bars) {
     while (iEv < events.length && events[iEv].t <= b.t) {
       const e = events[iEv++];
-      if (e.nr === 1) b1 = { dir: e.dir, bhi: e.bhi, blo: e.blo, slD: e.slD,
+      vorige = aktuell;
+      aktuell = { dir: e.dir, bhi: e.bhi, blo: e.blo, slD: e.slD, nr: e.nr,
         ent: [e.vals ? e.vals[0] : null, e.vals ? e.vals[1] : null], t: e.t };
     }
-    b.b1 = b1;
+    b.b1 = vorige;
   }
 
   // Die Zone steht nicht in jeder Zeile. Der letzte bekannte Stand gilt weiter,
@@ -4951,8 +4964,8 @@ function trEvaluate(raw, opt) {
   // ── Plausibilität (Briefing 4) ──────────────────────────────────────────
   const warn = [];
   if (cBrNr >= 0) {
-    const n1 = out.filter(t => t.isSh && t.brNr !== 2).length;
-    if (n1) warn.push(`${n1}× Stophunt-Fill außerhalb von Bruch 2`);
+    const n1 = out.filter(t => t.isSh && !(t.brNr >= 2)).length;
+    if (n1) warn.push(`${n1}× Stophunt-Fill vor Bruch 2`);
   }
   if (cShArm >= 0) {
     const n2 = out.filter(t => t.isSh && !(t.shArm > 0)).length;
@@ -5082,7 +5095,7 @@ const TR_DIM_INFO = {
   "Richtung": "Long oder Short.",
   "Session": "In welcher Handelszeit der Einstieg gefüllt wurde.",
   "Einstiegszeit": "Zu welcher Tageszeit das Limit gefüllt wurde, in halben Stunden. Es zählt die Uhrzeit, die beim Einlesen der Datei galt.",
-  "Stophunt beim Fill": "Was im Augenblick des Einstiegs über den Stophunt bekannt war: keiner im Gange, noch kein Farbwechsel, Überwachung ohne scharfes Limit, mindestens ein Limit scharf, oder bereits beendet. Nur mit diesem Wissen lässt sich live entscheiden.",
+  "Stophunt beim Fill": "Der Stophunt läuft fortlaufend: jeder Bruch wird gegen die vorige Box geprüft. Hier steht, was im Augenblick des Einstiegs darüber bekannt war: keiner im Gange, noch kein Farbwechsel, Überwachung ohne scharfes Limit, mindestens ein Limit scharf, oder bereits beendet. Nur mit diesem Wissen lässt sich live entscheiden.",
   "Stophunt-Ausgang": "Wie der Stophunt-Abschnitt ausging, in dem dieser Einstieg lag: bestätigt, gescheitert oder offen. Das steht erst hinterher fest — zum Prüfen der Theorie gut, als Regel für den nächsten Trade nicht brauchbar.",
   "Gegenposition": "Ob zur selben Zeit ein Einstieg der Gegenrichtung offen war — beim Stophunt laufen das Box-2-Limit und das Stophunt-Limit gegeneinander.",
   "Zeitfenster": "Zwei Zeiträume zum selbst Eintragen. Von-Zeit zählt mit, Bis-Zeit nicht mehr; ein Fenster darf auch über Mitternacht gehen. Einstiege außerhalb beider Fenster bleiben ohne Wert.",
@@ -5890,6 +5903,75 @@ function trPickTable(list) {
           ${isNaN(pick.exp) ? '—' : trSign(pick.exp) + ' R je Trade'}
           <button class="tr-flink" onclick="trPickClear()">leeren</button></span>` : ''}</div>
       <div class="tr-pgrid">${bloecke.join('')}</div>
+    </div></details>`;
+}
+
+// ── Normale Limits, während ein Stophunt lief ─────────────────────────────
+// Die Frage dahinter: Das Stophunt-Limit handelt gegen den Bruch, das normale
+// Limit mit ihm. Beide können im selben Abschnitt füllen. Gezählt wird deshalb,
+// wie oft die normalen Limits aufgegangen sind, je nachdem was zum Zeitpunkt
+// des Fills über den Stophunt bekannt war.
+const TR_SH_GRP = [
+  ['kein Stophunt im Gange',        t => t.shSt === 0],
+  ['noch kein Farbwechsel',         t => t.shSt === 1],
+  ['Überwachung, nichts scharf',    t => (t.shSt === 2 || t.shSt === 3) && !(t.shArm > 0)],
+  ['ein Limit war scharf',          t => t.shArm > 0 || t.shSt === 4],
+  ['Stophunt schon beendet',        t => t.shSt === 5]
+];
+function trShStat(rows, goalR) {
+  const o = rows.map(t => trRrOut(t, goalR));
+  const auf = o.filter(v => v !== null && v > 0).length;
+  const aus = o.filter(v => v !== null && v < 0).length;
+  const dec = auf + aus;
+  const sum = o.filter(v => v !== null).reduce((a, b) => a + b, 0);
+  return { n: rows.length, auf, aus, offen: rows.length - dec, dec,
+    quote: dec ? 100 * auf / dec : NaN, exp: dec ? sum / dec : NaN };
+}
+function trShCard(list) {
+  const goalR = trGoalR();
+  const norm = list.filter(t => !t.isSh && !isNaN(trN(t.shSt)));
+  const sh   = list.filter(t => t.isSh);
+  if (!norm.length && !sh.length) return '';
+  const aktiv = norm.filter(t => t.shSt >= 1 && t.shSt <= 4);
+  const ohne  = norm.filter(t => t.shSt === 0);
+  const a = trShStat(aktiv, goalR), o = trShStat(ohne, goalR);
+  const zeile = (name, st, cls) => `<tr class="${cls || ''}">
+    <td>${name}</td>
+    <td class="num">${st.n}</td>
+    <td class="num">${st.auf}</td>
+    <td class="num">${st.aus}</td>
+    <td class="num">${st.offen || '—'}</td>
+    <td class="num">${isNaN(st.quote) ? '—' : trFi(st.quote) + ' %'}</td>
+    <td class="num">${isNaN(st.exp) ? '—' : trSign(st.exp)}</td>
+    ${st.dec && st.dec < 20 ? `<td class="tr-dünn" title="Unter 20 entschiedenen Einstiegen trägt keine Aussage">dünn</td>` : '<td></td>'}
+  </tr>`;
+  const kernsatz = a.dec
+    ? `Von <b>${a.n}</b> normalen Limits, die bei laufendem Stophunt gefüllt wurden, sind
+       <b>${a.auf} aufgegangen</b>${a.dec ? ` (${trFi(a.quote)} % der entschiedenen)` : ''}
+       und ${a.aus} ausgestoppt.${o.dec ? ` Ohne Stophunt: ${trFi(o.quote)} %.` : ''}
+       ${(o.dec && a.dec) ? (a.quote < o.quote
+          ? `Das sind <b>${trFi(o.quote - a.quote)} Punkte weniger</b> — in diese Richtung deutet deine Vermutung.`
+          : `Das sind <b>${trFi(a.quote - o.quote)} Punkte mehr</b> — gegen deine Vermutung.`) : ''}`
+    : 'Noch kein normales Limit, das bei laufendem Stophunt gefüllt wurde.';
+  return `<details class="tr-card tr-shcard" open><summary>Normale Limits, während ein Stophunt lief</summary>
+    <div class="tr-body">
+      <div class="tr-verdict">${kernsatz}</div>
+      <div class="tr-sub">„Aufgegangen“ heißt: das Limit hat sein Ziel von
+        ${trRrLbl(goalR)} R erreicht, bevor der Stop kam. Die Gruppen sagen, was im
+        <b>Augenblick des Fills</b> über den Stophunt bekannt war — danach lässt sich live
+        entscheiden. Laufende Einstiege zählen weder als aufgegangen noch als ausgestoppt.</div>
+      <div class="tr-tblwrap"><table class="tr-tbl tr-shtbl">
+        <thead><tr><th>Beim Fill war …</th><th>Fills</th><th>auf&shy;gegangen</th><th>aus&shy;gestoppt</th>
+          <th>läuft</th><th>Treffer</th><th>Ø R</th><th></th></tr></thead>
+        <tbody>
+          ${TR_SH_GRP.map(([name, f]) => {
+            const r = norm.filter(f);
+            return r.length ? zeile(name, trShStat(r, goalR)) : '';
+          }).join('')}
+          ${aktiv.length ? zeile('zusammen: Stophunt war aktiv', a, 'tr-shsum') : ''}
+          ${sh.length ? zeile('zum Vergleich: die Stophunt-Einstiege selbst', trShStat(sh, goalR), 'tr-shalt') : ''}
+        </tbody>
+      </table></div>
     </div></details>`;
 }
 
@@ -7327,6 +7409,7 @@ function renderTrades() {
     + `<div class="tr-kpis">${kpis.map((c, i) => `<div class="tr-kpi" style="animation-delay:${i * 45}ms">
         <div class="v ${c.cls || ''}">${c.v}</div><div class="l">${c.l}</div></div>`).join('')}</div>`
     + trFamPanel(list)
+    + trShCard(list)
     + trPickTable(list)
     + trVarCard(list)
     + trEquity(list)
