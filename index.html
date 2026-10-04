@@ -4483,6 +4483,14 @@ function trEvaluate(raw, opt) {
   const cZ1 = trFindCol(H, "ziel 1 (cluster-tp)", "ziel 1");
   const cZ2 = trFindCol(H, "ziel 2 (cluster-tp)", "ziel 2");
   const cZoneHi = trFindCol(H, "zone high"), cZoneLo = trFindCol(H, "zone low");
+  // Stophunt: Zustand, scharfe Limits, Ausgang und die laufende Bruchnummer
+  // Event-Ebene: Richtung und Box des Bruchs selbst (nicht die Fill-Spalten)
+  const cEvDir = trFindCol(H, "richtung (+1 long / -1 short)");
+  const cEvBH  = trFindCol(H, "box high"), cEvBL = trFindCol(H, "box low");
+  const cShSt  = trFindCol(H, "stophunt-zustand (0-5)", "stophunt-zustand");
+  const cShArm = trFindCol(H, "stophunt scharf (0 / 1=kies1 / 2=kies2 / 3=beide)", "stophunt scharf");
+  const cShFlg = trFindCol(H, "stophunt (1 = bestätigt, -1 = ungültig)", "stophunt (1");
+  const cBrNr  = trFindCol(H, "bruch-nr (laufend)");
 
   if (cT < 0 || cH < 0 || cL < 0)
     return { err: "Spalten time/high/low nicht gefunden — ist das die TradingView-CSV?" };
@@ -4505,15 +4513,21 @@ function trEvaluate(raw, opt) {
   };
   const vars = [
     ['Kies 1',  '1', 'kies 1', 'entry 1 (cluster)', 'entry 1'],
-    ['Kies 2',  '2', 'kies 2', 'entry 2 (cluster)', 'entry 2'],
-    ['Hunt 1',  '1', 'hunt 1'],
-    ['Hunt 2',  '2', 'hunt 2']
+    ['Kies 2',  '2', 'kies 2', 'entry 2 (cluster)', 'entry 2']
   ].map(([name, lvl, ...alias]) => ({
-    name, lvl,
+    name, lvl, sh: false,
     fill: trFindCol(H, ...alias.map(a2 => 'fill ' + a2)),
     ent:  colAfter(Math.max(0, cEv), ...alias),
     sl:   trFindCol(H, ...alias.map(a2 => 'sl ' + a2))
   })).filter(v => v.fill >= 0 && v.ent >= 0);
+  // Der Stophunt-Einstieg hat keine eigenen Preisspalten: er nimmt das Limit
+  // von Box 1 wieder auf. Die Spalten „Kies x" tragen zu diesem Zeitpunkt
+  // längst die Werte von Box 2 — deshalb merkt sich die Auswertung den Stand
+  // der Bruch-#1-Zeile und greift darauf zurück.
+  [['Stophunt 1', '1', 1], ['Stophunt 2', '2', 2]].forEach(([name, lvl, nr]) => {
+    const f = trFindCol(H, 'fill sh kies ' + nr);
+    if (f >= 0) vars.push({ name, lvl, sh: true, nr, fill: f, ent: -1, sl: -1 });
+  });
 
   const bars = [], events = [];
   let zoneHiVal = NaN, zoneLoVal = NaN, touchMsGlobal = null;
@@ -4537,6 +4551,11 @@ function trEvaluate(raw, opt) {
       // Zonenkanten dieser Kerze — die Zone darf zwischendurch verschoben werden
       zhi: cZoneHi >= 0 ? parseFloat(c[cZoneHi]) : NaN,
       zlo: cZoneLo >= 0 ? parseFloat(c[cZoneLo]) : NaN,
+      // Stophunt-Stand dieser Kerze
+      shSt:  cShSt  >= 0 ? parseFloat(c[cShSt])  : NaN,
+      shArm: cShArm >= 0 ? parseFloat(c[cShArm]) : NaN,
+      shFlg: cShFlg >= 0 ? parseFloat(c[cShFlg]) : NaN,
+      brNr:  cBrNr  >= 0 ? parseFloat(c[cBrNr])  : NaN,
       // welche Einstiegsarten in dieser Kerze gefüllt wurden (mehrere möglich)
       vf: (vars.length && parseFloat(c[cF]) === 1) ? vars.map(v => parseFloat(c[v.fill]) === 1) : null
     });
@@ -4544,7 +4563,11 @@ function trEvaluate(raw, opt) {
     if (isNaN(zoneLoVal) && cZoneLo >= 0) { const v = parseFloat(c[cZoneLo]); if (!isNaN(v)) zoneLoVal = v; }
     if (touchMsGlobal === null && cTo >= 0) { const v = parseFloat(c[cTo]); if (!isNaN(v) && v > 0) touchMsGlobal = v * 1000; }
     if (cEv >= 0 && parseFloat(c[cEv]) === 1) {
-      events.push({ t, e1: cE1 >= 0 ? parseFloat(c[cE1]) : NaN, e2: cE2 >= 0 ? parseFloat(c[cE2]) : NaN,
+      events.push({ t, nr: cBrNr >= 0 ? parseFloat(c[cBrNr]) : NaN,
+                    dir: cEvDir >= 0 ? parseFloat(c[cEvDir]) : NaN,
+                    bhi: cEvBH >= 0 ? parseFloat(c[cEvBH]) : NaN,
+                    blo: cEvBL >= 0 ? parseFloat(c[cEvBL]) : NaN,
+                    e1: cE1 >= 0 ? parseFloat(c[cE1]) : NaN, e2: cE2 >= 0 ? parseFloat(c[cE2]) : NaN,
                     avgW: cAW >= 0 ? parseFloat(c[cAW]) : NaN, touchS: cTo >= 0 ? parseFloat(c[cTo]) : NaN,
                     slD: cSlD >= 0 ? parseFloat(c[cSlD]) : NaN,
                     tp1: cZ1 >= 0 ? parseFloat(c[cZ1]) : NaN, tp2: cZ2 >= 0 ? parseFloat(c[cZ2]) : NaN,
@@ -4555,6 +4578,20 @@ function trEvaluate(raw, opt) {
   }
   bars.sort((a, b) => a.t - b.t);
   events.sort((a, b) => a.t - b.t);
+
+  // ── Stand von Box 1 je Kerze ────────────────────────────────────────────
+  // Der Stophunt-Einstieg greift das Limit von Bruch #1 wieder auf. Ab Bruch #2
+  // tragen die Spalten „Kies x" aber die Werte von Box 2. Deshalb wandert der
+  // Stand der letzten Bruch-#1-Zeile mit jeder Kerze mit.
+  let b1 = null, iEv = 0;
+  for (const b of bars) {
+    while (iEv < events.length && events[iEv].t <= b.t) {
+      const e = events[iEv++];
+      if (e.nr === 1) b1 = { dir: e.dir, bhi: e.bhi, blo: e.blo, slD: e.slD,
+        ent: [e.vals ? e.vals[0] : null, e.vals ? e.vals[1] : null], t: e.t };
+    }
+    b.b1 = b1;
+  }
 
   // Die Zone steht nicht in jeder Zeile. Der letzte bekannte Stand gilt weiter,
   // und vor der ersten Angabe gilt die erste — so trägt jede Kerze die Kanten,
@@ -4630,11 +4667,20 @@ function trEvaluate(raw, opt) {
       for (let k = events.length - 1; k >= 0; k--) if (events[k].t < b.t) { evB = events[k]; break; }
       b.vf.forEach((on, vi) => {
         if (!on) return;
+        const v = vars[vi];
+        if (v.sh) {
+          // Stophunt: Preis, SL, Richtung und Box stammen aus Bruch #1
+          const q = b.b1 && b.b1.ent ? b.b1.ent[v.nr - 1] : null;
+          if (!q || isNaN(q.ent)) return;
+          jobs.push({ ent: q.ent, sl: q.sl, name: v.name, lvl: v.lvl, ev: evB,
+                      sh: true, dir: b.b1.dir, bhi: b.b1.bhi, blo: b.b1.blo, slD: b.b1.slD });
+          return;
+        }
         const val = evB && evB.vals ? evB.vals[vi] : null;
         const p = (val && !isNaN(val.ent)) ? val.ent : b.ent;
         if (isNaN(p)) return;
         jobs.push({ ent: p, sl: (val && !isNaN(val.sl)) ? val.sl : b.sl,
-                    name: vars[vi].name, lvl: vars[vi].lvl, ev: evB });
+                    name: v.name, lvl: v.lvl, ev: evB });
       });
     }
     // Ersatz nur für alte Exporte ohne Arten-Spalten. Bringt die Datei Arten
@@ -4645,8 +4691,11 @@ function trEvaluate(raw, opt) {
 
     for (const job of jobs) {
       const ent = job.ent, slP = job.sl;
-      const dir = b.dir;
-      const target = dir === 1 ? b.bhi : b.blo;
+      // Der Stophunt handelt die Richtung von Bruch #1 und zielt auf dessen
+      // Box — die Fill-Spalten der Zeile gehören dann zu Bruch #2.
+      const dir = job.sh ? job.dir : b.dir;
+      const boxHiJ = job.sh ? job.bhi : b.bhi, boxLoJ = job.sh ? job.blo : b.blo;
+      const target = dir === 1 ? boxHiJ : boxLoJ;
       let evT = null, entLevel = "", touchMs = null, evE1 = NaN, evE2 = NaN, avgW = NaN, evSlD = NaN;
       if (job.ev) {
         // Neues Format: die Art steht in der Zeile, das Event ist das letzte
@@ -4679,7 +4728,8 @@ function trEvaluate(raw, opt) {
       // Bewegung selbst wird in Punkten gemessen und bleibt davon unberührt.
       let slDist = Math.abs(ent - slP), slSrc = 'gesetzt';
       if (!(slDist > 0)) {
-        const d = b.slDBar > 0 ? b.slDBar : (evSlD > 0 ? evSlD : NaN);
+        const d = job.sh && job.slD > 0 ? job.slD
+          : b.slDBar > 0 ? b.slDBar : (evSlD > 0 ? evSlD : NaN);
         if (d > 0) { slDist = d; slSrc = 'SL-Distanz'; }
         else { slDist = NaN; slSrc = 'geschätzt'; }
       }
@@ -4743,12 +4793,12 @@ function trEvaluate(raw, opt) {
       // Ein Einstieg, der weder den SL noch sein Ziel gesehen hat, läuft noch —
       // er ist nicht verloren, sondern unentschieden.
       const offen = (!stopped && !reached) ? "JA" : "nein";
-      const boxH = (isNaN(b.bhi) || isNaN(b.blo)) ? NaN : (b.bhi - b.blo);
-      const tiefe = (!isNaN(boxH) && boxH > 0) ? 100 * (dir === 1 ? (b.bhi - ent) : (ent - b.blo)) / boxH : NaN;
+      const boxH = (isNaN(boxHiJ) || isNaN(boxLoJ)) ? NaN : (boxHiJ - boxLoJ);
+      const tiefe = (!isNaN(boxH) && boxH > 0) ? 100 * (dir === 1 ? (boxHiJ - ent) : (ent - boxLoJ)) / boxH : NaN;
       const d0 = new Date(b.t);
       let boxSweep = "";
-      if (!isNaN(zoneHiVal) && !isNaN(zoneLoVal) && !isNaN(b.bhi) && !isNaN(b.blo))
-        boxSweep = (dir === -1 ? (b.bhi > zoneHiVal) : (b.blo < zoneLoVal)) ? "JA" : "nein";
+      if (!isNaN(zoneHiVal) && !isNaN(zoneLoVal) && !isNaN(boxHiJ) && !isNaN(boxLoJ))
+        boxSweep = (dir === -1 ? (boxHiJ > zoneHiVal) : (boxLoJ < zoneLoVal)) ? "JA" : "nein";
       const hasTgt = !isNaN(target), tpHas1 = !isNaN(tpP1), tpHas2 = !isNaN(tpP2);
       // ── Zone: Lage des Einstiegs, Laufrichtung, Ziel und Stop ───────────
       // Zwei getrennte Fragen. Erstens rein geometrisch: liegt der Einstieg in
@@ -4798,8 +4848,8 @@ function trEvaluate(raw, opt) {
         // negativ, liegen Box und Zone getrennt; ist sie null, berühren sich
         // die Kanten; ist sie positiv, überlappen sie — und dann sagt die Lage
         // der Boxkanten, auf welche der denkbaren Weisen.
-        if (!isNaN(b.bhi) && !isNaN(b.blo) && boxH > 0) {
-          const bTop = Math.max(b.bhi, b.blo), bBot = Math.min(b.bhi, b.blo);
+        if (!isNaN(boxHiJ) && !isNaN(boxLoJ) && boxH > 0) {
+          const bTop = Math.max(boxHiJ, boxLoJ), bBot = Math.min(boxHiJ, boxLoJ);
           const ov = Math.min(bTop, zTop) - Math.max(bBot, zBot);
           if (ov < -zt) {
             boxTouch = "kein Kontakt zur Zone";
@@ -4830,7 +4880,7 @@ function trEvaluate(raw, opt) {
         stunde: d0.getHours(), session: trSession(d0.getHours()),
         dir, brk: b.brk, entLevel,
         gegenTrend: isNaN(b.brk) ? "" : (b.brk % 2 === 1 ? "JA" : "nein"),
-        bhi: b.bhi, blo: b.blo, boxPts: isNaN(boxH) ? NaN : toPts(boxH), tiefe,
+        bhi: boxHiJ, blo: boxLoJ, boxPts: isNaN(boxH) ? NaN : toPts(boxH), tiefe,
         evDatum: evT ? trDate(evT) : "", evZeit: evT ? trClock(evT) : "",
         warteMin: evT ? Math.max(0, Math.round((b.t - evT) / 60000)) : NaN,
         touchEvMin: (evT && touchMs) ? Math.max(0, Math.round((evT - touchMs) / 60000)) : NaN,
@@ -4846,6 +4896,8 @@ function trEvaluate(raw, opt) {
         tpHas2, tpP2, tpR2,
         dauerMin: Math.max(0, Math.round((endT - b.t) / 60000)),
         zonePenPct, zoneThrough, zoneHi: zHi, zoneLo: zLo, boxSweep,
+        // Stophunt: was in dieser Kerze bekannt war, und wozu der Einstieg gehört
+        shSt: b.shSt, shArm: b.shArm, brNr: b.brNr, isSh: !!job.sh,
         zonePos, zoneDir, zoneTgt, zoneSl,
         zoneDistPts, zoneDistPct, zoneInPct, zoneHPts: isNaN(zH) ? NaN : toPts(zH),
         boxTouch, boxZone, boxOvPts, boxOvPct, boxGapPts, boxGapPct,
@@ -4856,6 +4908,59 @@ function trEvaluate(raw, opt) {
       if (evT !== null) doneFills.push({ evT, t: b.t });
     }
   }
+  // ── Ausgang jedes Stophunt-Abschnitts ───────────────────────────────────
+  // Ein Abschnitt läuft vom Bruch #2 (Zustand springt auf 1) bis er endet
+  // (Zustand wieder 0 oder 5). Er gilt als bestätigt, sobald irgendwo ein Limit
+  // scharf war, als gescheitert bei einer Zeile mit −1, sonst als offen. Das
+  // ist Wissen von später: zum Prüfen der Theorie gut, als Regel nicht.
+  if (cShSt >= 0) {
+    const absch = [];
+    let akt = null;
+    for (const b of bars) {
+      if (b.t > cutMs) break;
+      const st = b.shSt;
+      if (isNaN(st)) continue;
+      if (st >= 1 && st <= 4) {
+        if (!akt) akt = { von: b.t, bis: b.t, scharf: false, hin: false };
+        akt.bis = b.t;
+        if (b.shArm > 0) akt.scharf = true;
+        if (b.shFlg === -1) akt.hin = true;
+      } else if (akt) {
+        if (st === 5) { akt.bis = b.t; if (b.shFlg === -1) akt.hin = true; }
+        absch.push(akt);
+        akt = null;
+      }
+    }
+    if (akt) absch.push(akt);
+    out.forEach(t => {
+      const a = absch.find(x => t.ts >= x.von && t.ts <= x.bis);
+      t.shErg = !a ? "" : a.scharf ? "bestätigt" : a.hin ? "gescheitert" : "offen";
+    });
+  }
+  // ── Gegenposition offen ─────────────────────────────────────────────────
+  // Beim Stophunt laufen Box-2-Limit und Stophunt-Limit gegeneinander: füllt
+  // beides, ist gleichzeitig long und short offen. Markiert wird jeder
+  // Einstieg, dessen Laufzeit sich mit einem Einstieg der Gegenrichtung
+  // überschneidet.
+  out.forEach(t => {
+    const bis = t.ts + (t.dauerMin || 0) * 60000;
+    t.gegen = out.some(o => o !== t && o.dir === -t.dir
+      && o.ts <= bis && (o.ts + (o.dauerMin || 0) * 60000) >= t.ts) ? "JA" : "nein";
+  });
+
+  // ── Plausibilität (Briefing 4) ──────────────────────────────────────────
+  const warn = [];
+  if (cBrNr >= 0) {
+    const n1 = out.filter(t => t.isSh && t.brNr !== 2).length;
+    if (n1) warn.push(`${n1}× Stophunt-Fill außerhalb von Bruch 2`);
+  }
+  if (cShArm >= 0) {
+    const n2 = out.filter(t => t.isSh && !(t.shArm > 0)).length;
+    if (n2) warn.push(`${n2}× Stophunt-Fill, ohne dass ein Limit scharf war`);
+  }
+  const n3 = out.filter(t => t.isSh && isNaN(t.ent)).length;
+  if (n3) warn.push(`${n3}× Stophunt-Fill ohne Preis aus Bruch 1`);
+
   if (!out.length) return { err: "Keine Fill-Zeilen (Fill = 1) im Datensatz gefunden."
     + (isFinite(cutMs)
         ? ` „Simulation bis“ steht auf ${trDate(cutMs)} ${trClock(cutMs)} — bis dahin gibt es keinen Einstieg.`
@@ -4878,7 +4983,7 @@ function trEvaluate(raw, opt) {
     }
     delete t._d;
   });
-  return { trades: out, ps, est, noSl, limits, cutIgnored,
+  return { trades: out, ps, est, noSl, limits, cutIgnored, warn,
            offen: out.filter(t => t.offen === 'JA').length };
 }
 
@@ -4887,7 +4992,7 @@ function trEvaluate(raw, opt) {
 // Wert als 0. Text in diesen Feldern wird ebenfalls zu einer Zahl.
 const TR_NUMKEYS = ['touchEvMin', 'warteMin', 'zoneHi', 'zoneLo', 'zonePenPct',
   'zoneDistPts', 'zoneDistPct', 'zoneInPct', 'zoneHPts',
-  'boxOvPts', 'boxOvPct', 'boxGapPts', 'boxGapPct', 'bhi', 'blo',
+  'boxOvPts', 'boxOvPct', 'boxGapPts', 'boxGapPct', 'shSt', 'shArm', 'brNr', 'bhi', 'blo',
   'boxPts', 'tiefe', 'ent', 'sl', 'slPts', 'wickPts', 'mfePts', 'mfeR', 'mfeMin', 'maePts',
   'maeR', 'maeAllPts', 'maeAllR', 'givebackPts', 'dauerMin', 'target', 'tgtR', 'tgtRR', 'tpP1', 'tp1R', 'tp1RR',
   'tpP2', 'tp2R', 'tp2RR', 'ts', 'stunde', 'brk'];
@@ -4977,6 +5082,9 @@ const TR_DIM_INFO = {
   "Richtung": "Long oder Short.",
   "Session": "In welcher Handelszeit der Einstieg gefüllt wurde.",
   "Einstiegszeit": "Zu welcher Tageszeit das Limit gefüllt wurde, in halben Stunden. Es zählt die Uhrzeit, die beim Einlesen der Datei galt.",
+  "Stophunt beim Fill": "Was im Augenblick des Einstiegs über den Stophunt bekannt war: keiner im Gange, noch kein Farbwechsel, Überwachung ohne scharfes Limit, mindestens ein Limit scharf, oder bereits beendet. Nur mit diesem Wissen lässt sich live entscheiden.",
+  "Stophunt-Ausgang": "Wie der Stophunt-Abschnitt ausging, in dem dieser Einstieg lag: bestätigt, gescheitert oder offen. Das steht erst hinterher fest — zum Prüfen der Theorie gut, als Regel für den nächsten Trade nicht brauchbar.",
+  "Gegenposition": "Ob zur selben Zeit ein Einstieg der Gegenrichtung offen war — beim Stophunt laufen das Box-2-Limit und das Stophunt-Limit gegeneinander.",
   "Zeitfenster": "Zwei Zeiträume zum selbst Eintragen. Von-Zeit zählt mit, Bis-Zeit nicht mehr; ein Fenster darf auch über Mitternacht gehen. Einstiege außerhalb beider Fenster bleiben ohne Wert.",
   "Wochentag": "An welchem Wochentag der Einstieg gefüllt wurde.",
   "Symbol": "Das Währungspaar, aus dessen Datei der Einstieg stammt.",
@@ -5075,6 +5183,10 @@ const TR_DIM_ORDER = {
   "Wartezeit": TR_WARTE,
   "Einstiegszeit": TR_SLOTS,
   "Zeitfenster": [],
+  "Stophunt beim Fill": ["kein Stophunt", "noch kein Farbwechsel", "Überwachung, nichts scharf",
+    "ein Limit war scharf", "Stophunt beendet"],
+  "Stophunt-Ausgang": ["Stophunt bestätigt", "Stophunt gescheitert", "Stophunt offen"],
+  "Gegenposition": ["allein im Markt", "gleichzeitig gegen die Richtung offen"],
   "Abstand zur Zone": ["im Bereich der Zone", "bis ½ Zonenhöhe", "½ bis 1½ Zonenhöhen", "über 1½ Zonenhöhen"],
   "Eintauchtiefe": ["bis halb hinein", "halb bis ganz", "durch die Zone"],
   "Lage zur Zone": ["in der Zone", "oberhalb der Zone", "unterhalb der Zone"],
@@ -5106,6 +5218,22 @@ const TR_DIMS = [
   ["Session",            t => t.session],
   ["Einstiegszeit",      t => trSlot(t)],
   ["Zeitfenster",        t => trWinOf(t)],
+  // Was im Moment des Fills über den Stophunt bekannt war — damit lässt sich
+  // eine Regel bauen, die man live befolgen kann.
+  ["Stophunt beim Fill", t => {
+    const st = trN(t.shSt), arm = trN(t.shArm);
+    if (isNaN(st)) return null;
+    if (st === 0) return "kein Stophunt";
+    if (arm > 0) return "ein Limit war scharf";
+    if (st === 1) return "noch kein Farbwechsel";
+    if (st === 2 || st === 3) return "Überwachung, nichts scharf";
+    if (st === 4) return "ein Limit war scharf";
+    return "Stophunt beendet";
+  }],
+  // Wie der Abschnitt ausging — das weiß man erst hinterher.
+  ["Stophunt-Ausgang",   t => t.shErg ? "Stophunt " + t.shErg : null],
+  ["Gegenposition",      t => t.gegen === "JA" ? "gleichzeitig gegen die Richtung offen"
+                            : t.gegen === "nein" ? "allein im Markt" : null],
   ["Wochentag",          t => t.wtag],
   ["Symbol",             t => t.sym || null],
   ["Gegen Trend",        t => t.gegenTrend === "JA" ? "gegen den Trend" : t.gegenTrend === "nein" ? "mit dem Trend" : null],
@@ -5475,8 +5603,8 @@ function trGoalsCard(list) {
 // Ein weit entferntes Limit kauft Genauigkeit mit verpassten Einstiegen.
 // Nur noch die beiden Familien: Kies und Hunt. Extreme und Volume werden
 // nicht mehr erfasst; was davon noch in der Sammlung liegt, fliegt beim Laden.
-const TR_VAR_ORDER = ['Kies 1', 'Kies 2', 'Hunt 1', 'Hunt 2'];
-const TR_VAR_DROP = /^(Extreme|Volume)$/;
+const TR_VAR_ORDER = ['Kies 1', 'Kies 2', 'Stophunt 1', 'Stophunt 2'];
+const TR_VAR_DROP = /^(Extreme|Volume|Hunt \d+)$/;
 const TR_VAR_MIN = 3;   // unter so wenigen Fills wird nichts gekürt
 
 
@@ -5769,7 +5897,7 @@ function trPickTable(list) {
 // Oben die drei Zahlen, die den Versuch bestimmen: Konto, Einsatz je Trade und
 // das Ziel. Darunter je Familie derselbe Verlauf — durchgezogen, was die
 // gesetzten Bedingungen übrig lassen, gestrichelt alle Einstiege der Familie.
-const TR_FAM_ORDER = ['Kies', 'Hunt'];
+const TR_FAM_ORDER = ['Kies', 'Stophunt'];
 
 // Beide Hälften teilen sich Maßstab und Breite — sonst sieht eine Familie
 // nur deshalb besser aus, weil ihre Achse anders steht.
@@ -5843,7 +5971,7 @@ function trFamPanel(list) {
     </tr>`;
   };
   return `<div class="tr-card tr-famcard">
-    <div class="tr-h"><span>Kies gegen Hunt</span></div>
+    <div class="tr-h"><span>${halves.length > 1 ? halves.map(h => esc(h.fam)).join(' gegen ') : esc(halves[0].fam)}</span></div>
     <div class="tr-famset">
       <div class="tr-f"><label>Konto</label>
         <input type="text" inputmode="decimal" value="${trNum0.format(start)}"
@@ -7295,7 +7423,8 @@ async function trRun() {
     + (res.est ? ` · bei ${res.est} fehlte der SL, dafür zählt das mittlere Risiko` : '')
     + (res.noSl ? ` · ${res.noSl} ganz ohne Risiko — nur in Punkten messbar` : '')
     + (res.offen ? ` · ${res.offen} ${res.offen === 1 ? 'läuft' : 'laufen'} noch` : '')
-    + (res.cutIgnored ? ` · „Simulation bis“ lag vor diesen Daten und wurde übergangen` : '') };
+    + (res.cutIgnored ? ` · „Simulation bis“ lag vor diesen Daten und wurde übergangen` : '')
+    + ((res.warn && res.warn.length) ? ` · Prüfung: ${res.warn.join(', ')} — das deutet auf einen Fehler im Indikator hin` : '') };
   trRaw = '';
   await persistTrades();
   renderTrades();
