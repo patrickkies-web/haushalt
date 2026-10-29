@@ -2338,6 +2338,7 @@
         <div class="seg" id="f-cycle">
           <button data-c="monthly" class="active">monatlich</button>
           <button data-c="quarterly">quartalsweise</button>
+          <button data-c="halfyearly">halbjährlich</button>
           <button data-c="yearly">jährlich</button>
         </div>
       </div>
@@ -2454,6 +2455,7 @@ const DEFAULT_CATS = ["Streaming", "Software", "Versicherung", "Wohnen", "Sport"
 const CYCLES = {
   monthly:   { label: "monatlich",     perYear: 12, short: "Mon."   },
   quarterly: { label: "quartalsweise", perYear: 4,  short: "Quart." },
+  halfyearly:{ label: "halbjährlich",  perYear: 2,  short: "Halbj." },
   yearly:    { label: "jährlich",      perYear: 1,  short: "Jahr"   },
 };
 
@@ -3431,7 +3433,7 @@ function setInc(mk, field, val) {
 // the forecast table draws with — an undated subscription is anchored to the
 // current month, not to whichever month is being asked about.
 function costsInMonth(mk) {
-  const stepOf = { monthly: 1, quarterly: 3, yearly: 12 };
+  const stepOf = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 };
   const now = new Date();
   const curMk = now.getFullYear() * 12 + now.getMonth();
   const out = [];
@@ -3911,7 +3913,7 @@ function nextOccurrence(s) {
   let d = new Date(s.date + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const step = { monthly: 1, quarterly: 3, yearly: 12 }[s.cycle];
+  const step = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 }[s.cycle];
   let guard = 0;
   while (d < today && guard < 400) {
     d.setMonth(d.getMonth() + step);
@@ -4181,7 +4183,7 @@ function renderPlanPanel(plan) {
 
   if (!hasIrr) return `<div class="plan">
     <div class="plan-head"><div><h2>Monatsplan</h2></div>${picker}</div>
-    <p class="reserve-note">Keine quartalsweisen oder jährlichen Kosten — ohne die braucht es kein Rotierkonto.</p>
+    <p class="reserve-note">Keine quartalsweisen, halbjährlichen oder jährlichen Kosten — ohne die braucht es kein Rotierkonto.</p>
   </div>`;
 
   const cfg = `<div class="rot-cfg">
@@ -4263,7 +4265,7 @@ function renderForecast() {
   now.setHours(0, 0, 0, 0);
   const curMk    = now.getFullYear() * 12 + now.getMonth();
   const startIdx = curMk - PAST;  // absolute month index of column 0
-  const stepOf   = { monthly: 1, quarterly: 3, yearly: 12 };
+  const stepOf   = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 };
   const mf       = new Intl.DateTimeFormat("de-DE", { month: "short" });
 
   const colDate = k => new Date(now.getFullYear(), now.getMonth() - PAST + k, 1);
@@ -4356,7 +4358,7 @@ function renderForecast() {
     tot += `<td class="${cls}">${v ? eur.format(v) : "–"}</td>`;
   });
 
-  // Rotierkonto: only irregular (quarterly + yearly) subs need smoothing
+  // Rotierkonto: only irregular (quarterly, half-yearly, yearly) subs need smoothing
   const irrTotals = new Array(N).fill(0);
   rows.forEach(s => {
     if (s.cycle === 'monthly') return;
@@ -4663,7 +4665,7 @@ function renderRotChart(host) {
   }
   const plan = rotPlan();
   if (!plan.hasIrr) {
-    host.innerHTML = `<div class="ana-empty">Keine quartalsweisen oder jährlichen Kosten — ohne die gibt es nichts zu verteilen.</div>`;
+    host.innerHTML = `<div class="ana-empty">Keine quartalsweisen, halbjährlichen oder jährlichen Kosten — ohne die gibt es nichts zu verteilen.</div>`;
     return;
   }
   const { S, rate, cushion, soll } = plan;
