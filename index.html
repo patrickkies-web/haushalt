@@ -1325,6 +1325,7 @@
     .rc-legend i.rc-up   { background: var(--accent); }
     .rc-legend i.rc-down { background: var(--danger); }
     .rc-legend i.rc-line { height: 2px; width: 14px; border-radius: 1px; background: var(--ink); }
+    .rc-legend i.rc-expline { height: 2px; width: 14px; border-radius: 1px; background: var(--muted); }
     .rc-wrap { display: flex; align-items: flex-start; padding: 0 0 8px; }
     .rc-axis { flex: none; }
     .rc-scroll { flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1337,7 +1338,20 @@
     svg.rc .rc-up   { fill: var(--accent); }
     svg.rc .rc-down { fill: var(--danger); }
     svg.rc .rc-line { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
-    svg.rc .rc-dot  { fill: var(--ink); }
+    svg.rc .rc-expline { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-linejoin: round; opacity: .8; }
+    svg.rc .rc-sel { fill: var(--accent); opacity: 0; }
+    svg.rc .rc-sel.on { opacity: .12; }
+    svg.rc .rc-hit { fill: transparent; cursor: pointer; }
+    .rc-read {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px;
+      padding: 10px 16px 4px; font-size: 12px; color: var(--muted); min-height: 38px;
+    }
+    .rc-read-m { font-weight: 500; color: var(--ink); width: 100%; font-size: 12.5px; }
+    .rc-read span { display: inline-flex; gap: 5px; align-items: baseline; }
+    .rc-read i { font-style: normal; font-size: 10.5px; color: var(--faint); }
+    .rc-read b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .rc-read span.up b   { color: var(--accent); }
+    .rc-read span.down b { color: var(--danger); }
     .rc-t { fill: var(--faint); font-size: 10px; font-family: inherit; font-variant-numeric: tabular-nums; }
     .rc-t.now { fill: var(--ink); font-weight: 500; }
     .rc-t.yr  { font-size: 9px; }
@@ -4653,10 +4667,13 @@ function renderAnalysis() {
 
 // ── Verlauf ────────────────────────────────────────────────────────────────
 // Ein Monat je Spalte, 24 ab dem Start des Rhythmus. Graue Säule: alles, was
-// in dem Monat geplant abgeht. Grün oder rot daneben: die eine Überweisung —
-// aufs Rotierkonto, oder von dort zurück, weil eine Rechnung kommt. Die Linie
-// ist der Soll-Stand am Monatsende, Punkt für Punkt, nichts geglättet.
+// in dem Monat geplant abgeht, als Linie noch einmal nachgezogen. Grün oder rot
+// daneben: die eine Überweisung — aufs Rotierkonto, oder von dort zurück, weil
+// eine Rechnung kommt. Die dunkle Linie ist der Soll-Stand am Monatsende, von
+// Monat zu Monat gerade verbunden, nichts geglättet. Ein Tipp auf einen Monat
+// zeigt seine Zahlen über dem Diagramm.
 const RC_COLW = 44;
+let rcSel = null;   // der angetippte Monat; ohne Tipp der Planungsmonat
 function renderRotChart(host) {
   if (!host) return;
   if (!subs.length || !smoothOn()) {
@@ -4714,10 +4731,8 @@ function renderRotChart(host) {
     const d  = new Date(Math.floor(c.mk / 12), c.mk % 12, 1);
     if (c.mk === cur) marks += `<rect class="rc-cur" x="${x0}" y="${TOP}" width="${RC_COLW}" height="${plotH}"/>`;
     if (c.mk === P && P !== cur) marks += `<rect class="rc-plan" x="${x0}" y="${TOP}" width="${RC_COLW}" height="${plotH}"/>`;
-    const tip = `${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}: geplant ${eur.format(c.exp)}`
-      + (c.move === null ? '' : ` · Überweisung ${c.move < -0.005 ? '−' : '+'}${eur.format(Math.abs(c.move))}`)
-      + (c.bal === null ? '' : ` · Soll-Stand ${eur.format(Math.abs(c.bal) < 0.005 ? 0 : c.bal)}`);
-    bars += `<g><title>${esc(tip)}</title>`;
+    marks += `<rect class="rc-sel" data-mk="${c.mk}" x="${x0}" y="${TOP}" width="${RC_COLW}" height="${plotH}"/>`;
+    bars += `<g>`;
     if (c.exp > 0.005)
       bars += `<rect class="rc-exp" x="${r2(xc - BW - GAP / 2)}" y="${r2(y(c.exp))}" width="${BW}" height="${r2(y(0) - y(c.exp))}" rx="2"/>`;
     if (c.move !== null && Math.abs(c.move) > 0.005) {
@@ -4725,25 +4740,29 @@ function renderRotChart(host) {
       bars += `<rect class="${up ? 'rc-up' : 'rc-down'}" x="${r2(xc + GAP / 2)}" y="${r2(up ? y(c.move) : y(0))}" width="${BW}" height="${r2(Math.abs(y(c.move) - y(0)))}" rx="2"/>`;
     }
     bars += `</g>`;
+    // Die Fläche der Spalte nimmt den Tipp entgegen
+    bars += `<rect class="rc-hit" data-mk="${c.mk}" x="${x0}" y="0" width="${RC_COLW}" height="${H}"/>`;
     labels += `<text class="rc-t ${c.mk === cur ? 'now' : ''}" x="${xc}" y="${H - 14}" text-anchor="middle">${mf.format(d).replace('.', '')}</text>`;
     if (c.mk % 12 === 0 || i === 0)
       labels += `<text class="rc-t yr" x="${xc}" y="${H - 3}" text-anchor="middle">'${String(d.getFullYear()).slice(2)}</text>`;
   });
 
-  // Die Linie: ein Punkt je Monatsende, gerade verbunden
-  const pts = cols.map((c, i) => c.bal === null ? null : [r2(i * RC_COLW + RC_COLW / 2), r2(y(c.bal))]).filter(Boolean);
-  const line = pts.length
-    ? `<polyline class="rc-line" points="${pts.map(p => p.join(',')).join(' ')}"/>`
-      + pts.map(p => `<circle class="rc-dot" cx="${p[0]}" cy="${p[1]}" r="2.6"/>`).join('')
-    : '';
+  // Zwei Linien, ein Wert je Monat, gerade verbunden: die geplanten Ausgaben
+  // und der Soll-Stand am Monatsende
+  const poly = (cls, pick) => {
+    const pts = cols.map((c, i) => pick(c) === null ? null : `${r2(i * RC_COLW + RC_COLW / 2)},${r2(y(pick(c)))}`).filter(Boolean);
+    return pts.length ? `<polyline class="${cls}" points="${pts.join(' ')}"/>` : '';
+  };
+  const line = poly('rc-expline', c => c.exp) + poly('rc-line', c => c.bal);
 
   host.innerHTML = `
     <div class="rc-legend">
-      <span><i class="rc-exp"></i>Geplante Ausgaben</span>
+      <span><i class="rc-exp"></i><i class="rc-expline"></i>Geplante Ausgaben</span>
       <span><i class="rc-up"></i>Aufs Rotierkonto</span>
       <span><i class="rc-down"></i>Vom Rotierkonto</span>
       <span><i class="rc-line"></i>Soll-Stand</span>
     </div>
+    <div class="rc-read" id="rc-read"></div>
     <div class="rc-wrap">
       <svg class="rc-axis" width="${AXW}" height="${H}" viewBox="0 0 ${AXW} ${H}" aria-hidden="true">${axis}</svg>
       <div class="rc-scroll" id="rc-scroll">
@@ -4755,6 +4774,25 @@ function renderRotChart(host) {
     </div>`;
   const sc = $("rc-scroll");
   if (sc) sc.scrollLeft = Math.max(0, (Math.min(cur, S - 1) - from) * RC_COLW);
+
+  // Ein Tipp auf einen Monat zeigt seine Zahlen; bis dahin die des Planungsmonats
+  const show = mk => {
+    const c = cols.find(x => x.mk === mk);
+    if (!c) return;
+    rcSel = mk;
+    host.querySelectorAll('.rc-sel').forEach(r => r.classList.toggle('on', +r.dataset.mk === mk));
+    const d = new Date(Math.floor(mk / 12), mk % 12, 1);
+    const stat = (l, v, cls) => `<span class="${cls || ''}"><i>${l}</i><b>${v}</b></span>`;
+    $("rc-read").innerHTML =
+      `<span class="rc-read-m">${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}</span>`
+      + stat('Geplant', eur.format(c.exp))
+      + (c.move === null ? '' : stat(c.move < -0.005 ? 'Vom Rotierkonto' : 'Aufs Rotierkonto',
+          `${c.move < -0.005 ? '−' : '+'}${eur.format(Math.abs(c.move) < 0.005 ? 0 : Math.abs(c.move))}`,
+          c.move < -0.005 ? 'down' : 'up'))
+      + (c.bal === null ? '' : stat('Soll-Stand', eur.format(Math.abs(c.bal) < 0.005 ? 0 : c.bal)));
+  };
+  host.querySelectorAll('.rc-hit').forEach(r => { r.onclick = () => show(+r.dataset.mk); });
+  show(rcSel !== null && cols.some(c => c.mk === rcSel) ? rcSel : (P >= from && P <= to ? P : from));
 }
 
 // ── Zeitstrahl ─────────────────────────────────────────────────────────────
