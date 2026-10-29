@@ -3376,11 +3376,14 @@ const mkLabel = mk => new Date(Math.floor(mk / 12), mk % 12, 1)
   .toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }).replace('.', '');
 
 // Seit wann eine Zahlung läuft: der gespeicherte Monat. Fehlt er noch (ältere
-// Einträge), der früheste Hinweis, den es gibt — die eingetragene Zahlung,
+// Einträge), der früheste Hinweis, den es gibt — der Monat, in dem das Abo
+// angelegt wurde (die id trägt den Zeitstempel), die eingetragene Zahlung,
 // eine verknüpfte Buchung, oder eben jetzt.
 function subSince(s) {
   if (typeof s.since === 'string' && /^\d{4}-\d{2}$/.test(s.since)) return s.since;
   const c = [nowMk()];
+  const made = /^s(\d{13})/.exec(s.id || '');
+  if (made) { const d = new Date(+made[1]); if (!isNaN(d)) c.push(d.getFullYear() * 12 + d.getMonth()); }
   if (s.date && /^\d{4}-\d{2}/.test(s.date)) c.push(mkOf(s.date.slice(0, 7)));
   Object.keys(payments[s.id] || {}).forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) c.push(mkOf(k)); });
   return ymOf(Math.min(...c));
