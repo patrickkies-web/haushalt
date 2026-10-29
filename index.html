@@ -1317,6 +1317,31 @@
     }
     .tl-bar.ended { opacity: .45; }
 
+    /* Verlauf: Achse links bleibt stehen, die Monate scrollen */
+    .rc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 16px 4px; font-size: 11px; color: var(--muted); }
+    .rc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .rc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+    .rc-legend i.rc-exp  { background: var(--line); }
+    .rc-legend i.rc-up   { background: var(--accent); }
+    .rc-legend i.rc-down { background: var(--danger); }
+    .rc-legend i.rc-line { height: 2px; width: 14px; border-radius: 1px; background: var(--ink); }
+    .rc-wrap { display: flex; align-items: flex-start; padding: 0 0 8px; }
+    .rc-axis { flex: none; }
+    .rc-scroll { flex: 1; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    svg.rc { display: block; }
+    svg.rc .rc-cur  { fill: var(--bg-2); }
+    svg.rc .rc-plan { fill: var(--accent-tint); }
+    svg.rc .rc-grid { stroke: var(--line-soft); stroke-width: 1; }
+    svg.rc .rc-zero { stroke: var(--line); stroke-width: 1; }
+    svg.rc .rc-exp  { fill: var(--line); }
+    svg.rc .rc-up   { fill: var(--accent); }
+    svg.rc .rc-down { fill: var(--danger); }
+    svg.rc .rc-line { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
+    svg.rc .rc-dot  { fill: var(--ink); }
+    .rc-t { fill: var(--faint); font-size: 10px; font-family: inherit; font-variant-numeric: tabular-nums; }
+    .rc-t.now { fill: var(--ink); font-weight: 500; }
+    .rc-t.yr  { font-size: 9px; }
+
     /* ── Tab navigation ── */
     .tab-nav {
       display: flex;
@@ -4586,7 +4611,10 @@ const ANA_KEY = "turnus:ana";
 const ANA_SECTIONS = [
   { id: 'timeline', title: 'Zeitstrahl',
     hint: 'Wie lange jede wiederkehrende Zahlung läuft — und wann sie aufgehört hat.',
-    render: host => renderTimeline(host) }
+    render: host => renderTimeline(host) },
+  { id: 'chart', title: 'Verlauf',
+    hint: 'Geplante Ausgaben je Monat, deine Überweisung aufs oder vom Rotierkonto, und der Soll-Stand.',
+    render: host => renderRotChart(host) }
 ];
 let anaOpen = null;
 function anaState() {
@@ -4619,6 +4647,112 @@ function renderAnalysis() {
       <div class="ana-body" id="ana-${sec.id}"></div>
     </div>`).join('');
   ANA_SECTIONS.forEach(sec => sec.render($("ana-" + sec.id)));
+}
+
+// ── Verlauf ────────────────────────────────────────────────────────────────
+// Ein Monat je Spalte, 24 ab dem Start des Rhythmus. Graue Säule: alles, was
+// in dem Monat geplant abgeht. Grün oder rot daneben: die eine Überweisung —
+// aufs Rotierkonto, oder von dort zurück, weil eine Rechnung kommt. Die Linie
+// ist der Soll-Stand am Monatsende, Punkt für Punkt, nichts geglättet.
+const RC_COLW = 44;
+function renderRotChart(host) {
+  if (!host) return;
+  if (!subs.length || !smoothOn()) {
+    host.innerHTML = `<div class="ana-empty">Noch keine wiederkehrenden Kosten.</div>`;
+    return;
+  }
+  const plan = rotPlan();
+  if (!plan.hasIrr) {
+    host.innerHTML = `<div class="ana-empty">Keine quartalsweisen oder jährlichen Kosten — ohne die gibt es nichts zu verteilen.</div>`;
+    return;
+  }
+  const { S, rate, cushion, soll } = plan;
+  const cur  = nowMk(), P = planMk();
+  const from = Math.min(cur, S - 1), to = S + ROT_H - 1;
+  const N    = to - from + 1;
+  const mf   = new Intl.DateTimeFormat('de-DE', { month: 'short' });
+
+  // Die Zahlen je Monat
+  const cols = [];
+  for (let mk = from; mk <= to; mk++) {
+    const exp = costsInMonth(mk).reduce((a, c) => a + c.amount, 0);
+    let move = null;
+    if (mk === S - 1) move = cushion;                      // das Polster aufbauen
+    else if (mk >= S) move = rate - irrDueAt(mk);          // Rate minus Fälliges
+    cols.push({ mk, exp, move, bal: mk >= S - 1 ? soll(mk) : null });
+  }
+  const hi = Math.max(1, ...cols.map(c => Math.max(c.exp, c.move || 0, c.bal || 0)));
+  const lo = Math.min(0, ...cols.map(c => c.move || 0));
+
+  // Runde Achsenschritte, vier bis sechs Linien
+  const span = hi - lo;
+  const raw  = span / 5;
+  const pow  = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * pow).find(v => v >= raw) || pow * 10;
+  const yMax = Math.ceil(hi / step) * step, yMin = Math.floor(lo / step) * step;
+
+  const H = 220, TOP = 14, BOT = 30, AXW = 52;
+  const plotH = H - TOP - BOT;
+  const y  = v => TOP + (yMax - v) / (yMax - yMin) * plotH;
+  const r2 = v => Math.round(v * 100) / 100;
+  const W  = N * RC_COLW;
+  const fmtK = v => Math.abs(v) >= 1000 ? (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' k' : v.toLocaleString('de-DE', { maximumFractionDigits: 0 });
+
+  let grid = '', axis = '';
+  for (let v = yMin; v <= yMax + 1e-9; v += step) {
+    grid += `<line class="${Math.abs(v) < 1e-9 ? 'rc-zero' : 'rc-grid'}" x1="0" x2="${W}" y1="${r2(y(v))}" y2="${r2(y(v))}"/>`;
+    axis += `<text class="rc-t" x="${AXW - 6}" y="${r2(y(v)) + 3.5}" text-anchor="end">${fmtK(v)}</text>`;
+  }
+
+  let bars = '', labels = '', marks = '';
+  const BW = 13, GAP = 3;
+  cols.forEach((c, i) => {
+    const x0 = i * RC_COLW;
+    const xc = x0 + RC_COLW / 2;
+    const d  = new Date(Math.floor(c.mk / 12), c.mk % 12, 1);
+    if (c.mk === cur) marks += `<rect class="rc-cur" x="${x0}" y="${TOP}" width="${RC_COLW}" height="${plotH}"/>`;
+    if (c.mk === P && P !== cur) marks += `<rect class="rc-plan" x="${x0}" y="${TOP}" width="${RC_COLW}" height="${plotH}"/>`;
+    const tip = `${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}: geplant ${eur.format(c.exp)}`
+      + (c.move === null ? '' : ` · Überweisung ${c.move < -0.005 ? '−' : '+'}${eur.format(Math.abs(c.move))}`)
+      + (c.bal === null ? '' : ` · Soll-Stand ${eur.format(Math.abs(c.bal) < 0.005 ? 0 : c.bal)}`);
+    bars += `<g><title>${esc(tip)}</title>`;
+    if (c.exp > 0.005)
+      bars += `<rect class="rc-exp" x="${r2(xc - BW - GAP / 2)}" y="${r2(y(c.exp))}" width="${BW}" height="${r2(y(0) - y(c.exp))}" rx="2"/>`;
+    if (c.move !== null && Math.abs(c.move) > 0.005) {
+      const up = c.move > 0;
+      bars += `<rect class="${up ? 'rc-up' : 'rc-down'}" x="${r2(xc + GAP / 2)}" y="${r2(up ? y(c.move) : y(0))}" width="${BW}" height="${r2(Math.abs(y(c.move) - y(0)))}" rx="2"/>`;
+    }
+    bars += `</g>`;
+    labels += `<text class="rc-t ${c.mk === cur ? 'now' : ''}" x="${xc}" y="${H - 14}" text-anchor="middle">${mf.format(d).replace('.', '')}</text>`;
+    if (c.mk % 12 === 0 || i === 0)
+      labels += `<text class="rc-t yr" x="${xc}" y="${H - 3}" text-anchor="middle">'${String(d.getFullYear()).slice(2)}</text>`;
+  });
+
+  // Die Linie: ein Punkt je Monatsende, gerade verbunden
+  const pts = cols.map((c, i) => c.bal === null ? null : [r2(i * RC_COLW + RC_COLW / 2), r2(y(c.bal))]).filter(Boolean);
+  const line = pts.length
+    ? `<polyline class="rc-line" points="${pts.map(p => p.join(',')).join(' ')}"/>`
+      + pts.map(p => `<circle class="rc-dot" cx="${p[0]}" cy="${p[1]}" r="2.6"/>`).join('')
+    : '';
+
+  host.innerHTML = `
+    <div class="rc-legend">
+      <span><i class="rc-exp"></i>Geplante Ausgaben</span>
+      <span><i class="rc-up"></i>Aufs Rotierkonto</span>
+      <span><i class="rc-down"></i>Vom Rotierkonto</span>
+      <span><i class="rc-line"></i>Soll-Stand</span>
+    </div>
+    <div class="rc-wrap">
+      <svg class="rc-axis" width="${AXW}" height="${H}" viewBox="0 0 ${AXW} ${H}" aria-hidden="true">${axis}</svg>
+      <div class="rc-scroll" id="rc-scroll">
+        <svg class="rc" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+          aria-label="Geplante Ausgaben, Überweisungen und Soll-Stand des Rotierkontos je Monat">
+          ${marks}${grid}${bars}${line}${labels}
+        </svg>
+      </div>
+    </div>`;
+  const sc = $("rc-scroll");
+  if (sc) sc.scrollLeft = Math.max(0, (Math.min(cur, S - 1) - from) * RC_COLW);
 }
 
 // ── Zeitstrahl ─────────────────────────────────────────────────────────────
