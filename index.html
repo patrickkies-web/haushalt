@@ -1356,6 +1356,11 @@
     .rc-t.now { fill: var(--ink); font-weight: 500; }
     .rc-t.yr  { font-size: 9px; }
 
+    .f-log { margin-top: 20px; font-size: 11.5px; color: var(--faint); line-height: 1.45; }
+    .f-log-head { margin-bottom: 4px; }
+    .f-log-row { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line-soft); color: var(--muted); }
+    .f-log-row span:first-child { flex: none; color: var(--faint); font-variant-numeric: tabular-nums; }
+
     /* ── Tab navigation ── */
     .tab-nav {
       display: flex;
@@ -2400,6 +2405,7 @@
       </div>
       <div style="font-size:12px;color:var(--muted);margin-top:6px">Zahlungen bis zu diesem Datum werden weiter geplant, danach nicht mehr.</div>
     </div>
+    <div class="f-log" id="f-log" style="display:none"></div>
     <div class="sheet-actions" id="sheet-actions">
       <button class="btn btn-danger" id="delete-btn" style="display:none">Löschen</button>
       <button class="btn btn-ghost" id="deact-btn" style="display:none" onclick="quickDeactivate()">Deaktivieren</button>
@@ -2425,6 +2431,8 @@ const AKEY = "turnus:accounts";
 const RKEY = "turnus:rotierkonto";
 const HKEY = "turnus:household";
 const OKEY = "turnus:oneoffs";
+const ZKEY = "turnus:trash";
+const nowIso = () => new Date().toISOString();
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // Backed by localStorage, with an in-memory fallback for private windows or
@@ -2483,6 +2491,8 @@ let CATS        = [...DEFAULT_CATS];
 let subs        = [];
 // One-off costs. They land in the month of their date, not every month.
 let oneoffs     = [];
+// Was gelöscht wurde, mit dem Zeitpunkt — die letzten fünfzig Einträge
+let trash       = [];
 let editingOne  = null;
 let income      = {};   // { [absMonthIdx]: { patrick, sara, other, prevSara, prevPatrick, sockel } }
 let editing     = null;
@@ -2506,13 +2516,14 @@ let txActiveAcc   = "a1";
 // Rotierkonto: start = first month of the rhythm (YYYY-MM, "" = next month),
 // plan = the month being planned (YYYY-MM, never before the current one),
 // balance = what sits on the account on the 1st of balanceMonth (null = unknown)
-let rotCfg        = { start: "", plan: "", balance: null, balanceMonth: "" };
+let rotCfg        = { start: "", startSetAt: "", plan: "", planSetAt: "", balance: null, balanceMonth: "", balanceAt: "" };
 function rotCfgApply(d) {
   if (!d || typeof d !== 'object') return;
   if (typeof d.start === 'string') rotCfg.start = d.start;
   if (typeof d.plan  === 'string') rotCfg.plan  = d.plan;
   if (typeof d.balance === 'number' || d.balance === null) rotCfg.balance = d.balance;
   if (typeof d.balanceMonth === 'string') rotCfg.balanceMonth = d.balanceMonth;
+  ['startSetAt', 'planSetAt', 'balanceAt'].forEach(k => { if (typeof d[k] === 'string') rotCfg[k] = d[k]; });
 }
 // Income keys stay the member id, so the two original people keep their data
 let household     = {
@@ -2688,6 +2699,10 @@ async function load() {
     if (ro && ro.value) { const d = JSON.parse(ro.value); if (Array.isArray(d)) oneoffs = d; }
   } catch (e) {}
   try {
+    const rz = await window.storage.get(ZKEY);
+    if (rz && rz.value) { const d = JSON.parse(rz.value); if (Array.isArray(d)) trash = d; }
+  } catch (e) {}
+  try {
     const rh = await window.storage.get(HKEY);
     if (rh && rh.value) {
       const d = JSON.parse(rh.value);
@@ -2708,6 +2723,12 @@ async function load() {
       if (d && typeof d === 'object') gh = { ...gh, ...d };
     }
   } catch (e) {}
+  // Stempel nachtragen, die ältere Daten noch nicht haben
+  const ch = stampMigrate();
+  if (ch.subs)         await persist();
+  if (ch.oneoffs)      await persistOneoffs();
+  if (ch.transactions) await persistTransactions();
+  if (ch.settlements)  await persistSettlements();
   render();
   if (ghReady()) { syncBadge("ok", "Sync"); ghPull({ silent: true }); }
 }
@@ -2733,6 +2754,7 @@ async function persistOneoffs() {
 }
 
 async function persistHousehold() {
+  household.updatedAt = nowIso();
   try { await window.storage.set(HKEY, JSON.stringify(household)); } catch (e) {}
   syncSoon();
 }
@@ -2766,7 +2788,7 @@ function ghSnapshot() {
   return {
     v: 2, subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, household, oneoffs
+    accounts: txAccCfg, rotierkonto: rotCfg, household, oneoffs, trash
   };
 }
 
@@ -2788,6 +2810,8 @@ function ghApply(d) {
     household = d.household;
   hhMigrate();
   if (Array.isArray(d.oneoffs)) oneoffs = d.oneoffs;
+  if (Array.isArray(d.trash))   trash   = d.trash;
+  stampMigrate();
   return true;
 }
 
@@ -2796,7 +2820,7 @@ async function ghPersistAll() {
   await Promise.all([
     persist(), persistCats(), persistIncome(), persistTransactions(),
     persistPayments(), persistTxCats(), persistSettlements(),
-    persistAccCfg(), persistRotCfg(), persistHousehold(), persistOneoffs()
+    persistAccCfg(), persistRotCfg(), persistHousehold(), persistOneoffs(), persistTrash()
   ]);
   applyingRemote = false;
 }
@@ -3054,7 +3078,7 @@ async function hhApply() {
 
 async function hhAdd() {
   hhKeepTyped();
-  household.members.push({ id: 'm' + Date.now().toString(36), name: `Person ${household.members.length + 1}` });
+  household.members.push({ id: 'm' + Date.now().toString(36), name: `Person ${household.members.length + 1}`, addedAt: nowIso() });
   await hhApply();
 }
 
@@ -3062,6 +3086,9 @@ async function hhRemove(i) {
   const m = household.members[i];
   if (!confirm(`„${m.name || 'Person'}" entfernen? Die eingetragenen Löhne dieser Person bleiben gespeichert, werden aber nicht mehr angezeigt.`)) return;
   hhKeepTyped();
+  // Wer geht, bleibt mit Namen und Zeitpunkt vermerkt — die Löhne unter
+  // seiner id bleiben ja auch
+  household.former = [...(household.former || []), { id: m.id, name: m.name, removedAt: nowIso() }];
   household.members.splice(i, 1);
   await hhApply();
 }
@@ -3277,7 +3304,7 @@ function doLinkTx(txId, subId, isException) {
   const yymm = txYYMM(t);
   if (!yymm) return;
   if (!payments[subId]) payments[subId] = {};
-  payments[subId][yymm] = { txId, txAmount: t.amount, date: t.date, isException };
+  payments[subId][yymm] = { txId, txAmount: t.amount, date: t.date, isException, linkedAt: nowIso() };
   persistPayments();
   document.querySelectorAll(".tx-sub-picker").forEach(p => p.remove());
   document.querySelectorAll(".tx-sub-scrim").forEach(p => p.remove());
@@ -3404,7 +3431,12 @@ async function reactivateAll() {
   const list = subs.filter(s => !!s.deactivatedFrom);
   if (!list.length) return;
   if (!confirm(`${list.length === 1 ? "Diese Kosten" : list.length + " Kosten"} wieder aktivieren? Sie werden ab sofort wieder eingeplant.`)) return;
-  list.forEach(s => { s.deactivatedFrom = null; });
+  const at = nowIso();
+  list.forEach(s => {
+    s.log = [...(Array.isArray(s.log) ? s.log : []), { at, field: 'deactivatedFrom', from: s.deactivatedFrom, to: null }];
+    s.deactivatedFrom = null;
+    s.updatedAt = at;
+  });
   await persist();
   render();
   showToast(list.length === 1 ? "Wieder aktiv" : `${list.length} Kosten wieder aktiv`);
@@ -3442,6 +3474,7 @@ function setInc(mk, field, val) {
   const k = String(mk);
   if (!income[k]) income[k] = {};
   income[k][field] = val;
+  income[k]._at = nowIso();   // wann dieser Monat zuletzt angefasst wurde
 }
 
 // What each member's account actually carries in a given month — the sum of
@@ -3836,6 +3869,85 @@ function buildPayers() {
 }
 function pickPayer(id) { draft.payer = id; buildPayers(); }
 
+// ── Zeitstempel ────────────────────────────────────────────────────────────
+// Jeder Eintrag weiß, wann er angelegt und zuletzt geändert wurde; ein Abo
+// führt dazu ein Protokoll seiner Änderungen (Betrag, Rhythmus, Konto, Ende …).
+// Ältere Daten tragen den Zeitpunkt der Anlage in ihrer id — daraus werden
+// die fehlenden Stempel beim Laden nachgetragen.
+const SUB_FIELDS = {
+  name: 'Name', amount: 'Betrag', cycle: 'Rhythmus', cat: 'Kategorie', payer: 'Konto',
+  date: 'Fälligkeit', since: 'Aktiv seit', deactivatedFrom: 'Deaktiviert ab', split: 'Aufteilung'
+};
+const sameVal = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+function subChanges(old, neu) {
+  const at = nowIso();
+  return Object.keys(SUB_FIELDS)
+    .filter(f => !sameVal(old[f], neu[f]))
+    .map(f => ({ at, field: f, from: old[f] ?? null, to: neu[f] ?? null }));
+}
+const idStamp = id => {
+  const m = /^[a-z]+(\d{13})/.exec(id || '');
+  const d = m ? new Date(+m[1]) : null;
+  return d && !isNaN(d) ? d.toISOString() : null;
+};
+function stampMigrate() {
+  const ch = { subs: false, oneoffs: false, transactions: false, settlements: false };
+  subs.forEach(s => {
+    if (!s.createdAt) { s.createdAt = idStamp(s.id) || nowIso(); ch.subs = true; }
+    if (!s.updatedAt) { s.updatedAt = s.createdAt; ch.subs = true; }
+    if (!Array.isArray(s.log)) { s.log = []; ch.subs = true; }
+    // Der Startmonat wird festgeschrieben, sobald es einen echten Hinweis gibt;
+    // "jetzt" allein bleibt offen, damit ein späterer Hinweis noch zählt.
+    if (!(typeof s.since === 'string' && /^\d{4}-\d{2}$/.test(s.since))) {
+      const guess = subSince(s);
+      if (guess !== ymOf(nowMk())) { s.since = guess; ch.subs = true; }
+    }
+  });
+  oneoffs.forEach(o => {
+    if (!o.createdAt) { o.createdAt = idStamp(o.id) || nowIso(); ch.oneoffs = true; }
+    if (!o.updatedAt) { o.updatedAt = o.createdAt; ch.oneoffs = true; }
+  });
+  transactions.forEach(t => {
+    if (!t.importedAt) { t.importedAt = idStamp(t.id) || nowIso(); ch.transactions = true; }
+  });
+  settlements.forEach(x => {
+    if (!x.createdAt) { x.createdAt = idStamp(x.id) || nowIso(); ch.settlements = true; }
+  });
+  return ch;
+}
+function trashPut(kind, item) {
+  trash.unshift({ kind, deletedAt: nowIso(), item });
+  trash = trash.slice(0, 50);
+  return persistTrash();
+}
+async function persistTrash() {
+  try { await window.storage.set(ZKEY, JSON.stringify(trash)); } catch (e) {}
+  syncSoon();
+}
+
+// Das Protokoll eines Abos, lesbar
+function fmtStamp(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function subValLabel(field, v) {
+  if (v === null || v === undefined || v === '') return '–';
+  if (field === 'amount') return eur.format(v);
+  if (field === 'cycle') return (CYCLES[v] || {}).label || String(v);
+  if (field === 'payer') return accLabel(v);
+  if (field === 'date' || field === 'deactivatedFrom') return fmtStamp(v + 'T00:00:00') || String(v);
+  if (field === 'since') return /^\d{4}-\d{2}$/.test(v) ? mkLabel(mkOf(v)) : String(v);
+  if (field === 'split') return 'eigene Anteile';
+  return String(v);
+}
+function subLogHtml(s) {
+  const rows = [...(s.log || [])].reverse().slice(0, 12).map(e =>
+    `<div class="f-log-row"><span>${fmtStamp(e.at)}</span><span>${esc(SUB_FIELDS[e.field] || e.field)}:
+      ${esc(subValLabel(e.field, e.from))} → ${esc(subValLabel(e.field, e.to))}</span></div>`).join('');
+  const changed = s.updatedAt && s.updatedAt !== s.createdAt ? ` · zuletzt geändert ${fmtStamp(s.updatedAt)}` : '';
+  return `<div class="f-log-head">Angelegt ${fmtStamp(s.createdAt) || '–'}${changed}</div>${rows}`;
+}
+
 // ── One-off costs ──────────────────────────────────────────────────────────
 const oneMonth = o => (o.month || (o.date || '').slice(0, 7));
 const oneMk = o => {
@@ -3899,9 +4011,10 @@ async function saveOne() {
   };
   if (editingOne) {
     const i = oneoffs.findIndex(x => x.id === editingOne);
-    if (i > -1) oneoffs[i] = { ...oneoffs[i], ...data };
+    if (i > -1) oneoffs[i] = { ...oneoffs[i], ...data, updatedAt: nowIso() };
   } else {
-    oneoffs.push({ id: "o" + Date.now() + Math.random().toString(36).slice(2, 6), ...data });
+    const at = nowIso();
+    oneoffs.push({ id: "o" + Date.now() + Math.random().toString(36).slice(2, 6), ...data, createdAt: at, updatedAt: at });
   }
   await persistOneoffs();
   closeOneSheet();
@@ -3910,7 +4023,9 @@ async function saveOne() {
 
 async function delOne() {
   if (!editingOne) return;
+  const gone = oneoffs.find(x => x.id === editingOne);
   oneoffs = oneoffs.filter(x => x.id !== editingOne);
+  if (gone) await trashPut('oneoff', gone);
   await persistOneoffs();
   closeOneSheet();
   render();
@@ -4266,6 +4381,7 @@ function renderPlanPanel(plan) {
 
 async function planShift(n) {
   rotCfg.plan = ymOf(Math.max(nowMk(), planMk() + n));
+  rotCfg.planSetAt = nowIso();
   await persistRotCfg();
   renderForecast();
 }
@@ -4587,6 +4703,7 @@ function renderForecast() {
   const rs = $("rot-start");
   if (rs) rs.addEventListener('change', async () => {
     rotCfg.start = /^\d{4}-\d{2}$/.test(rs.value) ? rs.value : "";
+    rotCfg.startSetAt = nowIso();
     await persistRotCfg();
     renderForecast();
   });
@@ -4598,6 +4715,7 @@ function renderForecast() {
       const raw = rb.value.trim();
       rotCfg.balance = raw === "" ? null : (parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0);
       rotCfg.balanceMonth = raw === "" ? "" : ymOf(planMk());
+      rotCfg.balanceAt    = raw === "" ? "" : nowIso();
       await persistRotCfg();
       renderForecast();
     };
@@ -5055,6 +5173,7 @@ function importTxData(text) {
   parsed.forEach(t => {
     if (existing.has(t.fp)) { skipped++; return; }
     t.id = "t" + Date.now() + Math.random().toString(36).slice(2, 5);
+    t.importedAt = nowIso();
     transactions.push(t);
     existing.add(t.fp);
     if (t.date) newMonths.add(t.date.slice(0, 7));
@@ -5236,6 +5355,7 @@ function confirmSettlement(expenseTxId) {
   if (!ids.length) { showToast("Mindestens eine Erstattung auswählen"); return; }
   settlements.push({
     id: "sl" + Date.now() + Math.random().toString(36).slice(2, 4),
+    createdAt: nowIso(),
     expenseTxId,
     reimbursementTxIds: ids
   });
@@ -5861,6 +5981,9 @@ function openSheet(id) {
     deactWrap.style.display = "none";
     deactBtn.style.display = s ? "block" : "none";
   }
+  const logEl = $("f-log");
+  logEl.style.display = s ? "" : "none";
+  logEl.innerHTML = s ? subLogHtml(s) : "";
   clearErr();
   $("scrim").classList.add("on");
   $("sheet").classList.add("on");
@@ -5953,9 +6076,14 @@ async function save() {
 
   if (editing) {
     const i = subs.findIndex(x => x.id === editing);
-    if (i > -1) subs[i] = { ...subs[i], ...data };
+    if (i > -1) {
+      const old = subs[i];
+      const log = [...(Array.isArray(old.log) ? old.log : []), ...subChanges(old, data)];
+      subs[i] = { ...old, ...data, log, updatedAt: nowIso() };
+    }
   } else {
-    subs.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), ...data });
+    const at = nowIso();
+    subs.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2, 6), ...data, createdAt: at, updatedAt: at, log: [] });
   }
 
   await persist();
@@ -5965,7 +6093,9 @@ async function save() {
 
 async function del() {
   if (!editing) return;
+  const gone = subs.find(x => x.id === editing);
   subs = subs.filter(x => x.id !== editing);
+  if (gone) await trashPut('sub', gone);
   await persist();
   closeSheet();
   render();
@@ -5978,7 +6108,7 @@ function exportData() {
     v: 2,
     subs, cats: CATS, income,
     transactions, payments, txcats: txUserCats, settlements,
-    accounts: txAccCfg, rotierkonto: rotCfg, household, oneoffs,
+    accounts: txAccCfg, rotierkonto: rotCfg, household, oneoffs, trash,
     exported: new Date().toISOString()
   }, null, 2);
   const blob    = new Blob([payload], { type: "application/json" });
@@ -6020,11 +6150,13 @@ async function importData(file) {
       household = data.household;
     hhMigrate();
     if (Array.isArray(data.oneoffs)) oneoffs = data.oneoffs;
+    if (Array.isArray(data.trash))   trash   = data.trash;
+    stampMigrate();
 
     await Promise.all([
       persist(), persistCats(), persistIncome(), persistTransactions(),
       persistPayments(), persistTxCats(), persistSettlements(),
-      persistAccCfg(), persistRotCfg(), persistHousehold(), persistOneoffs()
+      persistAccCfg(), persistRotCfg(), persistHousehold(), persistOneoffs(), persistTrash()
     ]);
     render();
     showToast(`${subs.length} Abos, ${transactions.length} Umsätze geladen`);
