@@ -1,7 +1,7 @@
 // The page itself comes from the network whenever the network answers, so a
 // deploy is visible on the next open instead of the one after. Icons and the
 // manifest stay cache-first. Offline, everything falls back to the cache.
-const CACHE = 'togethr-v6';
+const CACHE = 'togethr-v7';
 const SHELL = ['.', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

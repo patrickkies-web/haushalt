@@ -713,27 +713,6 @@
       color: var(--faint);
     }
 
-    .forecast-head .avg       { text-align: right; flex: none; }
-
-    .forecast-head .avg-label {
-      display: block;
-      font-size: 11px;
-      color: var(--faint);
-      font-weight: 500;
-    }
-
-    .forecast-head .avg-val {
-      font-family: inherit;
-      font-variant-numeric: tabular-nums;
-      font-weight: 500;
-      font-size: 19px;
-      color: var(--accent);
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -.015em;
-      line-height: 1.1;
-      margin-top: 2px;
-    }
-
     .fc-scroll {
       background: var(--surface);
       border-radius: var(--radius);
@@ -945,6 +924,43 @@
     table.fc tr.fc-avg td.name .lbl { color: var(--text-2); font-weight: 500; font-size: 11px; }
     table.fc tr.fc-avg td.cur      { background: var(--bg-2); }
     table.fc tr.fc-avg td.past-col { opacity: .45; }
+
+    .plan { margin-bottom: 30px; }
+    .plan-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 14px; flex-wrap: wrap; margin: 0 2px 14px;
+    }
+    .plan-head h2 { font-size: 16px; font-weight: 500; letter-spacing: -.01em; }
+    .plan-head .hint { display: block; margin-top: 3px; font-size: 11.5px; color: var(--faint); }
+    .plan-month { display: flex; align-items: center; gap: 4px; }
+    .plan-month > span { display: flex; flex-direction: column; align-items: center; min-width: 128px; line-height: 1.15; }
+    .plan-month-l { font-size: 9.5px; font-weight: 500; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+    .plan-month b { font-size: 14px; font-weight: 500; white-space: nowrap; }
+    .plan-step {
+      width: 32px; height: 32px; border-radius: 9px; cursor: pointer;
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+      font-family: inherit; font-size: 18px; line-height: 1; display: grid; place-items: center;
+    }
+    .plan-step:disabled { opacity: .3; cursor: default; }
+    .plan-rows {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 4px 14px; margin-bottom: 10px;
+    }
+    .plan-row {
+      display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+      padding: 9px 0; font-size: 13.5px; border-bottom: 1px solid var(--line-soft);
+    }
+    .plan-row:last-child { border-bottom: none; }
+    .plan-row b { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .plan-row.total { font-weight: 500; }
+    .plan-row.total b { color: var(--accent); }
+    .plan-items { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 0 10px; margin-top: -3px; }
+    .plan-items span {
+      font-size: 11px; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 3px 7px;
+      font-variant-numeric: tabular-nums;
+    }
+    .plan-items span b { font-weight: 500; color: var(--ink); }
+    table.fc thead th.plan-col { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
 
     .rot-action {
       display: flex;
@@ -2447,8 +2463,16 @@ let settlements   = [];
 let txAccCfg      = { a1: { label: "Gehaltskonto", number: "" }, a2: { label: "Gemeinschaftskonto", number: "" } };
 let txActiveAcc   = "a1";
 // Rotierkonto: start = first month of the rhythm (YYYY-MM, "" = next month),
-// balance = actual amount currently sitting on the account (null = unknown)
-let rotCfg        = { start: "", balance: null };
+// plan = the month being planned (YYYY-MM, never before the current one),
+// balance = what sits on the account on the 1st of balanceMonth (null = unknown)
+let rotCfg        = { start: "", plan: "", balance: null, balanceMonth: "" };
+function rotCfgApply(d) {
+  if (!d || typeof d !== 'object') return;
+  if (typeof d.start === 'string') rotCfg.start = d.start;
+  if (typeof d.plan  === 'string') rotCfg.plan  = d.plan;
+  if (typeof d.balance === 'number' || d.balance === null) rotCfg.balance = d.balance;
+  if (typeof d.balanceMonth === 'string') rotCfg.balanceMonth = d.balanceMonth;
+}
 // Income keys stay the member id, so the two original people keep their data
 let household     = {
   name: '',
@@ -2615,13 +2639,7 @@ async function load() {
   } catch (e) {}
   try {
     const rr = await window.storage.get(RKEY);
-    if (rr && rr.value) {
-      const d = JSON.parse(rr.value);
-      if (d && typeof d === 'object') {
-        if (typeof d.start === 'string') rotCfg.start = d.start;
-        if (typeof d.balance === 'number' || d.balance === null) rotCfg.balance = d.balance;
-      }
-    }
+    if (rr && rr.value) rotCfgApply(JSON.parse(rr.value));
   } catch (e) {}
   applyTheme();
   try {
@@ -2724,11 +2742,7 @@ function ghApply(d) {
     if (d.accounts.a1) txAccCfg.a1 = { ...txAccCfg.a1, ...d.accounts.a1 };
     if (d.accounts.a2) txAccCfg.a2 = { ...txAccCfg.a2, ...d.accounts.a2 };
   }
-  if (d.rotierkonto && typeof d.rotierkonto === 'object') {
-    if (typeof d.rotierkonto.start === 'string') rotCfg.start = d.rotierkonto.start;
-    const b = d.rotierkonto.balance;
-    if (typeof b === 'number' || b === null) rotCfg.balance = b;
-  }
+  rotCfgApply(d.rotierkonto);
   if (d.household && Array.isArray(d.household.members) && d.household.members.length)
     household = d.household;
   hhMigrate();
@@ -3402,10 +3416,10 @@ function costsInMonth(mk) {
     const bi = d.getFullYear() * 12 + d.getMonth();
     const phase = (((mk - bi) % step) + step) % step === 0;
     if (phase && (bi <= curMk || mk >= bi) && mk < subDeactMk(s))
-      out.push({ amount: s.amount, payer: s.payer, split: s.split, irr: step > 1 });
+      out.push({ id: s.id, name: s.name, amount: s.amount, payer: s.payer, split: s.split, irr: step > 1 });
   });
   oneoffs.forEach(o => {
-    if (oneMk(o) === mk) out.push({ amount: o.amount, payer: o.payer, split: o.split, irr: false });
+    if (oneMk(o) === mk) out.push({ id: o.id, name: o.name, amount: o.amount, payer: o.payer, split: o.split, irr: false });
   });
   return out;
 }
@@ -4090,6 +4104,128 @@ function balanceRows(M, iRow, calcCells) {
        + M.map(m => iRow('inc-balance', `${esc(m.name)} Saldo${tag}`, calcCells('bal_' + m.id))).join('');
 }
 
+// ── Rotierkonto-Plan ───────────────────────────────────────────────────────
+// Der Plan hängt an einem festen Start, nicht am Kalender. Ab dem Startmonat
+// geht jeden Monat dieselbe Rate aufs Rotierkonto: der Durchschnitt aller
+// quartalsweisen und jährlichen Kosten der nächsten 24 Monate. Die fälligen
+// Rechnungen gehen davon ab. Das Startpolster ist der tiefste Stand, den das
+// Konto ohne Polster erreichen würde — so viel muss am Starttag drauf liegen,
+// damit es nie ins Minus rutscht. Der Soll-Stand jedes Monats folgt daraus,
+// ein für alle Mal; der Kalender schiebt nichts mehr nach.
+const ROT_H = 24;
+const ymMk  = ym => { const m = /^(\d{4})-(\d{2})$/.exec(ym || ""); return m ? (+m[1]) * 12 + (+m[2]) - 1 : null; };
+const rotStartMk = () => ymMk(rotCfg.start) ?? nowMk() + 1;
+// Der Planungsmonat: gesetzt am Planungstag, und nie hinter dem Kalender —
+// ist der Monat vorbei, zeigt die App den laufenden.
+const planMk = () => Math.max(nowMk(), ymMk(rotCfg.plan) ?? nowMk());
+const irrItemsAt = mk => costsInMonth(mk).filter(c => c.irr);
+const irrDueAt   = mk => irrItemsAt(mk).reduce((a, c) => a + c.amount, 0);
+
+function rotPlan() {
+  const S   = rotStartMk();
+  const due = Array.from({ length: ROT_H }, (_, i) => irrDueAt(S + i));
+  const rate = due.reduce((a, v) => a + v, 0) / ROT_H;
+  let b = 0, minB = 0;
+  due.forEach(v => { b += rate - v; if (b < minB) minB = b; });
+  const cushion = minB < -0.005 ? -minB : 0;
+  // Soll-Stand am Ende eines Monats; der Monat vor dem Start trägt das Polster
+  const soll = mk => {
+    if (mk < S - 1) return null;
+    let t = cushion;
+    for (let m = S; m <= mk; m++) t += rate - irrDueAt(m);
+    return t;
+  };
+  return { S, rate, cushion, soll, hasIrr: rate > 0.005 };
+}
+
+// Die Anweisung für den Planungsmonat, in Worten und einer Zahl
+function renderPlanPanel(plan) {
+  const { S, rate, cushion, soll, hasIrr } = plan;
+  const P    = planMk();
+  const cur  = nowMk();
+  const long = mk => new Date(Math.floor(mk / 12), mk % 12, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  const first = mk => `01.${String(mk % 12 + 1).padStart(2, '0')}.${Math.floor(mk / 12)}`;
+  const signed = v => `${v < -0.005 ? '−' : '+'}${eur.format(Math.abs(v) < 0.005 ? 0 : Math.abs(v))}`;
+  const balFor = rotCfg.balanceMonth === ymOf(P) && typeof rotCfg.balance === 'number' ? rotCfg.balance : null;
+
+  const picker = `<div class="plan-month">
+      <button class="plan-step" onclick="planShift(-1)" ${P <= cur ? 'disabled' : ''} aria-label="Monat zurück">‹</button>
+      <span><span class="plan-month-l">Planung für</span><b>${long(P)}</b></span>
+      <button class="plan-step" onclick="planShift(1)" aria-label="Monat vor">›</button>
+    </div>`;
+
+  if (!hasIrr) return `<div class="plan">
+    <div class="plan-head"><div><h2>Monatsplan</h2></div>${picker}</div>
+    <p class="reserve-note">Keine quartalsweisen oder jährlichen Kosten — ohne die braucht es kein Rotierkonto.</p>
+  </div>`;
+
+  const cfg = `<div class="rot-cfg">
+    <label>Rhythmus ab
+      <input type="month" id="rot-start" value="${ymOf(S)}">
+    </label>
+    <label>Kontostand am ${first(P)}
+      <input type="text" id="rot-bal" inputmode="decimal" placeholder="unbekannt"${balFor !== null ? ` value="${String(balFor).replace('.', ',')}"` : ''}>
+    </label>
+  </div>`;
+
+  let rows, action, actLbl, actHint, note;
+  if (P < S) {
+    // Vor dem Start: das Polster aufbauen
+    rows = `<div class="plan-row total"><span>Soll am ${first(S)} · Startpolster</span><b>${eur.format(cushion)}</b></div>
+      <div class="plan-row"><span>Rate ab ${long(S)}</span><b>${eur.format(rate)} / Monat</b></div>`;
+    action  = cushion - (balFor ?? 0);
+    actLbl  = `Bis ${first(S)}`;
+    actHint = action < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto';
+    note = cushion > 0.005
+      ? `Der Rhythmus beginnt im <b>${long(S)}</b>. Bis dahin müssen <b>${eur.format(cushion)}</b> auf dem Rotierkonto liegen: damit ist jede Rechnung der nächsten ${ROT_H} Monate gedeckt, ohne dass das Konto ins Minus rutscht. Ab ${long(S)} geht jeden Monat die Rate drauf, fällige Rechnungen gehen davon ab.`
+      : `Der Rhythmus beginnt im <b>${long(S)}</b>. Ein Startpolster brauchst du nicht — die Rate reicht, um jede Rechnung zu decken.`;
+  } else {
+    const items = irrItemsAt(P);
+    const due   = items.reduce((a, c) => a + c.amount, 0);
+    const start = soll(P - 1), end = soll(P);
+    const list  = items.length
+      ? `<div class="plan-items">${items.map(c => `<span>${esc(c.name)} <b>${eur.format(c.amount)}</b></span>`).join('')}</div>` : '';
+    rows = `<div class="plan-row"><span>Soll am ${first(P)}</span><b>${eur.format(start)}</b></div>
+      <div class="plan-row"><span>↑ Rate</span><b>+${eur.format(rate)}</b></div>
+      <div class="plan-row"><span>↓ Fällig im ${long(P).split(' ')[0]}</span><b>${due > 0.005 ? '−' + eur.format(due) : '–'}</b></div>${list}
+      <div class="plan-row total"><span>Soll am Ende ${long(P).split(' ')[0]}</span><b>${eur.format(Math.abs(end) < 0.005 ? 0 : end)}</b></div>`;
+    actLbl = `Überweisung im ${long(P).split(' ')[0]}`;
+    // Was direkt vom Rotierkonto abgebucht wird, muss nicht erst aufs
+    // Gehaltskonto geholt werden; der Rest schon.
+    const fromRot = items.filter(c => c.payer === ROT).reduce((a, c) => a + c.amount, 0);
+    const direct  = fromRot > 0.005 ? ` Davon gehen <b>${eur.format(fromRot)}</b> direkt vom Rotierkonto ab.` : '';
+    if (balFor !== null) {
+      action = end - balFor;
+      note = `Auf dem Rotierkonto liegen <b>${eur.format(balFor)}</b>. Damit es Ende ${long(P).split(' ')[0]} bei <b>${eur.format(end)}</b> steht, ist das die eine Überweisung — Abweichungen aus den Vormonaten sind darin schon ausgeglichen.${direct}`;
+    } else {
+      action = rate - (due - fromRot);
+      note = `Rate minus das, was im ${long(P).split(' ')[0]} vom Gehaltskonto fällig ist.${direct} Trag den Kontostand am ${first(P)} ein, dann rechnet die App mit ein, was aus den Vormonaten zu viel oder zu wenig drauf liegt.`;
+    }
+    actHint = action < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto';
+  }
+
+  return `<div class="plan">
+    <div class="plan-head">
+      <div><h2>Monatsplan</h2><span class="hint">Rhythmus ab ${long(S)} · Rate ${eur.format(rate)} / Monat</span></div>
+      ${picker}
+    </div>
+    <div class="plan-rows">${rows}</div>
+    <div class="rot-action">
+      <span class="rot-action-lbl">${actLbl}</span>
+      <span class="rot-action-val ${action < -0.005 ? 'neg' : 'pos'}">${signed(action)}</span>
+      <span class="rot-action-hint">${actHint}</span>
+    </div>
+    <p class="reserve-note">${note}</p>
+    ${cfg}
+  </div>`;
+}
+
+async function planShift(n) {
+  rotCfg.plan = ymOf(Math.max(nowMk(), planMk() + n));
+  await persistRotCfg();
+  renderForecast();
+}
+
 function renderForecast() {
   const host = $("forecast");
   if (subs.length === 0) { host.innerHTML = ""; return; }
@@ -4111,11 +4247,12 @@ function renderForecast() {
   const isCur   = k => k === PAST;
 
   // Month headers
+  const planK = planMk() - startIdx;
   let head = `<th class="name">Ausgabe</th>`;
   for (let k = 0; k < N; k++) {
     const d     = colDate(k);
-    const cls   = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
-    head += `<th class="${cls}">${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
+    const cls   = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : "", k === planK ? "plan-col" : ""].filter(Boolean).join(" ");
+    head += `<th class="${cls}"${k === planK ? ' title="Planungsmonat"' : ''}>${mf.format(d).replace(".", "")}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></th>`;
   }
 
   const baseIndex = s => {
@@ -4208,50 +4345,21 @@ function renderForecast() {
     }
   });
 
-  // Rhythm start: first month a transfer happens. Default = next month, so the
-  // cushion gets funded at the end of the current one.
-  const rotStartMk = (() => {
-    const m = /^(\d{4})-(\d{2})$/.exec(rotCfg.start || "");
-    return m ? (+m[1]) * 12 + (+m[2]) - 1 : curMk + 1;
-  })();
-  const rotStartCol = rotStartMk - startIdx;
-  const setupPhase  = rotStartCol > PAST;   // rhythm has not begun yet
-
-  // Window is always forward-looking: 24 months from the rhythm start, but
-  // never reaching back before the current month once the rhythm is running.
-  const WIN     = 24;
-  const winFrom = Math.min(Math.max(rotStartCol, PAST), N - 1);
-  const winEnd  = Math.min(winFrom + WIN, N);
-  const winLen  = Math.max(1, winEnd - winFrom);
-  const sumWin  = arr => arr.slice(winFrom, winEnd).reduce((a, v) => a + v, 0);
+  // The plan is anchored at its start, whatever month the calendar shows
+  const plan = rotPlan();
+  const { S: rotStartMk_, rate: avgIrr, soll, hasIrr } = plan;
+  const planCol = planMk() - startIdx;
 
   // Each person's standing rate into the Rotierkonto — read by updateIncomeCol
-  lastWinFromMk = startIdx + winFrom;
-  lastAvgIrrBy  = avgIrrByMember(lastWinFromMk, winLen);
-  const avgAll  = sumWin(totals)    / winLen;  // all subs — what a month really costs
-  const avgIrr  = sumWin(irrTotals) / winLen;  // irregular only — the Rotierkonto rate
+  lastWinFromMk = rotStartMk_;
+  lastAvgIrrBy  = avgIrrByMember(rotStartMk_, ROT_H);
 
-  // The deepest trough over the window decides the cushion
-  let b = 0, minB = 0;
-  for (let k = winFrom; k < winEnd; k++) {
-    b += avgIrr - irrTotals[k];
-    if (b < minB) minB = b;
-  }
-  const cushion = minB < -0.005 ? -minB : 0;
-
-  // Ideal balance track, seeded with the cushion at the start of the rhythm
-  const targetAt = new Array(N).fill(null);
-  let t = cushion;
-  for (let k = winFrom; k < N; k++) { t += avgIrr - irrTotals[k]; targetAt[k] = t; }
-
-  // One transfer per month: bring the account from where it is to where it
-  // should be. Without a known balance that is just the plain netto.
-  const ist        = typeof rotCfg.balance === 'number' ? rotCfg.balance : null;
-  const targetNow  = setupPhase ? cushion : (targetAt[PAST] ?? cushion);
-  const plainNet   = setupPhase ? cushion : avgIrr - irrTotals[PAST];
-  const action     = ist === null ? plainNet : targetNow - ist;
-
-  const hasIrr = avgIrr > 0.005;
+  // What a month really costs on average, all subs, over the plan window —
+  // as far as the table reaches
+  const winFrom = Math.max(0, Math.min(rotStartMk_ - startIdx, N - 1));
+  const winEnd  = Math.min(winFrom + ROT_H, N);
+  const winLen  = Math.max(1, winEnd - winFrom);
+  const avgAll  = totals.slice(winFrom, winEnd).reduce((a, v) => a + v, 0) / winLen;
 
   // Average row, right under Summe / Monat
   let avgRow = `<td class="name"><span class="lbl">Ø / Monat · ${winLen} Mon.</span></td>`;
@@ -4264,56 +4372,28 @@ function renderForecast() {
   let rotEin = `<td class="name"><span class="lbl">↑ Einzahlen / Monat</span></td>`;
   let rotAus = `<td class="name"><span class="lbl">↓ Auszahlen wenn fällig</span></td>`;
   let rotNet = `<td class="name"><span class="lbl">= Netto · Überweisung</span></td>`;
-  let rotRes = `<td class="name"><span class="lbl">Rotierkonto Saldo</span></td>`;
+  let rotRes = `<td class="name"><span class="lbl">Rotierkonto Soll-Stand</span></td>`;
   for (let k = 0; k < N; k++) {
+    const mk  = startIdx + k;
     const cls = [isCur(k) ? "cur" : "", isPast(k) ? "past-col" : ""].filter(Boolean).join(" ");
-    const due = irrTotals[k];
     rotSep += `<td class="${cls}"></td>`;
-    if (!hasIrr || k < winFrom) {
+    if (!hasIrr || mk < rotStartMk_) {
       rotEin += `<td class="${cls}">–</td>`;
       rotAus += `<td class="${cls}">–</td>`;
       rotNet += `<td class="${cls}">–</td>`;
-      rotRes += `<td class="${cls}">–</td>`;
+      rotRes += `<td class="${cls}">${hasIrr && mk === rotStartMk_ - 1 && plan.cushion > 0.005 ? eur.format(plan.cushion) : '–'}</td>`;
       continue;
     }
+    const due = irrTotals[k];
     const net = avgIrr - due;
     rotEin += `<td class="${cls}">${eur.format(avgIrr)}</td>`;
     rotAus += `<td class="${cls}">${due > 0.005 ? eur.format(due) : '–'}</td>`;
     rotNet += `<td class="${cls} ${net < -0.005 ? 'rot-net-neg' : 'rot-net-pos'}">${net >= 0 ? '+' : '−'}${eur.format(Math.abs(net) < 0.005 ? 0 : Math.abs(net))}</td>`;
-    const bal = targetAt[k];
+    const bal = soll(mk);
     rotRes += `<td class="${cls}">${eur.format(Math.abs(bal) < 0.005 ? 0 : bal)}</td>`;
   }
 
-  const mfLong   = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
-  const startLbl = mfLong.format(new Date(Math.floor(rotStartMk / 12), rotStartMk % 12, 1));
-  const fundBy   = mfLong.format(new Date(Math.floor((rotStartMk - 1) / 12), (rotStartMk - 1) % 12, 1));
-
-  const note = !hasIrr
-    ? ''
-    : setupPhase
-      ? (cushion > 0.005
-          ? `Der Rhythmus startet im <b>${startLbl}</b>. Leg bis Ende ${fundBy} <b>${eur.format(cushion)}</b> aufs Rotierkonto – damit ist jede fällige Rechnung der nächsten ${winLen} Monate gedeckt, ohne dass das Konto ins Minus rutscht.`
-          : `Der Rhythmus startet im <b>${startLbl}</b>. Ein Startpolster brauchst du nicht – die monatlichen Einzahlungen reichen aus.`)
-      : (ist === null
-          ? `Trag unten deinen aktuellen Kontostand ein, dann rechnet die App dir jeden Monat genau eine Überweisung aus. Solange kein Stand hinterlegt ist, siehst du den reinen Netto-Betrag der Spalte.`
-          : `Soll-Stand Ende dieses Monats: <b>${eur.format(targetNow)}</b>, aktuell drauf: <b>${eur.format(ist)}</b>. Die Differenz ist deine Überweisung – Abweichungen aus Vormonaten sind darin schon ausgeglichen.`);
-
-  const startInput = `${rotStartMk >= 0 ? String(Math.floor(rotStartMk / 12)).padStart(4, '0') : '0000'}-${String(rotStartMk % 12 + 1).padStart(2, '0')}`;
-  const cfgRow = !hasIrr ? '' : `<div class="rot-cfg">
-    <label>Rhythmus ab
-      <input type="month" id="rot-start" value="${startInput}">
-    </label>
-    <label>Kontostand aktuell
-      <input type="text" id="rot-bal" inputmode="decimal" placeholder="unbekannt"${ist !== null ? ` value="${String(ist).replace('.', ',')}"` : ''}>
-    </label>
-  </div>`;
-
-  const actLbl = setupPhase ? `Bis Ende ${fundBy}` : 'Diesen Monat';
-  const actBox = !hasIrr ? '' : `<div class="rot-action">
-    <span class="rot-action-lbl">${actLbl}</span>
-    <span class="rot-action-val ${action < -0.005 ? 'neg' : 'pos'}">${action >= 0 ? '+' : '−'}${eur.format(Math.abs(action) < 0.005 ? 0 : Math.abs(action))}</span>
-    <span class="rot-action-hint">${action < -0.005 ? 'vom Rotierkonto aufs Gehaltskonto' : 'aufs Rotierkonto'}</span>
-  </div>`;
+  const panel = smoothOn() ? renderPlanPanel(plan) : '';
 
   // ── Income rows ──
   const iRow = (trCls, lbl, cells) =>
@@ -4409,19 +4489,13 @@ function renderForecast() {
   lastStartIdx = startIdx; // absolute month index of column 0
 
   host.innerHTML = `<div class="forecast-wrap">
+    ${panel}
     <div class="forecast-head">
       <div>
-        <h2>Prognose</h2>
-        <span class="hint">← 6 Monate · aktueller Monat · Prognose 35 Monate →</span>
-      </div>
-      <div class="avg">
-        <span class="avg-label">Rotierkonto · Ø / Monat</span>
-        <span class="avg-val">${hasIrr ? eur.format(avgIrr) : '–'}</span>
+        <h2>Tabelle</h2>
+        <span class="hint">← 6 Monate · aktueller Monat · 35 Monate →</span>
       </div>
     </div>
-    ${smoothOn() ? `${actBox}
-    <div class="reserve-note">${note}</div>
-    ${cfgRow}` : ''}
     <div class="fc-scroll" id="fc-scroll">
       <table class="fc">
         <thead><tr>${head}</tr></thead>
@@ -4473,11 +4547,13 @@ function renderForecast() {
     renderForecast();
   });
 
+  // Der Kontostand gilt für den Planungsmonat, für den er eingetragen wurde
   const rb = $("rot-bal");
   if (rb) {
     const commit = async () => {
       const raw = rb.value.trim();
       rotCfg.balance = raw === "" ? null : (parseFloat(raw.replace(/\./g, '').replace(',', '.')) || 0);
+      rotCfg.balanceMonth = raw === "" ? "" : ymOf(planMk());
       await persistRotCfg();
       renderForecast();
     };
@@ -5762,11 +5838,7 @@ async function importData(file) {
       if (data.accounts.a1) txAccCfg.a1 = { ...txAccCfg.a1, ...data.accounts.a1 };
       if (data.accounts.a2) txAccCfg.a2 = { ...txAccCfg.a2, ...data.accounts.a2 };
     }
-    if (data.rotierkonto && typeof data.rotierkonto === 'object') {
-      const r = data.rotierkonto;
-      if (typeof r.start === 'string') rotCfg.start = r.start;
-      if (typeof r.balance === 'number' || r.balance === null) rotCfg.balance = r.balance;
-    }
+    rotCfgApply(data.rotierkonto);
     if (data.household && Array.isArray(data.household.members) && data.household.members.length)
       household = data.household;
     hhMigrate();
