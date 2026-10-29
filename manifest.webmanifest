@@ -1,7 +1,7 @@
 {
   "name": "togethr — gemeinsame Kosten",
   "short_name": "togethr",
-  "description": "Gemeinsame Kosten und Schlaf im Blick",
+  "description": "Gemeinsame Kosten im Blick",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
