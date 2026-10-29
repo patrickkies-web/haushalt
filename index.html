@@ -1226,6 +1226,81 @@
       background: var(--bg-2);
     }
 
+    /* ── Analyse ── */
+    .ana-sec {
+      background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow);
+      margin-bottom: 14px; overflow: hidden;
+    }
+    .ana-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      width: 100%; padding: 15px 16px; text-align: left; cursor: pointer;
+      font-family: inherit; font-size: 15px; font-weight: 500; letter-spacing: -.01em;
+      color: var(--ink); background: transparent; border: none;
+    }
+    .ana-head .hint { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 400; color: var(--faint); line-height: 1.4; }
+    .ana-head svg { width: 16px; height: 16px; flex: none; color: var(--faint); transition: transform .2s ease; }
+    .ana-sec.open .ana-head svg { transform: rotate(180deg); }
+    .ana-body { display: none; border-top: 1px solid var(--line-soft); }
+    .ana-sec.open .ana-body { display: block; }
+    .ana-empty { padding: 26px 16px; font-size: 13px; line-height: 1.5; color: var(--muted); text-align: center; }
+
+    /* Zeitstrahl: links die Zahlung (bleibt stehen), rechts die Monate zum Wischen */
+    .tl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tl-head, .tl-row { display: flex; width: max-content; min-width: 100%; }
+    .tl-head { border-bottom: 1px solid var(--line); }
+    .tl-name {
+      position: sticky; left: 0; z-index: 2; flex: none;
+      width: 42vw; max-width: 50vw; background: var(--surface);
+      box-shadow: 1px 0 0 var(--line); padding: 7px 10px 7px 4px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    @media (min-width: 560px) { .tl-name { width: 230px; max-width: 260px; } }
+    .tl-head .tl-name { z-index: 3; padding-left: 12px; font-size: 12px; font-weight: 500; color: var(--muted); }
+    .tl-m {
+      flex: none; width: 44px; padding: 10px 0 8px; text-align: center;
+      font-size: 11.5px; font-weight: 500; color: var(--muted); line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+    .tl-m .yr { display: block; font-size: 9px; color: var(--faint); margin-top: 2px; }
+    .tl-m.cur { color: var(--ink); background: var(--bg-2); }
+    .tl-m.past { color: var(--faint); }
+    .tl-row { border-bottom: 1px solid var(--line-soft); }
+    .tl-row:last-child { border-bottom: none; }
+    .tl-row.dragging { opacity: .6; }
+    .tl-row.dragging .tl-name { background: var(--bg-2); }
+    .tl-grip {
+      flex: none; width: 24px; height: 32px; display: grid; place-items: center;
+      color: var(--faint); cursor: grab; touch-action: none;
+      border: none; background: transparent; border-radius: 6px; padding: 0;
+    }
+    .tl-grip:active { cursor: grabbing; color: var(--ink); background: var(--bg-2); }
+    .tl-grip svg { width: 11px; height: 13px; }
+    .tl-lbl { flex: 1; min-width: 0; cursor: pointer; }
+    .tl-lbl .n { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 500; }
+    .tl-lbl .n i { width: 8px; height: 8px; border-radius: 3px; flex: none; }
+    .tl-lbl .n span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tl-lbl .s { font-size: 10.5px; color: var(--faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tl-row.ended .tl-lbl .n { color: var(--muted); }
+    .tl-cells {
+      position: relative; flex: none; height: 50px;
+      background-image: linear-gradient(to right, var(--line-soft) 1px, transparent 1px);
+      background-size: 44px 100%;
+    }
+    .tl-head .tl-cells { height: auto; display: flex; background: none; }
+    .tl-cur { position: absolute; top: 0; bottom: 0; width: 44px; background: var(--bg-2); }
+    .tl-bar {
+      position: absolute; top: 15px; height: 20px; border-radius: 6px;
+      display: flex; align-items: center; padding: 0 9px; box-sizing: border-box;
+      font-size: 10.5px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden;
+      font-variant-numeric: tabular-nums;
+    }
+    .tl-bar.open {
+      border-radius: 6px 0 0 6px;
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 60px), transparent);
+      mask-image: linear-gradient(to right, #000 calc(100% - 60px), transparent);
+    }
+    .tl-bar.ended { opacity: .45; }
+
     /* ── Tab navigation ── */
     .tab-nav {
       display: flex;
@@ -2110,6 +2185,7 @@
       <button class="tab-btn active" data-tab="turnus">Kosten</button>
       <button class="tab-btn" data-tab="plan">Rhythmus</button>
       <button class="tab-btn" data-tab="tx">Transaktionen</button>
+      <button class="tab-btn" data-tab="ana">Analyse</button>
     </div>
 
     <div id="pane-turnus">
@@ -2136,6 +2212,10 @@
 
     <div id="pane-tx" style="display:none">
       <section id="transactions"></section>
+    </div>
+
+    <div id="pane-ana" style="display:none">
+      <section id="ana"></section>
     </div>
   </div>
 
@@ -2243,9 +2323,13 @@
     </div>
     <div class="fstep" data-s="7">
       <div class="fstep-q">Wann ist die nächste Zahlung?</div>
-      <div class="fstep-h">Optional — ohne Datum wird ab diesem Monat gerechnet.</div>
+      <div class="fstep-h">Optional — ohne Datum wird ab diesem Monat gerechnet. Im Zeitstrahl beginnt die Zahlung mit diesem Monat.</div>
       <div class="field">
         <input id="f-date" type="date">
+      </div>
+      <div class="field" id="f-since-wrap" style="display:none;margin-top:18px">
+        <label>Aktiv seit <span style="font-weight:400;color:var(--muted)">— Beginn im Zeitstrahl</span></label>
+        <input id="f-since" type="month">
       </div>
       <div class="field" style="margin-top:18px">
         <label>Notiz (optional)</label>
@@ -3231,6 +3315,22 @@ function subDeactMk(s) {
 }
 
 const nowMk = () => { const d = new Date(); return d.getFullYear() * 12 + d.getMonth(); };
+const mkOf  = ym => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
+const ymOf  = mk => `${Math.floor(mk / 12)}-${String(mk % 12 + 1).padStart(2, '0')}`;
+const mkLabel = mk => new Date(Math.floor(mk / 12), mk % 12, 1)
+  .toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }).replace('.', '');
+
+// Seit wann eine Zahlung läuft: der gespeicherte Monat. Fehlt er noch (ältere
+// Einträge), der früheste Hinweis, den es gibt — die eingetragene Zahlung,
+// eine verknüpfte Buchung, oder eben jetzt.
+function subSince(s) {
+  if (typeof s.since === 'string' && /^\d{4}-\d{2}$/.test(s.since)) return s.since;
+  const c = [nowMk()];
+  if (s.date && /^\d{4}-\d{2}/.test(s.date)) c.push(mkOf(s.date.slice(0, 7)));
+  Object.keys(payments[s.id] || {}).forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) c.push(mkOf(k)); });
+  return ymOf(Math.min(...c));
+}
+const subSinceMk = s => mkOf(subSince(s));
 
 // Inactive only once the deactivation month has actually arrived — a date in the
 // future just means the cost runs out later, it is still being paid today.
@@ -3880,6 +3980,7 @@ function render() {
 
   renderForecast();
   renderTransactions();
+  renderAnalysis();
 
   // Subscription list
   $("count").textContent = subs.length + (subs.length === 1 ? " Eintrag" : " Einträge");
@@ -4400,6 +4501,178 @@ function fcCellClick(subId, yymm) {
       if (b.dataset.tab === "tx") b.click();
     });
   }
+}
+
+// ── Analyse ────────────────────────────────────────────────────────────────
+// Abschnitte untereinander, jeder lässt sich auf- und zuklappen. Welche offen
+// sind, merkt sich nur dieser Browser — das ist Bequemlichkeit, keine Daten.
+const ANA_KEY = "turnus:ana";
+const ANA_SECTIONS = [
+  { id: 'timeline', title: 'Zeitstrahl',
+    hint: 'Wie lange jede wiederkehrende Zahlung läuft — und wann sie aufgehört hat.',
+    render: host => renderTimeline(host) }
+];
+let anaOpen = null;
+function anaState() {
+  if (anaOpen) return anaOpen;
+  anaOpen = {};
+  try {
+    const d = JSON.parse(localStorage.getItem(ANA_KEY) || '{}');
+    if (d && typeof d === 'object') anaOpen = d;
+  } catch (e) {}
+  return anaOpen;
+}
+const anaIsOpen = id => anaState()[id] !== false;
+function anaToggle(id) {
+  const st = anaState();
+  st[id] = !anaIsOpen(id);
+  try { localStorage.setItem(ANA_KEY, JSON.stringify(st)); } catch (e) {}
+  const sec = document.querySelector(`.ana-sec[data-id="${id}"]`);
+  if (sec) sec.classList.toggle('open', st[id]);
+}
+
+function renderAnalysis() {
+  const host = $("ana");
+  if (!host) return;
+  host.innerHTML = ANA_SECTIONS.map(sec => `
+    <div class="ana-sec ${anaIsOpen(sec.id) ? 'open' : ''}" data-id="${sec.id}">
+      <button class="ana-head" onclick="anaToggle('${sec.id}')" aria-expanded="${anaIsOpen(sec.id)}">
+        <span>${esc(sec.title)}<span class="hint">${esc(sec.hint)}</span></span>
+        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 6l4.5 4.5L12.5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="ana-body" id="ana-${sec.id}"></div>
+    </div>`).join('');
+  ANA_SECTIONS.forEach(sec => sec.render($("ana-" + sec.id)));
+}
+
+// ── Zeitstrahl ─────────────────────────────────────────────────────────────
+// Links die Zahlung, rechts ein Balken je Monat, in dem sie läuft — vom ersten
+// Monat bis zu dem, ab dem sie beendet wurde. Der Rhythmus (monatlich,
+// quartalsweise, jährlich) spielt hier keine Rolle: es geht darum, wie lange
+// etwas aktiv war, nicht wann es abgebucht wird. Die Reihenfolge der Zeilen
+// legt man selbst fest, am Griff links.
+const TL_COLW = 44;
+
+function tlRows() {
+  const ord = s => typeof s.order === 'number' ? s.order : Infinity;
+  return [...subs].sort((a, b) =>
+    (ord(a) - ord(b)) || (subSinceMk(a) - subSinceMk(b)) || a.name.localeCompare(b.name, 'de'));
+}
+
+function renderTimeline(host) {
+  if (!host) return;
+  if (!subs.length) {
+    host.innerHTML = `<div class="ana-empty">Noch keine wiederkehrenden Kosten — sobald du welche
+      anlegst, siehst du hier, wie lange sie laufen.</div>`;
+    return;
+  }
+  const rows = tlRows();
+  const cur  = nowMk();
+  const ends = rows.map(subDeactMk).filter(isFinite);
+  const from = Math.min(cur - 5, ...rows.map(subSinceMk)) - 1;
+  const to   = Math.max(cur + 6, ...ends.map(e => e + 1));
+  const N    = to - from + 1;
+  const mf   = new Intl.DateTimeFormat('de-DE', { month: 'short' });
+  const mon  = n => `${n} ${n === 1 ? 'Monat' : 'Monate'}`;
+
+  let head = `<div class="tl-name">Zahlung</div><div class="tl-cells tl-months" style="width:${N * TL_COLW}px">`;
+  for (let mk = from; mk <= to; mk++) {
+    const d = new Date(Math.floor(mk / 12), mk % 12, 1);
+    head += `<div class="tl-m ${mk === cur ? 'cur' : mk < cur ? 'past' : ''}">${mf.format(d).replace('.', '')}<span class="yr">'${String(d.getFullYear()).slice(2)}</span></div>`;
+  }
+  head += `</div>`;
+
+  const body = rows.map(s => {
+    const a     = subSinceMk(s);
+    const dk    = subDeactMk(s);
+    const ended = isFinite(dk);
+    // Deaktiviert "ab" einem Monat heißt: der Monat davor war der letzte.
+    const last  = ended ? Math.max(a, dk - 1) : to;
+    const n     = last - a + 1;
+    const inactive = subIsInactive(s);
+    const span  = ended ? `${mkLabel(a)} – ${mkLabel(last)}` : `seit ${mkLabel(a)}`;
+    const title = `${s.name} · ${span} · ${mon(ended ? n : cur - a + 1)}`;
+    const lbl   = ended ? mon(n) : `${eur.format(s.amount)} ${CYCLES[s.cycle].label}`;
+    const grip  = `<svg viewBox="0 0 12 14" fill="currentColor" aria-hidden="true">
+        <circle cx="3.5" cy="2.5" r="1.4"/><circle cx="8.5" cy="2.5" r="1.4"/>
+        <circle cx="3.5" cy="7" r="1.4"/><circle cx="8.5" cy="7" r="1.4"/>
+        <circle cx="3.5" cy="11.5" r="1.4"/><circle cx="8.5" cy="11.5" r="1.4"/></svg>`;
+    return `<div class="tl-row ${inactive ? 'ended' : ''}" data-id="${s.id}">
+      <div class="tl-name">
+        <button class="tl-grip" title="Ziehen zum Sortieren" aria-label="Zeile verschieben"
+          onpointerdown="tlDragStart(event)">${grip}</button>
+        <div class="tl-lbl" onclick="openSheet('${s.id}')">
+          <div class="n"><i style="background:${catColor(s.cat)}"></i><span>${esc(s.name)}</span></div>
+          <div class="s">${esc(span)}</div>
+        </div>
+      </div>
+      <div class="tl-cells" style="width:${N * TL_COLW}px">
+        <div class="tl-cur" style="left:${(cur - from) * TL_COLW}px"></div>
+        <div class="tl-bar ${ended ? (inactive ? 'ended' : 'later') : 'open'}"
+          style="left:${(a - from) * TL_COLW}px;width:${n * TL_COLW}px;background:${catColor(s.cat)}"
+          title="${esc(title)}"><span>${esc(lbl)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  host.innerHTML = `<div class="tl-scroll" id="tl-scroll">
+    <div class="tl-head">${head}</div>
+    <div class="tl-body" id="tl-body">${body}</div>
+  </div>`;
+  // Den aktuellen Monat ans rechte Ende des Sichtbaren holen, einen Monat
+  // Zukunft daneben — der Rest ist Vergangenheit, und die liest man nach links.
+  const sc = $("tl-scroll");
+  if (sc) {
+    const nameW = sc.querySelector('.tl-name').getBoundingClientRect().width;
+    const vis   = Math.max(2 * TL_COLW, sc.clientWidth - nameW);
+    sc.scrollLeft = Math.max(0, (cur - from + 2) * TL_COLW - vis);
+  }
+}
+
+// Sortieren: am Griff anfassen, die Zeile wandert mit dem Finger, loslassen.
+// Die Reihenfolge wird als Nummer je Zahlung gespeichert, also auch
+// synchronisiert. Die Bewegung hört das Fenster, nicht der Griff: die Zeile
+// wird beim Umsortieren kurz aus dem Dokument genommen, und damit verlöre der
+// Griff eine Pointer-Capture.
+let tlDrag = null;
+function tlDragStart(e) {
+  const row = e.currentTarget.closest('.tl-row');
+  if (!row || tlDrag) return;
+  e.preventDefault();
+  tlDrag = { row, body: row.parentElement, moved: false, id: e.pointerId };
+  row.classList.add('dragging');
+  window.addEventListener('pointermove', tlDragMove);
+  window.addEventListener('pointerup', tlDragEnd);
+  window.addEventListener('pointercancel', tlDragEnd);
+}
+function tlDragMove(e) {
+  if (!tlDrag || e.pointerId !== tlDrag.id) return;
+  const { row, body } = tlDrag;
+  const y = e.clientY;
+  let before = null;
+  for (const r of body.querySelectorAll('.tl-row')) {
+    if (r === row) continue;
+    const b = r.getBoundingClientRect();
+    if (y < b.top + b.height / 2) { before = r; break; }
+  }
+  if (before !== row.nextElementSibling) {
+    if (before) body.insertBefore(row, before); else body.appendChild(row);
+    tlDrag.moved = true;
+  }
+}
+async function tlDragEnd(e) {
+  if (!tlDrag || (e && e.pointerId !== tlDrag.id)) return;
+  window.removeEventListener('pointermove', tlDragMove);
+  window.removeEventListener('pointerup', tlDragEnd);
+  window.removeEventListener('pointercancel', tlDragEnd);
+  const { row, body, moved } = tlDrag;
+  row.classList.remove('dragging');
+  tlDrag = null;
+  if (!moved) return;
+  const ids = [...body.querySelectorAll('.tl-row')].map(r => r.dataset.id);
+  ids.forEach((id, i) => { const s = subs.find(x => x.id === id); if (s) s.order = i; });
+  await persist();
+  renderAnalysis();
 }
 
 // ── Account config ─────────────────────────────────────────────────────────
@@ -5302,6 +5575,8 @@ function openSheet(id) {
   $("f-name").value   = s ? s.name : "";
   $("f-amount").value = s ? String(s.amount).replace(".", ",") : "";
   $("f-date").value   = s ? s.date || "" : "";
+  $("f-since").value  = s ? subSince(s) : "";
+  $("f-since-wrap").style.display = s ? "" : "none";
   $("f-note").value   = s ? s.note || "" : "";
   draft.cycle = s ? s.cycle : "monthly";
   draft.cat   = s ? s.cat   : "Sonstiges";
@@ -5414,6 +5689,14 @@ async function save() {
     // Only an existing cost can carry a deactivation date — the field is hidden for new ones.
     deactivatedFrom: (editing && deactEl && deactEl.value) ? deactEl.value : null,
   };
+  // Seit wann die Zahlung läuft, für den Zeitstrahl. Neu angelegt: der Monat
+  // der eingetragenen (ersten) Zahlung, sonst dieser Monat. Beim Bearbeiten
+  // steht es im eigenen Feld und ändert sich nicht mit, wenn nur das nächste
+  // Datum angepasst wird.
+  const sinceEl = $("f-since");
+  data.since = editing
+    ? (/^\d{4}-\d{2}$/.test(sinceEl.value) ? sinceEl.value : subSince(subs.find(x => x.id === editing) || data))
+    : (data.date ? data.date.slice(0, 7) : ymOf(nowMk()));
 
   if (editing) {
     const i = subs.findIndex(x => x.id === editing);
@@ -5543,9 +5826,11 @@ document.querySelectorAll(".tab-btn").forEach(btn => btn.onclick = () => {
   $("pane-turnus").style.display = tab === "turnus" ? "" : "none";
   $("pane-plan").style.display   = tab === "plan"   ? "" : "none";
   $("pane-tx").style.display     = tab === "tx"     ? "" : "none";
+  $("pane-ana").style.display    = tab === "ana"    ? "" : "none";
   $("fab").style.display         = tab === "turnus" ? "flex" : "none";
   if (tab === "plan")  renderForecast();
   if (tab === "tx")    renderTransactions();
+  if (tab === "ana")   renderAnalysis();
 });
 
 // Register the worker so the app opens without a connection once installed
